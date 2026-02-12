@@ -1,0 +1,94 @@
+# Build Iceland Docker image, push to ECR, optionally run ECS task.
+# Requires: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, ECR_REPOSITORY,
+#           ECS_CLUSTER, ECS_TASK_DEFINITION, ECS_SUBNETS, ECS_SECURITY_GROUP, S3_BUCKET
+
+name: Deploy Iceland to AWS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_task:
+        description: 'Run ECS task after push'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      image: ${{ steps.build.outputs.image }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        id: build
+        env:
+          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY || 'globalskiatlas-backend-k8s-pipeline' }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -f Dockerfile.aws -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+  run-ecs-task:
+    needs: build-and-push
+    if: github.event_name == 'workflow_dispatch' && inputs.run_task
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Run ECS task
+        env:
+          SUBNETS: ${{ secrets.ECS_SUBNETS }}
+          SECURITY_GROUP: ${{ secrets.ECS_SECURITY_GROUP }}
+        run: |
+          if [ -z "$SUBNETS" ] || [ -z "$SECURITY_GROUP" ]; then
+            echo "::warning::ECS_SUBNETS and ECS_SECURITY_GROUP must be set to run the task"
+            exit 0
+          fi
+          # Build network config JSON (subnets: "a,b" -> ["a","b"])
+          SUBNET_ARR=$(echo "$SUBNETS" | jq -R 'split(",") | map(gsub("^\\s+|\\s+$";""))')
+          NETWORK_CONFIG=$(jq -n --argjson subnets "$SUBNET_ARR" --arg sg "$SECURITY_GROUP" \
+            '{awsvpcConfiguration: {subnets: $subnets, securityGroups: [$sg], assignPublicIp: "ENABLED"}}')
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --task-definition "${{ secrets.ECS_TASK_DEFINITION }}" \
+            --launch-type FARGATE \
+            --network-configuration "$NETWORK_CONFIG" \
+            --overrides "{\"containerOverrides\":[{\"name\":\"iceland\",\"environment\":[{\"name\":\"S3_BUCKET\",\"value\":\"${{ secrets.S3_BUCKET }}\"},{\"name\":\"REGION\",\"value\":\"iceland\"},{\"name\":\"AWS_REGION\",\"value\":\"${{ env.AWS_REGION }}\"}]}]}" \
+            --query 'tasks[0].taskArn' --output text)
+          echo "Task started: $TASK_ARN"
+          echo "task_arn=$TASK_ARN" >> $GITHUB_OUTPUT

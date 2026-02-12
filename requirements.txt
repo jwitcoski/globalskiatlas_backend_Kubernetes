@@ -1,0 +1,4 @@
+geopandas>=0.14
+shapely>=2.0
+pyarrow>=14.0
+pycountry>=24.0

@@ -1,0 +1,38 @@
+# Single-image Iceland pipeline for AWS ECS.
+# Combines extract (osmium, gdal) + analyze (geopandas) + AWS CLI for S3 upload.
+# globalskiatlas_backend_Kubernetes (Docker/ECS, distinct from Lambda backend)
+# Usage: docker build -f Dockerfile.aws -t globalskiatlas-backend-k8s-iceland .
+# Run: docker run -e S3_BUCKET=my-bucket -e AWS_ACCESS_KEY_ID=... -e AWS_SECRET_ACCESS_KEY=... globalskiatlas-backend-k8s-iceland
+
+FROM python:3.11-slim
+
+# System deps: osmium (extract), gdal (ogr2ogr), wget
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    osmium-tool \
+    gdal-bin \
+    libgeos-dev \
+    libproj-dev \
+    libgdal-dev \
+    wget \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt awscli
+
+# All Python scripts and boundaries
+COPY *.py .
+COPY scripts/ scripts/
+COPY boundaries/ boundaries/
+
+# Default boundaries path (can override with -e BOUNDARIES=...)
+ENV BOUNDARIES=/app/boundaries
+
+# Default output/data paths
+ENV DB=/db DATA=/data
+
+# Run full Iceland pipeline; uploads to S3 if S3_BUCKET is set
+# Task role must have s3:PutObject on the bucket
+CMD ["sh", "scripts/run_iceland_pipeline_aws.sh"]

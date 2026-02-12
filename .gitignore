@@ -1,0 +1,22 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Generated output
+output/
+osm_batches/
+*.log
+
+# Env / secrets
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

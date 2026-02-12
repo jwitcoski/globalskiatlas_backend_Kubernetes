@@ -1,0 +1,23 @@
+# Extract winter_sports from PBF using osmium + ogr2ogr
+# No Overpass required. Used for extract and osm_nearby (local PBF extraction).
+FROM python:3.11-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    osmium-tool \
+    gdal-bin \
+    libgeos-dev \
+    libproj-dev \
+    libgdal-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY scripts/pbf_to_geojson.py scripts/
+COPY scripts/extract_nearby_from_pbf.py scripts/
+COPY scripts/extract_lifts_and_pistes_from_pbf.py scripts/
+COPY convert_to_geoparquet.py .
+
+CMD ["python", "scripts/pbf_to_geojson.py", "/db/planet.osm.pbf", "/data/ski_areas.geojson"]

@@ -1,0 +1,109 @@
+# Cyprus flow: Download → Extract (osmium) → OSM nearby (local PBF) → Parquet
+# Same pipeline as Iceland; uses Geofabrik Cyprus PBF. Boundaries used for country/state (Natural Earth).
+# Usage: docker compose -f docker-compose.cyprus.yml up --build
+
+volumes:
+  ski-data-cyprus:
+
+services:
+  download:
+    image: alpine:latest
+    container_name: cyprus-download
+    user: root
+    volumes:
+      - ski-data-cyprus:/db
+    command: >
+      sh -c "apk add --no-cache wget
+      && wget --progress=bar:force -O /db/planet.osm.pbf https://download.geofabrik.de/europe/cyprus-latest.osm.pbf
+      && echo Download complete"
+
+  extract:
+    image: iceland-extract
+    build:
+      context: .
+      dockerfile: Dockerfile.extract
+    container_name: cyprus-extract
+    depends_on:
+      download:
+        condition: service_completed_successfully
+    volumes:
+      - ski-data-cyprus:/db
+      - ./output:/data
+    command: ["python", "scripts/pbf_to_geojson.py", "/db/planet.osm.pbf", "/data/ski_areas.geojson"]
+
+  osm_nearby:
+    image: iceland-extract
+    container_name: cyprus-osm-nearby
+    depends_on:
+      extract:
+        condition: service_completed_successfully
+    volumes:
+      - ski-data-cyprus:/db
+      - ./output:/data
+    working_dir: /app
+    command: ["python", "scripts/extract_nearby_from_pbf.py", "/db/planet.osm.pbf", "/data/ski_areas.geojson", "-o", "/data/osm_near_winter_sports.json"]
+
+  lifts_and_pistes:
+    image: iceland-extract
+    container_name: cyprus-lifts-pistes
+    depends_on:
+      extract:
+        condition: service_completed_successfully
+    volumes:
+      - ski-data-cyprus:/db
+      - ./output:/data
+    working_dir: /app
+    command: ["python", "scripts/extract_lifts_and_pistes_from_pbf.py", "/db/planet.osm.pbf", "-o", "/data"]
+
+  enrich_geojson:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cyprus-enrich-geojson
+    depends_on:
+      extract:
+        condition: service_completed_successfully
+      lifts_and_pistes:
+        condition: service_completed_successfully
+      osm_nearby:
+        condition: service_completed_successfully
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./output:/data
+      - ./boundaries:/boundaries
+    working_dir: /app
+    command: ["python", "scripts/enrich_geojson_properties.py", "all", "-d", "/data", "-b", "/boundaries"]
+
+  analyze:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cyprus-analyze
+    depends_on:
+      osm_nearby:
+        condition: service_completed_successfully
+    volumes:
+      - ./output:/data
+      - ./boundaries:/boundaries
+    working_dir: /app
+    command: ["python", "analyze_ski_areas.py", "/data/ski_areas.geojson", "/data/osm_near_winter_sports.json", "-o", "/data/ski_areas_analyzed.csv", "-b", "/boundaries"]
+
+  export_parquet:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cyprus-export-parquet
+    depends_on:
+      enrich_geojson:
+        condition: service_completed_successfully
+      analyze:
+        condition: service_completed_successfully
+    volumes:
+      - ./output:/data
+    working_dir: /app
+    command: >
+      sh -c "python convert_to_geoparquet.py osm -i /data/osm_near_winter_sports.json -o /data/osm_near_winter_sports.parquet
+      && python convert_to_geoparquet.py all -d /data
+      && rm -f /data/lifts.geojson /data/osm_near_winter_sports.json /data/pistes.geojson /data/ski_areas.geojson
+      && echo 'Removed GeoJSON/JSON to save space (keeping parquet and ski_areas_analyzed.csv)'"

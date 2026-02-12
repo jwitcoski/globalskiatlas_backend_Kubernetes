@@ -1,0 +1,18 @@
+# Exclude from Docker build
+.venv/
+__pycache__/
+*.pyc
+.git/
+*.parquet
+*.json
+!boundaries/*.shp
+!boundaries/*.shx
+!boundaries/*.dbf
+!boundaries/*.prj
+!boundaries/*.cpg
+output/
+osm_batches/
+*.log
+.env
+k8s/
+docs/

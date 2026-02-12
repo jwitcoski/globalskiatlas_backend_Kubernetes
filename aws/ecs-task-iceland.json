@@ -1,0 +1,31 @@
+{
+  "family": "globalskiatlas-backend-k8s-iceland",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "ephemeralStorage": {
+    "sizeInGiB": 10
+  },
+  "executionRoleArn": "arn:aws:iam::YOUR_ACCOUNT_ID:role/globalskiatlas-backend-k8s-ecs-execution",
+  "taskRoleArn": "arn:aws:iam::YOUR_ACCOUNT_ID:role/globalskiatlas-backend-k8s-ecs-task",
+  "containerDefinitions": [
+    {
+      "name": "iceland",
+      "image": "YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/globalskiatlas-backend-k8s-pipeline:latest",
+      "essential": true,
+      "environment": [
+        { "name": "S3_BUCKET", "value": "globalskiatlas-backend-k8s-output" },
+        { "name": "REGION", "value": "iceland" },
+        { "name": "AWS_REGION", "value": "us-east-1" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/globalskiatlas-backend-k8s-iceland",
+          "awslogs-region": "us-east-1"
+        }
+      }
+    }
+  ]
+}
