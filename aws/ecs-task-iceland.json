@@ -7,12 +7,12 @@
   "ephemeralStorage": {
     "sizeInGiB": 10
   },
-  "executionRoleArn": "arn:aws:iam::YOUR_ACCOUNT_ID:role/globalskiatlas-backend-k8s-ecs-execution",
-  "taskRoleArn": "arn:aws:iam::YOUR_ACCOUNT_ID:role/globalskiatlas-backend-k8s-ecs-task",
+  "executionRoleArn": "arn:aws:iam::298043721974:role/globalskiatlas-backend-k8s-ecs-execution",
+  "taskRoleArn": "arn:aws:iam::298043721974:role/globalskiatlas-backend-k8s-ecs-task",
   "containerDefinitions": [
     {
       "name": "iceland",
-      "image": "YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/globalskiatlas-backend-k8s-pipeline:latest",
+      "image": "298043721974.dkr.ecr.us-east-1.amazonaws.com/globalskiatlas-backend-k8s-pipeline:latest",
       "essential": true,
       "environment": [
         { "name": "S3_BUCKET", "value": "globalskiatlas-backend-k8s-output" },
