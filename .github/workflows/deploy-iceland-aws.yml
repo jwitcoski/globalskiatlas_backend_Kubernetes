@@ -14,6 +14,19 @@ on:
         required: false
         default: false
         type: boolean
+      region:
+        description: 'Region to run (PBF extract)'
+        required: true
+        default: 'iceland'
+        type: choice
+        options:
+          - iceland
+          - north-america
+          - south-america
+          - europe
+          - asia
+          - africa
+          - australia-oceania
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
@@ -77,20 +90,34 @@ jobs:
           S3_BUCKET: ${{ secrets.S3_BUCKET }}
           ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
           ECS_TASK_DEFINITION: ${{ secrets.ECS_TASK_DEFINITION }}
+          REGION_NAME: ${{ inputs.region }}
         run: |
           if [ -z "$SUBNETS" ] || [ -z "$SECURITY_GROUP" ]; then
             echo "::warning::ECS_SUBNETS and ECS_SECURITY_GROUP must be set to run the task"
             exit 0
           fi
+          case "$REGION_NAME" in
+            iceland) PBF_URL="https://download.geofabrik.de/europe/iceland-latest.osm.pbf" ;;
+            north-america) PBF_URL="https://download.geofabrik.de/north-america-latest.osm.pbf" ;;
+            south-america) PBF_URL="https://download.geofabrik.de/south-america-latest.osm.pbf" ;;
+            europe) PBF_URL="https://download.geofabrik.de/europe-latest.osm.pbf" ;;
+            asia) PBF_URL="https://download.geofabrik.de/asia-latest.osm.pbf" ;;
+            africa) PBF_URL="https://download.geofabrik.de/africa-latest.osm.pbf" ;;
+            australia-oceania) PBF_URL="https://download.geofabrik.de/australia-oceania-latest.osm.pbf" ;;
+            *) PBF_URL="https://download.geofabrik.de/europe/iceland-latest.osm.pbf" ;;
+          esac
+          echo "Region: $REGION_NAME | PBF: $PBF_URL"
           # Build network config JSON (subnets: "a,b" -> ["a","b"])
           SUBNET_ARR=$(echo "$SUBNETS" | jq -R 'split(",") | map(gsub("^\\s+|\\s+$";""))')
           NETWORK_CONFIG=$(jq -n --argjson subnets "$SUBNET_ARR" --arg sg "$SECURITY_GROUP" \
             '{awsvpcConfiguration: {subnets: $subnets, securityGroups: [$sg], assignPublicIp: "ENABLED"}}')
-          # Build overrides JSON with jq to properly escape values (avoids control chars in secrets)
+          # Build overrides JSON with jq (REGION + PBF_URL so container runs the chosen extract)
           OVERRIDES=$(jq -n \
             --arg s3 "$S3_BUCKET" \
-            --arg region "${{ env.AWS_REGION }}" \
-            '{containerOverrides: [{name: "iceland", environment: [{name: "S3_BUCKET", value: $s3}, {name: "REGION", value: "iceland"}, {name: "AWS_REGION", value: $region}]}]}')
+            --arg region "$REGION_NAME" \
+            --arg aws_region "${{ env.AWS_REGION }}" \
+            --arg pbf_url "$PBF_URL" \
+            '{containerOverrides: [{name: "iceland", environment: [{name: "S3_BUCKET", value: $s3}, {name: "REGION", value: $region}, {name: "AWS_REGION", value: $aws_region}, {name: "PBF_URL", value: $pbf_url}]}]}')
           TASK_ARN=$(aws ecs run-task \
             --cluster "$ECS_CLUSTER" \
             --task-definition "$ECS_TASK_DEFINITION" \
