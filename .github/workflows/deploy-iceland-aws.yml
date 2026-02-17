@@ -106,7 +106,7 @@ jobs:
             africa) PBF_URL="https://download.geofabrik.de/africa-latest.osm.pbf"
                      TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-medium" ;;
             australia-oceania) PBF_URL="https://download.geofabrik.de/australia-oceania-latest.osm.pbf"
-                     TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-medium" ;;
+                     TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-large" ;;
             *) PBF_URL="https://download.geofabrik.de/europe/iceland-latest.osm.pbf"
                TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-small" ;;
           esac
