@@ -1,20 +1,20 @@
-# Cyprus flow: Download → Extract (osmium) → OSM nearby (local PBF) → Parquet
-# Same pipeline as Iceland; uses Geofabrik Cyprus PBF. Boundaries used for country/state (Natural Earth).
-# Usage: docker compose -f docker-compose.cyprus.yml up --build
+# Australia / New Zealand: Download → Extract → OSM nearby → Parquet
+# Geofabrik Australia-Oceania PBF (~400 MB). 41 ski areas.
+# Usage: docker compose -f docker-compose.australia-oceania.yml up --build
 
 volumes:
-  ski-data-cyprus:
+  ski-data-australia-oceania:
 
 services:
   download:
     image: alpine:latest
-    container_name: cyprus-download
+    container_name: australia-oceania-download
     user: root
     volumes:
-      - ski-data-cyprus:/db
+      - ski-data-australia-oceania:/db
     command: >
       sh -c "apk add --no-cache wget
-      && wget --progress=bar:force -O /db/planet.osm.pbf https://download.geofabrik.de/europe/cyprus-latest.osm.pbf
+      && wget --progress=bar:force -O /db/planet.osm.pbf https://download.geofabrik.de/australia-oceania-latest.osm.pbf
       && echo Download complete"
 
   extract:
@@ -22,36 +22,36 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.extract
-    container_name: cyprus-extract
+    container_name: australia-oceania-extract
     depends_on:
       download:
         condition: service_completed_successfully
     volumes:
-      - ski-data-cyprus:/db
-      - ./output:/data
+      - ski-data-australia-oceania:/db
+      - ./output/australia-oceania:/data
     command: ["python", "scripts/pbf_to_geojson.py", "/db/planet.osm.pbf", "/data/ski_areas.geojson"]
 
   osm_nearby:
     image: iceland-extract
-    container_name: cyprus-osm-nearby
+    container_name: australia-oceania-osm-nearby
     depends_on:
       extract:
         condition: service_completed_successfully
     volumes:
-      - ski-data-cyprus:/db
-      - ./output:/data
+      - ski-data-australia-oceania:/db
+      - ./output/australia-oceania:/data
     working_dir: /app
     command: ["python", "scripts/extract_nearby_from_pbf.py", "/db/planet.osm.pbf", "/data/ski_areas.geojson", "-o", "/data/osm_near_winter_sports.json"]
 
   lifts_and_pistes:
     image: iceland-extract
-    container_name: cyprus-lifts-pistes
+    container_name: australia-oceania-lifts-pistes
     depends_on:
       extract:
         condition: service_completed_successfully
     volumes:
-      - ski-data-cyprus:/db
-      - ./output:/data
+      - ski-data-australia-oceania:/db
+      - ./output/australia-oceania:/data
     working_dir: /app
     command: ["python", "scripts/extract_lifts_and_pistes_from_pbf.py", "/db/planet.osm.pbf", "-o", "/data"]
 
@@ -59,7 +59,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: cyprus-enrich-geojson
+    container_name: australia-oceania-enrich-geojson
     depends_on:
       extract:
         condition: service_completed_successfully
@@ -70,7 +70,7 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
     volumes:
-      - ./output:/data
+      - ./output/australia-oceania:/data
       - ./boundaries:/boundaries
     working_dir: /app
     command: ["python", "scripts/enrich_geojson_properties.py", "all", "-d", "/data", "-b", "/boundaries"]
@@ -79,12 +79,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: cyprus-analyze
+    container_name: australia-oceania-analyze
     depends_on:
       osm_nearby:
         condition: service_completed_successfully
     volumes:
-      - ./output:/data
+      - ./output/australia-oceania:/data
       - ./boundaries:/boundaries
     working_dir: /app
     command: ["python", "analyze_ski_areas.py", "/data/ski_areas.geojson", "/data/osm_near_winter_sports.json", "-o", "/data/ski_areas_analyzed.csv", "-b", "/boundaries"]
@@ -93,14 +93,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: cyprus-export-parquet
+    container_name: australia-oceania-export-parquet
     depends_on:
       enrich_geojson:
         condition: service_completed_successfully
       analyze:
         condition: service_completed_successfully
     volumes:
-      - ./output:/data
+      - ./output/australia-oceania:/data
     working_dir: /app
     command: >
       sh -c "python convert_to_geoparquet.py osm -i /data/osm_near_winter_sports.json -o /data/osm_near_winter_sports.parquet

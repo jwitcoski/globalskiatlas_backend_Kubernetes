@@ -1,21 +1,20 @@
-# Iceland-only flow: Download → Extract (osmium) → OSM nearby (local PBF) → Parquet
-# Fully local: no Overpass API. Uses osmium extract + ogr2ogr from PBF.
-# Boundaries: Natural Earth shapefiles in ./boundaries tag country/state (required for multi-country runs e.g. Europe).
-# Usage: docker compose -f docker-compose.iceland.yml up --build
+# Africa flow: Download → Extract (osmium) → OSM nearby (local PBF) → Parquet
+# Uses Geofabrik Africa PBF (~3–4 GB). Tests clustering (5 ski areas across Morocco, Lesotho, etc.).
+# Usage: docker compose -f docker-compose.africa.yml up --build
 
 volumes:
-  ski-data:
+  ski-data-africa:
 
 services:
   download:
     image: alpine:latest
-    container_name: iceland-download
+    container_name: africa-download
     user: root
     volumes:
-      - ski-data:/db
+      - ski-data-africa:/db
     command: >
       sh -c "apk add --no-cache wget
-      && wget --progress=bar:force -O /db/planet.osm.pbf https://download.geofabrik.de/europe/iceland-latest.osm.pbf
+      && wget --progress=bar:force -O /db/planet.osm.pbf https://download.geofabrik.de/africa-latest.osm.pbf
       && echo Download complete"
 
   extract:
@@ -23,36 +22,36 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.extract
-    container_name: iceland-extract
+    container_name: africa-extract
     depends_on:
       download:
         condition: service_completed_successfully
     volumes:
-      - ski-data:/db
-      - ./output:/data
+      - ski-data-africa:/db
+      - ./output/africa:/data
     command: ["python", "scripts/pbf_to_geojson.py", "/db/planet.osm.pbf", "/data/ski_areas.geojson"]
 
   osm_nearby:
     image: iceland-extract
-    container_name: iceland-osm-nearby
+    container_name: africa-osm-nearby
     depends_on:
       extract:
         condition: service_completed_successfully
     volumes:
-      - ski-data:/db
-      - ./output:/data
+      - ski-data-africa:/db
+      - ./output/africa:/data
     working_dir: /app
     command: ["python", "scripts/extract_nearby_from_pbf.py", "/db/planet.osm.pbf", "/data/ski_areas.geojson", "-o", "/data/osm_near_winter_sports.json"]
 
   lifts_and_pistes:
     image: iceland-extract
-    container_name: iceland-lifts-pistes
+    container_name: africa-lifts-pistes
     depends_on:
       extract:
         condition: service_completed_successfully
     volumes:
-      - ski-data:/db
-      - ./output:/data
+      - ski-data-africa:/db
+      - ./output/africa:/data
     working_dir: /app
     command: ["python", "scripts/extract_lifts_and_pistes_from_pbf.py", "/db/planet.osm.pbf", "-o", "/data"]
 
@@ -60,7 +59,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: iceland-enrich-geojson
+    container_name: africa-enrich-geojson
     depends_on:
       extract:
         condition: service_completed_successfully
@@ -71,7 +70,7 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
     volumes:
-      - ./output:/data
+      - ./output/africa:/data
       - ./boundaries:/boundaries
     working_dir: /app
     command: ["python", "scripts/enrich_geojson_properties.py", "all", "-d", "/data", "-b", "/boundaries"]
@@ -80,12 +79,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: iceland-analyze
+    container_name: africa-analyze
     depends_on:
       osm_nearby:
         condition: service_completed_successfully
     volumes:
-      - ./output:/data
+      - ./output/africa:/data
       - ./boundaries:/boundaries
     working_dir: /app
     command: ["python", "analyze_ski_areas.py", "/data/ski_areas.geojson", "/data/osm_near_winter_sports.json", "-o", "/data/ski_areas_analyzed.csv", "-b", "/boundaries"]
@@ -94,14 +93,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: iceland-export-parquet
+    container_name: africa-export-parquet
     depends_on:
       enrich_geojson:
         condition: service_completed_successfully
       analyze:
         condition: service_completed_successfully
     volumes:
-      - ./output:/data
+      - ./output/africa:/data
     working_dir: /app
     command: >
       sh -c "python convert_to_geoparquet.py osm -i /data/osm_near_winter_sports.json -o /data/osm_near_winter_sports.parquet

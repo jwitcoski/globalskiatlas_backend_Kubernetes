@@ -171,8 +171,10 @@ The workflow selects **CPU/memory by region** so small regions don’t overpay a
 | Size   | Family name                                  | CPU  | Memory | Ephemeral | Regions |
 |--------|----------------------------------------------|------|--------|-----------|---------|
 | Small  | `globalskiatlas-backend-k8s-pipeline-small`  | 1 vCPU | 2 GB  | 21 GB     | iceland |
-| Medium | `globalskiatlas-backend-k8s-pipeline-medium` | 2 vCPU | 4 GB  | 21 GB     | south-america, africa, australia-oceania |
-| Large  | `globalskiatlas-backend-k8s-pipeline-large`  | 4 vCPU | 16 GB | 100 GB    | north-america, europe, asia |
+| Medium | `globalskiatlas-backend-k8s-pipeline-medium` | 2 vCPU | 4 GB  | 21 GB     | south-america, africa |
+| Large  | `globalskiatlas-backend-k8s-pipeline-large`  | 4 vCPU | 30 GB | 100 GB    | north-america, europe, asia, australia-oceania |
+
+**OOM fix (2026-02):** The pipeline now clusters ski areas by proximity (300 km) before extracting OSM data. This avoids continent-sized bboxes that caused OOM on medium. If a region still OOMs on medium, switch it to large in the workflow.
 
 1. **Create CloudWatch log group** (shared by all three):
    ```bash

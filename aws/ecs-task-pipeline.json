@@ -1,5 +1,5 @@
 {
-  "family": "globalskiatlas-backend-k8s-iceland",
+  "family": "globalskiatlas-backend-k8s-pipeline",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "2048",
@@ -11,7 +11,7 @@
   "taskRoleArn": "arn:aws:iam::298043721974:role/globalskiatlas-backend-k8s-ecs-task",
   "containerDefinitions": [
     {
-      "name": "iceland",
+      "name": "pipeline",
       "image": "298043721974.dkr.ecr.us-east-1.amazonaws.com/globalskiatlas-backend-k8s-pipeline:latest",
       "essential": true,
       "environment": [
@@ -22,7 +22,7 @@
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/globalskiatlas-backend-k8s-iceland",
+          "awslogs-group": "/ecs/globalskiatlas-backend-k8s-pipeline",
           "awslogs-region": "us-east-1",
           "awslogs-stream-prefix": "ecs"
         }

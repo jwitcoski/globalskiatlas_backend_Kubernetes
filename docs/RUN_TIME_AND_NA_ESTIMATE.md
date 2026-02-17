@@ -25,10 +25,13 @@ So Iceland is about **7× faster** end-to-end; enrich alone went from ~12.5 min 
 - **Issue**: For every lift and piste feature, `_lookup_country_state()` was called and **read both Natural Earth shapefiles from disk** and ran a spatial join. So 145 lifts ⇒ 290 shapefile reads; 184 pistes ⇒ 368 more. That’s why lifts took ~348 s and pistes ~397 s (~2 s per feature).
 - **Fix (implemented)**: Boundaries are loaded **once** via `_load_boundaries()`; `_batch_lookup_country_state()` does a single sjoin of all centroids against countries and states. In `_run_enrich_all`, the same cache is passed to all four steps. Ski-area lookups use an STRtree when available (`_build_ski_area_index` / `_ski_area_at_point_indexed`) so many areas scale well.
 
-### 2. osm_nearby (extract_nearby_from_pbf.py) — **fixed**
+### 2. osm_nearby (extract_nearby_from_pbf.py) — **fixed** (twice)
 
-- **Issue**: It looped **per ski area** and ran `osmium extract -b <bbox> <full_pbf>`. With 500 areas (e.g. North America) that was 500 full PBF reads. That did not scale.
-- **Fix (implemented)**: One **merged bbox** over all ski areas (with radius buffer) → **single** `osmium extract` and **single** ogr2ogr per layer. Then in Python, for each extracted feature we compute its centroid, check which ski area(s) are within `radius_m` (haversine), and emit one element per (feature, ski area) so output shape is unchanged.
+- **Issue 1**: It looped **per ski area** and ran `osmium extract -b <bbox> <full_pbf>`. With 500 areas (e.g. North America) that was 500 full PBF reads. That did not scale.
+- **Fix 1**: One **merged bbox** over all ski areas (with radius buffer) → **single** `osmium extract` and **single** ogr2ogr per layer. Then in Python, for each extracted feature we compute its centroid, check which ski area(s) are within `radius_m` (haversine), and emit one element per (feature, ski area) so output shape is unchanged.
+
+- **Issue 2 (OOM)**: When ski areas span a continent (Africa: Morocco + Lesotho; South America: Chile + Argentina), the merged bbox covers the **whole continent**. Osmium then extracts nearly the full PBF (e.g. 4 GB Africa) → ogr2ogr to GeoJSON (10–20× larger) → OOM on small/medium tasks.
+- **Fix 2**: **Cluster by proximity** (default 300 km). Ski areas within 300 km share one extract; distant clusters get separate extracts. Morocco and Lesotho become 2 clusters with small bboxes; Chile/Argentina may be 1–2 clusters. Memory = max(cluster extract size), not continent-sized.
 
 ---
 

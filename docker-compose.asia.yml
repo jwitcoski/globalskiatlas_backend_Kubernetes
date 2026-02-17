@@ -1,21 +1,20 @@
-# New Zealand flow: Download → Extract (osmium) → OSM nearby (local PBF) → Parquet
-# Same pipeline as Iceland; uses Geofabrik Australia-Oceania / New Zealand PBF (~350 MB).
-# Boundaries: Natural Earth shapefiles in ./boundaries tag country/state.
-# Usage: docker compose -f docker-compose.newzealand.yml up --build
+# Asia: Download → Extract → OSM nearby → Parquet
+# Geofabrik Asia PBF (~8 GB). Ski areas in Japan, India, etc.
+# Usage: docker compose -f docker-compose.asia.yml up --build
 
 volumes:
-  ski-data-nz:
+  ski-data-asia:
 
 services:
   download:
     image: alpine:latest
-    container_name: nz-download
+    container_name: asia-download
     user: root
     volumes:
-      - ski-data-nz:/db
+      - ski-data-asia:/db
     command: >
       sh -c "apk add --no-cache wget
-      && wget --progress=bar:force -O /db/planet.osm.pbf https://download.geofabrik.de/australia-oceania/new-zealand-latest.osm.pbf
+      && wget --progress=bar:force -O /db/planet.osm.pbf https://download.geofabrik.de/asia-latest.osm.pbf
       && echo Download complete"
 
   extract:
@@ -23,36 +22,36 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.extract
-    container_name: nz-extract
+    container_name: asia-extract
     depends_on:
       download:
         condition: service_completed_successfully
     volumes:
-      - ski-data-nz:/db
-      - ./output:/data
+      - ski-data-asia:/db
+      - ./output/asia:/data
     command: ["python", "scripts/pbf_to_geojson.py", "/db/planet.osm.pbf", "/data/ski_areas.geojson"]
 
   osm_nearby:
     image: iceland-extract
-    container_name: nz-osm-nearby
+    container_name: asia-osm-nearby
     depends_on:
       extract:
         condition: service_completed_successfully
     volumes:
-      - ski-data-nz:/db
-      - ./output:/data
+      - ski-data-asia:/db
+      - ./output/asia:/data
     working_dir: /app
     command: ["python", "scripts/extract_nearby_from_pbf.py", "/db/planet.osm.pbf", "/data/ski_areas.geojson", "-o", "/data/osm_near_winter_sports.json"]
 
   lifts_and_pistes:
     image: iceland-extract
-    container_name: nz-lifts-pistes
+    container_name: asia-lifts-pistes
     depends_on:
       extract:
         condition: service_completed_successfully
     volumes:
-      - ski-data-nz:/db
-      - ./output:/data
+      - ski-data-asia:/db
+      - ./output/asia:/data
     working_dir: /app
     command: ["python", "scripts/extract_lifts_and_pistes_from_pbf.py", "/db/planet.osm.pbf", "-o", "/data"]
 
@@ -60,7 +59,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: nz-enrich-geojson
+    container_name: asia-enrich-geojson
     depends_on:
       extract:
         condition: service_completed_successfully
@@ -71,7 +70,7 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
     volumes:
-      - ./output:/data
+      - ./output/asia:/data
       - ./boundaries:/boundaries
     working_dir: /app
     command: ["python", "scripts/enrich_geojson_properties.py", "all", "-d", "/data", "-b", "/boundaries"]
@@ -80,12 +79,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: nz-analyze
+    container_name: asia-analyze
     depends_on:
       osm_nearby:
         condition: service_completed_successfully
     volumes:
-      - ./output:/data
+      - ./output/asia:/data
       - ./boundaries:/boundaries
     working_dir: /app
     command: ["python", "analyze_ski_areas.py", "/data/ski_areas.geojson", "/data/osm_near_winter_sports.json", "-o", "/data/ski_areas_analyzed.csv", "-b", "/boundaries"]
@@ -94,14 +93,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: nz-export-parquet
+    container_name: asia-export-parquet
     depends_on:
       enrich_geojson:
         condition: service_completed_successfully
       analyze:
         condition: service_completed_successfully
     volumes:
-      - ./output:/data
+      - ./output/asia:/data
     working_dir: /app
     command: >
       sh -c "python convert_to_geoparquet.py osm -i /data/osm_near_winter_sports.json -o /data/osm_near_winter_sports.parquet

@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 RADIUS_METERS = int(__import__("os").environ.get("OSM_NEARBY_RADIUS_M", "2000"))
+# Max distance (m) for grouping ski areas into one extract. Prevents continent-sized bbox → OOM.
+CLUSTER_DIST_M = int(__import__("os").environ.get("OSM_NEARBY_CLUSTER_DIST_M", "300000"))  # 300 km
 
 
 def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -51,6 +53,34 @@ def _merged_bbox(features: List[dict], radius_m: float) -> Tuple[float, float, f
             maxlon = max(maxlon, c)
             maxlat = max(maxlat, d)
     return (minlon, minlat, maxlon, maxlat)
+
+
+def _cluster_features(features: List[dict], max_dist_m: float) -> List[List[dict]]:
+    """Group ski areas within max_dist_m into clusters. Uses union-find."""
+    n = len(features)
+    parent = list(range(n))
+
+    def find(i: int) -> int:
+        if parent[i] != i:
+            parent[i] = find(parent[i])
+        return parent[i]
+
+    def union(i: int, j: int) -> None:
+        pi, pj = find(i), find(j)
+        if pi != pj:
+            parent[pi] = pj
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            if _haversine_m(*features[i]["centroid"], *features[j]["centroid"]) <= max_dist_m:
+                union(i, j)
+
+    clusters: dict[int, List[dict]] = {}
+    for i in range(n):
+        root = find(i)
+        clusters.setdefault(root, []).append(features[i])
+
+    return list(clusters.values())
 
 
 def _point_from_geojson_feature(feat: dict) -> Optional[Tuple[float, float]]:
@@ -190,14 +220,57 @@ def _geojson_feature_to_osm_element(feat: dict, ws_id: int, ws_type: str, ws_nam
     return result
 
 
+def _process_cluster_extract(
+    extract_pbf: Path,
+    cluster_features: List[dict],
+    radius_m: int,
+) -> List[dict]:
+    """Run ogr2ogr on extract, filter by distance, return OSM elements."""
+    elements: List[dict] = []
+    for layer in ["points", "lines", "multilinestrings", "multipolygons"]:
+        layer_geojson = extract_pbf.parent / f"{layer}.geojson"
+        try:
+            subprocess.run(
+                ["ogr2ogr", "-f", "GeoJSON", "-t_srs", "EPSG:4326",
+                 "-sql", f"SELECT * FROM {layer}",
+                 str(layer_geojson), str(extract_pbf)],
+                check=True, capture_output=True, text=True,
+            )
+        except (FileNotFoundError, subprocess.CalledProcessError):
+            continue
+
+        if not layer_geojson.exists() or layer_geojson.stat().st_size <= 50:
+            continue
+
+        data = json.loads(layer_geojson.read_text(encoding="utf-8"))
+        for feat in data.get("features", []):
+            pt = _point_from_geojson_feature(feat)
+            if pt is None:
+                continue
+            lat_f, lon_f = pt
+            for ws in cluster_features:
+                lat_ws, lon_ws = ws["centroid"]
+                if _haversine_m(lat_f, lon_f, lat_ws, lon_ws) <= radius_m:
+                    elem = _geojson_feature_to_osm_element(
+                        feat, ws["id"], ws["type"], ws["name"],
+                        ws.get("country"), ws.get("state"),
+                    )
+                    if elem:
+                        elements.append(elem)
+        layer_geojson.unlink(missing_ok=True)  # Free disk/memory before next layer
+    return elements
+
+
 def extract_from_pbf(
     pbf_path: Path,
     ski_areas_path: Path,
     output_path: Path,
     radius_m: int = RADIUS_METERS,
+    cluster_dist_m: int = CLUSTER_DIST_M,
 ) -> None:
     """Extract OSM data within radius of each ski area from PBF.
-    One merged bbox extract (single PBF read), then assign elements to ski areas by distance in Python.
+    Clusters ski areas by proximity to avoid continent-sized bbox (OOM). One osmium
+    extract per cluster, then assign elements to ski areas by distance in Python.
     """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -208,67 +281,32 @@ def extract_from_pbf(
         print("Error: No features with geometry in input.", file=sys.stderr)
         sys.exit(1)
 
+    clusters = _cluster_features(features, cluster_dist_m)
     print(f"Extracting OSM data within {radius_m/1000:.1f}km of {len(features)} ski areas from PBF...")
     print(f"PBF: {pbf_path} | Output: {json_path}")
-    print("  (one merged bbox extract, then filter by distance in Python)")
-
-    minlon, minlat, maxlon, maxlat = _merged_bbox(features, radius_m)
-    bbox_str = f"{minlon},{minlat},{maxlon},{maxlat}"
+    print(f"  ({len(clusters)} cluster(s) within {cluster_dist_m/1000:.0f}km to avoid OOM)")
 
     all_elements: List[dict] = []
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
-        extract_pbf = tmp / "extract.pbf"
+        for ci, cluster in enumerate(clusters):
+            minlon, minlat, maxlon, maxlat = _merged_bbox(cluster, radius_m)
+            bbox_str = f"{minlon},{minlat},{maxlon},{maxlat}"
+            extract_pbf = tmp / f"extract_{ci}.pbf"
 
-        # Single osmium extract for the whole region
-        try:
-            subprocess.run(
-                ["osmium", "extract", "-b", bbox_str, str(pbf_path), "-o", str(extract_pbf)],
-                check=True, capture_output=True, text=True,
-            )
-        except (FileNotFoundError, subprocess.CalledProcessError) as e:
-            print(f"  osmium extract failed: {e}", file=sys.stderr)
-            sys.exit(1)
-
-        if not extract_pbf.exists() or extract_pbf.stat().st_size == 0:
-            print("  No data in extract (empty bbox or PBF).", file=sys.stderr)
-            json_output = {"version": 0.6, "generator": "extract_nearby_from_pbf.py", "elements": []}
-            json_path.write_text(json.dumps(json_output, indent=2, ensure_ascii=False), encoding="utf-8")
-            print(f"Saved 0 elements to {json_path} (JSON)")
-            return
-
-        # Convert to GeoJSON once per layer
-        for layer in ["points", "lines", "multilinestrings", "multipolygons"]:
-            layer_geojson = tmp / f"{layer}.geojson"
             try:
                 subprocess.run(
-                    ["ogr2ogr", "-f", "GeoJSON", "-t_srs", "EPSG:4326",
-                     "-sql", f"SELECT * FROM {layer}",
-                     str(layer_geojson), str(extract_pbf)],
+                    ["osmium", "extract", "-b", bbox_str, str(pbf_path), "-o", str(extract_pbf)],
                     check=True, capture_output=True, text=True,
                 )
-            except (FileNotFoundError, subprocess.CalledProcessError):
-                continue
+            except (FileNotFoundError, subprocess.CalledProcessError) as e:
+                print(f"  osmium extract failed (cluster {ci}): {e}", file=sys.stderr)
+                sys.exit(1)
 
-            if not layer_geojson.exists() or layer_geojson.stat().st_size <= 50:
-                continue
-
-            data = json.loads(layer_geojson.read_text(encoding="utf-8"))
-            for feat in data.get("features", []):
-                pt = _point_from_geojson_feature(feat)
-                if pt is None:
-                    continue
-                lat_f, lon_f = pt
-                # Which ski areas is this feature within radius of?
-                for ws in features:
-                    lat_ws, lon_ws = ws["centroid"]
-                    if _haversine_m(lat_f, lon_f, lat_ws, lon_ws) <= radius_m:
-                        elem = _geojson_feature_to_osm_element(
-                            feat, ws["id"], ws["type"], ws["name"],
-                            ws.get("country"), ws.get("state"),
-                        )
-                        if elem:
-                            all_elements.append(elem)
+            if extract_pbf.exists() and extract_pbf.stat().st_size > 0:
+                cluster_elements = _process_cluster_extract(extract_pbf, cluster, radius_m)
+                all_elements.extend(cluster_elements)
+            extract_pbf.unlink(missing_ok=True)
 
     json_output = {"version": 0.6, "generator": "extract_nearby_from_pbf.py", "elements": all_elements}
     json_path.write_text(json.dumps(json_output, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -283,8 +321,11 @@ if __name__ == "__main__":
     p.add_argument("-o", "--output", default="output/osm_near_winter_sports.json",
                     help="Output JSON path (default: output/osm_near_winter_sports.json)")
     p.add_argument("-r", "--radius", type=int, default=RADIUS_METERS, help="Radius in meters")
+    p.add_argument("--cluster-dist", type=int, default=CLUSTER_DIST_M,
+                    help="Max distance (m) to group ski areas; smaller = more clusters, less memory (default: 300000)")
     args = p.parse_args()
     extract_from_pbf(
         Path(args.pbf), Path(args.ski_areas), Path(args.output),
         radius_m=args.radius,
+        cluster_dist_m=args.cluster_dist,
     )
