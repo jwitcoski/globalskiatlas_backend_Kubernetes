@@ -1,8 +1,9 @@
-# Build Iceland Docker image, push to ECR, optionally run ECS task.
+# Build ski atlas pipeline image, push to ECR, optionally run ECS task (any region).
+# Task size is chosen by region: small (iceland), medium (south-america/africa/australia-oceania), large (north-america/europe/asia).
 # Requires: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, ECR_REPOSITORY,
-#           ECS_CLUSTER, ECS_TASK_DEFINITION, ECS_SUBNETS, ECS_SECURITY_GROUP, S3_BUCKET
+#           ECS_CLUSTER, ECS_SUBNETS, ECS_SECURITY_GROUP, S3_BUCKET
 
-name: Deploy Iceland to AWS
+name: Deploy pipeline to AWS
 
 on:
   push:
@@ -89,7 +90,6 @@ jobs:
           SECURITY_GROUP: ${{ secrets.ECS_SECURITY_GROUP }}
           S3_BUCKET: ${{ secrets.S3_BUCKET }}
           ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
-          ECS_TASK_DEFINITION: ${{ secrets.ECS_TASK_DEFINITION }}
           REGION_NAME: ${{ inputs.region }}
         run: |
           if [ -z "$SUBNETS" ] || [ -z "$SECURITY_GROUP" ]; then
@@ -97,16 +97,20 @@ jobs:
             exit 0
           fi
           case "$REGION_NAME" in
-            iceland) PBF_URL="https://download.geofabrik.de/europe/iceland-latest.osm.pbf" ;;
-            north-america) PBF_URL="https://download.geofabrik.de/north-america-latest.osm.pbf" ;;
-            south-america) PBF_URL="https://download.geofabrik.de/south-america-latest.osm.pbf" ;;
-            europe) PBF_URL="https://download.geofabrik.de/europe-latest.osm.pbf" ;;
-            asia) PBF_URL="https://download.geofabrik.de/asia-latest.osm.pbf" ;;
-            africa) PBF_URL="https://download.geofabrik.de/africa-latest.osm.pbf" ;;
-            australia-oceania) PBF_URL="https://download.geofabrik.de/australia-oceania-latest.osm.pbf" ;;
-            *) PBF_URL="https://download.geofabrik.de/europe/iceland-latest.osm.pbf" ;;
+            iceland) PBF_URL="https://download.geofabrik.de/europe/iceland-latest.osm.pbf"
+                     TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-small" ;;
+            north-america|europe|asia) PBF_URL="https://download.geofabrik.de/${REGION_NAME}-latest.osm.pbf"
+                     TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-large" ;;
+            south-america) PBF_URL="https://download.geofabrik.de/south-america-latest.osm.pbf"
+                     TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-medium" ;;
+            africa) PBF_URL="https://download.geofabrik.de/africa-latest.osm.pbf"
+                     TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-medium" ;;
+            australia-oceania) PBF_URL="https://download.geofabrik.de/australia-oceania-latest.osm.pbf"
+                     TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-medium" ;;
+            *) PBF_URL="https://download.geofabrik.de/europe/iceland-latest.osm.pbf"
+               TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-small" ;;
           esac
-          echo "Region: $REGION_NAME | PBF: $PBF_URL"
+          echo "Region: $REGION_NAME | PBF: $PBF_URL | Task: $TASK_DEFINITION"
           # Build network config JSON (subnets: "a,b" -> ["a","b"])
           SUBNET_ARR=$(echo "$SUBNETS" | jq -R 'split(",") | map(gsub("^\\s+|\\s+$";""))')
           NETWORK_CONFIG=$(jq -n --argjson subnets "$SUBNET_ARR" --arg sg "$SECURITY_GROUP" \
@@ -117,10 +121,10 @@ jobs:
             --arg region "$REGION_NAME" \
             --arg aws_region "${{ env.AWS_REGION }}" \
             --arg pbf_url "$PBF_URL" \
-            '{containerOverrides: [{name: "iceland", environment: [{name: "S3_BUCKET", value: $s3}, {name: "REGION", value: $region}, {name: "AWS_REGION", value: $aws_region}, {name: "PBF_URL", value: $pbf_url}]}]}')
+            '{containerOverrides: [{name: "pipeline", environment: [{name: "S3_BUCKET", value: $s3}, {name: "REGION", value: $region}, {name: "AWS_REGION", value: $aws_region}, {name: "PBF_URL", value: $pbf_url}]}]}')
           TASK_ARN=$(aws ecs run-task \
             --cluster "$ECS_CLUSTER" \
-            --task-definition "$ECS_TASK_DEFINITION" \
+            --task-definition "$TASK_DEFINITION" \
             --launch-type FARGATE \
             --network-configuration "$NETWORK_CONFIG" \
             --overrides "$OVERRIDES" \

@@ -130,7 +130,6 @@ Add these secrets:
 | `AWS_REGION`  | e.g. `us-east-1`                     |
 | `ECR_REPOSITORY` | e.g. `globalskiatlas-backend-k8s-pipeline`   |
 | `ECS_CLUSTER` | e.g. `globalskiatlas-backend-k8s`                |
-| `ECS_TASK_DEFINITION` | Name of task def (e.g. `globalskiatlas-backend-k8s-iceland`) |
 | `ECS_SUBNETS` | Comma-separated subnet IDs (private subnets) |
 | `ECS_SECURITY_GROUP` | Security group ID (must allow outbound HTTPS) |
 | `S3_BUCKET`   | e.g. `globalskiatlas-backend-k8s-output`         |
@@ -165,44 +164,42 @@ docker run --rm -e S3_BUCKET=your-bucket \
 
 ---
 
-## Step 4: ECS Task Definition
+## Step 4: ECS Task Definitions (region-based size)
 
-1. **Edit `aws/ecs-task-iceland.json`**: Replace `YOUR_ACCOUNT_ID` with your AWS account ID, and adjust the ECR image URI, execution role, and task role ARNs.
+The workflow selects **CPU/memory by region** so small regions don’t overpay and large continents don’t OOM. Three task definitions are used:
 
-2. **Create CloudWatch log group** (required for container logs):
+| Size   | Family name                                  | CPU  | Memory | Ephemeral | Regions |
+|--------|----------------------------------------------|------|--------|-----------|---------|
+| Small  | `globalskiatlas-backend-k8s-pipeline-small`  | 1 vCPU | 2 GB  | 21 GB     | iceland |
+| Medium | `globalskiatlas-backend-k8s-pipeline-medium` | 2 vCPU | 4 GB  | 21 GB     | south-america, africa, australia-oceania |
+| Large  | `globalskiatlas-backend-k8s-pipeline-large`  | 4 vCPU | 16 GB | 100 GB    | north-america, europe, asia |
+
+1. **Create CloudWatch log group** (shared by all three):
    ```bash
-   aws logs create-log-group --log-group-name /ecs/globalskiatlas-backend-k8s-iceland
+   aws logs create-log-group --log-group-name /ecs/globalskiatlas-backend-k8s-pipeline
    ```
 
-3. **Register the task definition**:
+2. **Register all three task definitions** (from repo root; replace account ID in the JSONs if needed):
    ```bash
-   aws ecs register-task-definition --cli-input-json file://aws/ecs-task-iceland.json
+   aws ecs register-task-definition --cli-input-json file://aws/ecs-task-pipeline-small.json --region us-east-1
+   aws ecs register-task-definition --cli-input-json file://aws/ecs-task-pipeline-medium.json --region us-east-1
+   aws ecs register-task-definition --cli-input-json file://aws/ecs-task-pipeline-large.json --region us-east-1
    ```
 
-**Important settings:**
-- **CPU**: 1024 (1 vCPU) for Iceland (~2 min run)
-- **Memory**: 2048 MB
-- **Ephemeral storage**: 10 GB (Iceland PBF ~60 MB)
-- **Task role**: `globalskiatlas-backend-k8s-ecs-task` (S3 write)
-- **Execution role**: `globalskiatlas-backend-k8s-ecs-execution`
-
-**Environment variables** passed to the container:
-- `S3_BUCKET` – bucket name
-- `REGION` – e.g. `iceland`
-- `AWS_REGION` – e.g. `us-east-1`
+**Task def JSONs:** `aws/ecs-task-pipeline-small.json`, `aws/ecs-task-pipeline-medium.json`, `aws/ecs-task-pipeline-large.json`. Each uses container name `pipeline`, so the workflow’s overrides apply to all. No GitHub secret for task definition is required—the workflow picks the family from the selected region.
 
 ---
 
 ## Step 5: GitHub Actions Workflow
 
-The workflow `.github/workflows/deploy-iceland.yml`:
+The workflow `.github/workflows/deploy-iceland-aws.yml`:
 
 1. **On push to main** (or manual dispatch):
    - Build Docker image
    - Push to ECR
-2. **Optional: Run ECS task** (manual `workflow_dispatch` with `run_task: true`):
-   - Runs the ECS task with the new image
-   - Task downloads PBF, runs pipeline, uploads to S3
+2. **Optional: Run ECS task** (manual `workflow_dispatch` with `run_task: true`, and choose **region**):
+   - Selects task size from region (small/medium/large)
+   - Runs the ECS task with the new image; task downloads PBF, runs pipeline, uploads to S3
 
 ---
 
@@ -275,5 +272,5 @@ For large regions:
 
 - **Task fails to start**: Check execution role has `AmazonECSTaskExecutionRolePolicy` and can pull from ECR.
 - **S3 upload fails**: Check task role has `s3:PutObject` on the bucket.
-- **Out of memory**: Increase memory in task definition.
+- **Out of memory**: The workflow uses small/medium/large task defs by region. If a region still OOMs, edit the corresponding `aws/ecs-task-pipeline-*.json` (e.g. medium → 8 GB), re-register, and re-run.
 - **Out of disk**: Increase `ephemeralStorage` (Fargate max 200 GB).
