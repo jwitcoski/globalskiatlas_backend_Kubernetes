@@ -166,29 +166,31 @@ docker run --rm -e S3_BUCKET=your-bucket \
 
 ## Step 4: ECS Task Definitions (region-based size)
 
-The workflow selects **CPU/memory by region** so small regions don’t overpay and large continents don’t OOM. Three task definitions are used:
+The workflow selects **CPU/memory by region** so small regions don’t overpay and large continents don’t OOM. Four task definitions are used:
 
 | Size   | Family name                                  | CPU  | Memory | Ephemeral | Regions |
 |--------|----------------------------------------------|------|--------|-----------|---------|
 | Small  | `globalskiatlas-backend-k8s-pipeline-small`  | 1 vCPU | 2 GB  | 21 GB     | iceland |
 | Medium | `globalskiatlas-backend-k8s-pipeline-medium` | 2 vCPU | 4 GB  | 21 GB     | south-america, africa |
-| Large  | `globalskiatlas-backend-k8s-pipeline-large`  | 4 vCPU | 30 GB | 100 GB    | north-america, europe, asia, australia-oceania |
+| Large  | `globalskiatlas-backend-k8s-pipeline-large`  | 4 vCPU | 30 GB | 100 GB    | australia-oceania |
+| XLarge | `globalskiatlas-backend-k8s-pipeline-xlarge` | 8 vCPU | 60 GB | 200 GB   | **europe, north-america, asia** |
 
-**OOM fix (2026-02):** The pipeline now clusters ski areas by proximity (300 km) before extracting OSM data. This avoids continent-sized bboxes that caused OOM on medium. If a region still OOMs on medium, switch it to large in the workflow.
+**OOM fix (2026-02):** Europe and North America use xlarge (8 vCPU, 60 GB, 200 GB) with `OSM_NEARBY_CLUSTER_DIST_M=200000`—fewer clusters, larger extracts, ~6 h each.
 
-1. **Create CloudWatch log group** (shared by all three):
+1. **Create CloudWatch log group** (shared by all):
    ```bash
    aws logs create-log-group --log-group-name /ecs/globalskiatlas-backend-k8s-pipeline
    ```
 
-2. **Register all three task definitions** (from repo root; replace account ID in the JSONs if needed):
+2. **Register all four task definitions** (from repo root; replace account ID in the JSONs if needed):
    ```bash
    aws ecs register-task-definition --cli-input-json file://aws/ecs-task-pipeline-small.json --region us-east-1
    aws ecs register-task-definition --cli-input-json file://aws/ecs-task-pipeline-medium.json --region us-east-1
    aws ecs register-task-definition --cli-input-json file://aws/ecs-task-pipeline-large.json --region us-east-1
+   aws ecs register-task-definition --cli-input-json file://aws/ecs-task-pipeline-xlarge.json --region us-east-1
    ```
 
-**Task def JSONs:** `aws/ecs-task-pipeline-small.json`, `aws/ecs-task-pipeline-medium.json`, `aws/ecs-task-pipeline-large.json`. Each uses container name `pipeline`, so the workflow’s overrides apply to all. No GitHub secret for task definition is required—the workflow picks the family from the selected region.
+**Task def JSONs:** `aws/ecs-task-pipeline-small.json`, `aws/ecs-task-pipeline-medium.json`, `aws/ecs-task-pipeline-large.json`, `aws/ecs-task-pipeline-xlarge.json`. Each uses container name `pipeline`, so the workflow’s overrides apply to all. No GitHub secret for task definition is required—the workflow picks the family from the selected region.
 
 ---
 
@@ -244,29 +246,26 @@ aws ecs run-task \
 
 ## Scaling to Continent-Wide (Europe, North America)
 
-| Region       | PBF Size | Est. Runtime | Suggested CPU/Memory      |
-|--------------|----------|--------------|---------------------------|
-| Iceland      | ~60 MB   | ~2 min       | 1 vCPU, 2 GB              |
-| New Zealand  | ~373 MB  | ~10 min      | 2 vCPU, 4 GB              |
-| North America| ~16 GB   | ~4–7 hours   | 4 vCPU, 16 GB, 100 GB disk|
+| Region        | PBF Size | Est. Runtime | Task  | Cost/run (6 h) |
+|---------------|----------|--------------|-------|----------------|
+| Iceland       | ~60 MB   | ~2 min       | small | ~$0.05         |
+| New Zealand   | ~373 MB  | ~10 min      | medium| ~$0.10         |
+| North America | ~16 GB   | ~5–7 hours   | xlarge| ~$3.50         |
+| Europe        | ~25 GB   | ~6–8 hours   | xlarge| ~$3.50         |
 
-For large regions:
-
-1. Increase task CPU/memory in the task definition
-2. Increase `ephemeralStorage` (up to 200 GB for Fargate)
-3. Add a `REGION` env var to select PBF URL (e.g. `north-america`, `europe`)
-4. Consider **AWS Batch** if you need longer runs or job queues
+Europe and North America use **xlarge** (8 vCPU, 60 GB, 200 GB ephemeral) with `OSM_NEARBY_CLUSTER_DIST_M=200000` for faster osm_nearby runs. Run them one at a time via Actions → Deploy pipeline → region: europe or north-america.
 
 ---
 
-## Cost Estimate (Iceland, monthly)
+## Cost Estimate
 
-| Item        | Cost                        |
-|-------------|-----------------------------|
-| ECR storage | ~$0.10/month (1 image)      |
-| Fargate     | ~$0.05/run (2 min × 1 vCPU) |
-| S3          | ~$0.01/month (MB of parquet)|
-| **Total**   | **~$0.20/month** for Iceland|
+| Region   | Task  | Est. runtime | Cost per run  |
+|----------|-------|--------------|---------------|
+| Iceland  | small | ~2 min       | ~$0.05        |
+| Europe   | xlarge| ~6–8 hours   | ~$3.50        |
+| North America | xlarge | ~5–7 hours | ~$3.50    |
+
+**Europe + North America together:** ~$7–10 for both (under $10 with credits). Fargate xlarge: ~$0.61/hour (8 vCPU + 60 GB).
 
 ---
 

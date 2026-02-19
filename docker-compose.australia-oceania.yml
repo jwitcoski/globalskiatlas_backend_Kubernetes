@@ -37,6 +37,8 @@ services:
     depends_on:
       extract:
         condition: service_completed_successfully
+    environment:
+      - PYTHONUNBUFFERED=1
     volumes:
       - ski-data-australia-oceania:/db
       - ./output/australia-oceania:/data

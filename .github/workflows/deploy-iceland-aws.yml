@@ -1,5 +1,5 @@
 # Build ski atlas pipeline image, push to ECR, optionally run ECS task (any region).
-# Task size is chosen by region: small (iceland), medium (south-america/africa/australia-oceania), large (north-america/europe/asia).
+# Task size by region: small (iceland), medium (south-america/africa), large (australia-oceania), xlarge (europe/north-america/asia).
 # Requires: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, ECR_REPOSITORY,
 #           ECS_CLUSTER, ECS_SUBNETS, ECS_SECURITY_GROUP, S3_BUCKET
 
@@ -98,30 +98,46 @@ jobs:
           fi
           case "$REGION_NAME" in
             iceland) PBF_URL="https://download.geofabrik.de/europe/iceland-latest.osm.pbf"
-                     TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-small" ;;
+                     TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-small"
+                     OSM_CLUSTER_DIST="" ;;
             north-america|europe|asia) PBF_URL="https://download.geofabrik.de/${REGION_NAME}-latest.osm.pbf"
-                     TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-large" ;;
+                     TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-xlarge"
+                     OSM_CLUSTER_DIST="200000" ;;
             south-america) PBF_URL="https://download.geofabrik.de/south-america-latest.osm.pbf"
-                     TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-medium" ;;
+                     TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-medium"
+                     OSM_CLUSTER_DIST="" ;;
             africa) PBF_URL="https://download.geofabrik.de/africa-latest.osm.pbf"
-                     TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-medium" ;;
+                     TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-medium"
+                     OSM_CLUSTER_DIST="" ;;
             australia-oceania) PBF_URL="https://download.geofabrik.de/australia-oceania-latest.osm.pbf"
-                     TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-large" ;;
+                     TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-large"
+                     OSM_CLUSTER_DIST="" ;;
             *) PBF_URL="https://download.geofabrik.de/europe/iceland-latest.osm.pbf"
-               TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-small" ;;
+               TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-small"
+               OSM_CLUSTER_DIST="" ;;
           esac
           echo "Region: $REGION_NAME | PBF: $PBF_URL | Task: $TASK_DEFINITION"
           # Build network config JSON (subnets: "a,b" -> ["a","b"])
           SUBNET_ARR=$(echo "$SUBNETS" | jq -R 'split(",") | map(gsub("^\\s+|\\s+$";""))')
           NETWORK_CONFIG=$(jq -n --argjson subnets "$SUBNET_ARR" --arg sg "$SECURITY_GROUP" \
             '{awsvpcConfiguration: {subnets: $subnets, securityGroups: [$sg], assignPublicIp: "ENABLED"}}')
-          # Build overrides JSON with jq (REGION + PBF_URL so container runs the chosen extract)
-          OVERRIDES=$(jq -n \
-            --arg s3 "$S3_BUCKET" \
-            --arg region "$REGION_NAME" \
-            --arg aws_region "${{ env.AWS_REGION }}" \
-            --arg pbf_url "$PBF_URL" \
-            '{containerOverrides: [{name: "pipeline", environment: [{name: "S3_BUCKET", value: $s3}, {name: "REGION", value: $region}, {name: "AWS_REGION", value: $aws_region}, {name: "PBF_URL", value: $pbf_url}]}]}')
+          # Build overrides JSON with jq (REGION + PBF_URL + OSM_NEARBY_CLUSTER_DIST_M for EU/NA)
+          if [ -n "$OSM_CLUSTER_DIST" ]; then
+            OVERRIDES=$(jq -n \
+              --arg s3 "$S3_BUCKET" \
+              --arg region "$REGION_NAME" \
+              --arg aws_region "${{ env.AWS_REGION }}" \
+              --arg pbf_url "$PBF_URL" \
+              --arg cluster_dist "$OSM_CLUSTER_DIST" \
+              '{containerOverrides: [{name: "pipeline", environment: [{name: "S3_BUCKET", value: $s3}, {name: "REGION", value: $region}, {name: "AWS_REGION", value: $aws_region}, {name: "PBF_URL", value: $pbf_url}, {name: "OSM_NEARBY_CLUSTER_DIST_M", value: $cluster_dist}]}]}')
+          else
+            OVERRIDES=$(jq -n \
+              --arg s3 "$S3_BUCKET" \
+              --arg region "$REGION_NAME" \
+              --arg aws_region "${{ env.AWS_REGION }}" \
+              --arg pbf_url "$PBF_URL" \
+              '{containerOverrides: [{name: "pipeline", environment: [{name: "S3_BUCKET", value: $s3}, {name: "REGION", value: $region}, {name: "AWS_REGION", value: $aws_region}, {name: "PBF_URL", value: $pbf_url}]}]}')
+          fi
           TASK_ARN=$(aws ecs run-task \
             --cluster "$ECS_CLUSTER" \
             --task-definition "$TASK_DEFINITION" \

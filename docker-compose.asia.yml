@@ -37,6 +37,11 @@ services:
     depends_on:
       extract:
         condition: service_completed_successfully
+    environment:
+      - PYTHONUNBUFFERED=1
+      # Smaller clusters = less memory per osmium extract (Asia PBF is large)
+      - OSM_NEARBY_CLUSTER_DIST_M=150000
+    # Exit 137 = OOM. Give Docker Desktop more RAM (e.g. 8GB+) or use smaller clusters (e.g. 100000).
     volumes:
       - ski-data-asia:/db
       - ./output/asia:/data

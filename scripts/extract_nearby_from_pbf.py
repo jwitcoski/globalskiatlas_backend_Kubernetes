@@ -290,17 +290,25 @@ def extract_from_pbf(
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
         for ci, cluster in enumerate(clusters):
+            print(f"  cluster {ci + 1}/{len(clusters)} ...", file=sys.stderr, flush=True)
             minlon, minlat, maxlon, maxlat = _merged_bbox(cluster, radius_m)
             bbox_str = f"{minlon},{minlat},{maxlon},{maxlat}"
             extract_pbf = tmp / f"extract_{ci}.pbf"
 
             try:
-                subprocess.run(
+                r = subprocess.run(
                     ["osmium", "extract", "-b", bbox_str, str(pbf_path), "-o", str(extract_pbf)],
-                    check=True, capture_output=True, text=True,
+                    capture_output=True, text=True,
                 )
-            except (FileNotFoundError, subprocess.CalledProcessError) as e:
-                print(f"  osmium extract failed (cluster {ci}): {e}", file=sys.stderr)
+                if r.returncode != 0:
+                    raise subprocess.CalledProcessError(r.returncode, r.args, r.stdout, r.stderr)
+            except FileNotFoundError as e:
+                print(f"  osmium extract failed (cluster {ci}): osmium not found", file=sys.stderr)
+                sys.exit(1)
+            except subprocess.CalledProcessError as e:
+                print(f"  osmium extract failed (cluster {ci}): exit {e.returncode}", file=sys.stderr)
+                if e.stderr:
+                    print(f"  osmium stderr: {e.stderr.strip()}", file=sys.stderr)
                 sys.exit(1)
 
             if extract_pbf.exists() and extract_pbf.stat().st_size > 0:
