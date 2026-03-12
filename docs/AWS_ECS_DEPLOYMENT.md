@@ -1,5 +1,7 @@
 # AWS Deployment: GitHub → ECR → ECS Fargate → S3
 
+**Quick setup:** For a step-by-step **local PC → GitHub → GitHub Actions → AWS** checklist, see [WORKFLOW_SETUP.md](WORKFLOW_SETUP.md).
+
 **globalskiatlas_backend_Kubernetes** — Docker/ECS backend (distinct from the Lambda-based setup). This guide walks through running the ski atlas pipeline (Iceland first, then continent-wide) on AWS using Docker, ECS Fargate, and S3. The flow is designed for **monthly batch jobs** that extract parquet files into an S3 bucket.
 
 ---
@@ -177,6 +179,8 @@ The workflow selects **CPU/memory by region** so small regions don’t overpay a
 
 **OOM fix (2026-02):** Europe and North America use xlarge (8 vCPU, 60 GB, 200 GB) with `OSM_NEARBY_CLUSTER_DIST_M=200000`—fewer clusters, larger extracts, ~6 h each.
 
+**Note:** The GitHub Actions workflow runs **full continents** (e.g. europe, north-america) in one task. For **per-region runs** (e.g. Germany, California) with OOM avoidance via sub-regions and `cluster_dist_m`, use the **local workflow** (`run_region_local.py` + `config/regions.yaml`). See `docs/LOCAL_WORKFLOW.md` and `docs/RUN_BY_REGION.md`.
+
 1. **Create CloudWatch log group** (shared by all):
    ```bash
    aws logs create-log-group --log-group-name /ecs/globalskiatlas-backend-k8s-pipeline
@@ -253,7 +257,7 @@ aws ecs run-task \
 | North America | ~16 GB   | ~5–7 hours   | xlarge| ~$3.50         |
 | Europe        | ~25 GB   | ~6–8 hours   | xlarge| ~$3.50         |
 
-Europe and North America use **xlarge** (8 vCPU, 60 GB, 200 GB ephemeral) with `OSM_NEARBY_CLUSTER_DIST_M=200000` for faster osm_nearby runs. Run them one at a time via Actions → Deploy pipeline → region: europe or north-america.
+Europe and North America use **xlarge** (8 vCPU, 60 GB, 200 GB ephemeral) with `OSM_NEARBY_CLUSTER_DIST_M=200000` for full-continent runs. Run them one at a time via Actions → Deploy pipeline → region: europe or north-america. For per-region runs with finer OOM control (sub-regions, smaller clusters), use the local workflow; see `docs/RUN_BY_REGION.md`.
 
 ---
 
@@ -273,5 +277,5 @@ Europe and North America use **xlarge** (8 vCPU, 60 GB, 200 GB ephemeral) with `
 
 - **Task fails to start**: Check execution role has `AmazonECSTaskExecutionRolePolicy` and can pull from ECR.
 - **S3 upload fails**: Check task role has `s3:PutObject` on the bucket.
-- **Out of memory**: The workflow uses small/medium/large task defs by region. If a region still OOMs, edit the corresponding `aws/ecs-task-pipeline-*.json` (e.g. medium → 8 GB), re-register, and re-run.
+- **Out of memory**: The workflow uses small/medium/large/xlarge task defs by region. Full-continent runs (europe, north-america) use xlarge. If a continent still OOMs, consider running **per-region** locally with `run_region_local.py` (uses `config/regions.yaml` with sub-regions and `cluster_dist_m` to avoid OOM); see `docs/RUN_BY_REGION.md`.
 - **Out of disk**: Increase `ephemeralStorage` (Fargate max 200 GB).
