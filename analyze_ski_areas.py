@@ -220,10 +220,26 @@ def _load_winter_sports(path: Path) -> Dict[Tuple[str, int], dict]:
                 continue
             lats = [p["lat"] for p in coords]
             lons = [p["lon"] for p in coords]
+            tags = {"name": props.get("name") or props.get("Name") or str(oid)}
+            # Parse other_tags (ogr2ogr HSTORE) for name:en, int_name
+            other_tags = props.get("other_tags")
+            if other_tags:
+                s = str(other_tags).strip()
+                if s.startswith("{"):
+                    try:
+                        tags.update(json.loads(s))
+                    except json.JSONDecodeError:
+                        pass
+                else:
+                    for part in s.split('","'):
+                        if "=>" in part:
+                            kv = part.replace('"', "").split("=>", 1)
+                            if len(kv) == 2:
+                                tags[kv[0].strip()] = kv[1].strip()
             ws = {
                 "type": ws_type,
                 "id": oid,
-                "tags": {"name": props.get("name") or props.get("Name") or str(oid)},
+                "tags": tags,
                 "geometry": coords,
                 "bounds": {"minlat": min(lats), "maxlat": max(lats), "minlon": min(lons), "maxlon": max(lons)},
                 "country": props.get("country"),
@@ -278,6 +294,7 @@ def analyze(
     osm_nearby_path: Union[str, Path] = "osm_near_winter_sports.json",
     output_path: Optional[str] = None,
     boundaries_dir: Optional[Union[str, Path]] = "boundaries",
+    region: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Analyze each winter_sports and produce enriched records.
     Tags country/state from boundaries (centroid point-in-polygon). Writes centroid and feature counts.
@@ -314,7 +331,12 @@ def analyze(
     for (ws_type, ws_id), ws in ws_by_id.items():
         nearby = by_ws.get((ws_type, ws_id)) or by_ws.get((str(ws_type), ws_id)) or []
         tags = ws.get("tags", {})
-        name = tags.get("name:en") or tags.get("name") or f"{ws_type}/{ws_id}"
+        name = tags.get("name") or f"{ws_type}/{ws_id}"
+        english_name = tags.get("name:en") or tags.get("int_name") or ""
+        website = str(tags.get("website") or tags.get("contact:website") or "").strip()
+        operator = str(tags.get("operator") or "").strip()
+        opening_hours = str(tags.get("opening_hours") or "").strip()
+        phone = str(tags.get("phone") or tags.get("contact:phone") or "").strip()
 
         # Centroid and country/state from boundaries
         centroid = _get_ws_centroid(ws)
@@ -343,6 +365,8 @@ def analyze(
         has_gladed = False
         has_snow_park = False
         has_sledding_tubing = False
+        has_night_skiing = False
+        lit_pistes = 0
         difficulty_counts: Dict[str, int] = {d: 0 for d in PISTE_DIFFICULTIES}
         for elem in nearby:
             etags = elem.get("tags", {})
@@ -351,6 +375,10 @@ def analyze(
                 has_snow_park = True
             if piste_type in ("sled", "tubing"):
                 has_sledding_tubing = True
+            if etags.get("lit") == "yes" or etags.get("piste:lit") == "yes":
+                has_night_skiing = True
+                if piste_type == "downhill":
+                    lit_pistes += 1
             if piste_type == "downhill":
                 downhill_trail_count += 1
                 diff = etags.get("piste:difficulty", "").strip().lower()
@@ -371,16 +399,20 @@ def analyze(
 
         longest_trail_mi = round(max(trail_lengths_m) * M_TO_MI, 2) if trail_lengths_m else 0.0
         avg_trail_mi = round((sum(trail_lengths_m) / len(trail_lengths_m)) * M_TO_MI, 2) if trail_lengths_m else 0.0
+        total_trail_mi = round(sum(trail_lengths_m) * M_TO_MI, 2) if trail_lengths_m else 0.0
 
         # 3. Total lifts, longest lift, lift type counts
         lift_count = 0
         seen_lift_ways = set()
         lift_type_counts: Dict[str, int] = {}
         max_lift_m = 0.0
+        lit_lifts = 0
         for elem in nearby:
             etags = elem.get("tags", {})
             aw = etags.get("aerialway")
             if aw and aw in LIFT_TYPES:
+                if etags.get("lit") == "yes":
+                    lit_lifts += 1
                 key = (elem.get("type"), elem.get("id"))
                 if key not in seen_lift_ways:
                     seen_lift_ways.add(key)
@@ -395,6 +427,16 @@ def analyze(
         lift_types_str = ", ".join(
             f"{_lift_type_label(aw)}: {c}" for aw, c in sorted(lift_type_counts.items())
         ) if lift_type_counts else ""
+
+        # Snowmaking: from winter_sports tags first, then any nearby element
+        snowmaking = str(tags.get("snowmaking") or "").strip().lower()
+        if snowmaking not in ("yes", "limited", "no"):
+            snowmaking = ""
+            for elem in nearby:
+                sm = str((elem.get("tags") or {}).get("snowmaking") or "").strip().lower()
+                if sm in ("yes", "limited", "no"):
+                    snowmaking = sm
+                    break
 
         # 4. Classification
         is_downhill_resort = (
@@ -412,6 +454,7 @@ def analyze(
             "winter_sports_id": ws_id,
             "winter_sports_type": ws_type,
             "name": name,
+            "english_name": english_name,
             "country": country,
             "state": state,
             "centroid_lat": centroid_lat,
@@ -425,25 +468,41 @@ def analyze(
             "downhill_trails": downhill_trail_count,
             "longest_trail_mi": longest_trail_mi,
             "avg_trail_mi": avg_trail_mi,
+            "total_trail_mi": total_trail_mi,
             **{f"trails_{d}": difficulty_counts[d] for d in PISTE_DIFFICULTIES},
             "gladed_terrain": "Yes" if has_gladed else "No",
             "snow_park": "Yes" if has_snow_park else "No",
             "sledding_tubing": "Yes" if has_sledding_tubing else "No",
+            "night_skiing": "Yes" if has_night_skiing else "No",
+            "lit_pistes": lit_pistes,
+            "lit_lifts": lit_lifts,
+            "snowmaking": snowmaking if snowmaking else "",
             "lift_types": lift_types_str,
             "resort_type": resort_type,
+            "website": website,
+            "operator": operator,
+            "opening_hours": opening_hours,
+            "phone": phone,
         }
+        if region is not None:
+            rec["region"] = region
         results.append(rec)
 
     import csv
     fieldnames = [
-        "winter_sports_id", "winter_sports_type", "name", "country", "state",
+        "winter_sports_id", "winter_sports_type", "name", "english_name", "country", "state",
         "centroid_lat", "centroid_lon",
         "total_area_ha", "total_area_acres", "skiable_terrain_ha", "skiable_terrain_acres",
-        "total_lifts", "longest_lift_mi", "downhill_trails", "longest_trail_mi", "avg_trail_mi",
+        "total_lifts", "longest_lift_mi", "downhill_trails", "longest_trail_mi", "avg_trail_mi", "total_trail_mi",
         *[f"trails_{d}" for d in PISTE_DIFFICULTIES],
-        "gladed_terrain", "snow_park", "sledding_tubing", "lift_types",
+        "gladed_terrain", "snow_park", "sledding_tubing",
+        "night_skiing", "lit_pistes", "lit_lifts", "snowmaking",
+        "lift_types",
         "resort_type",
+        "website", "operator", "opening_hours", "phone",
     ]
+    if region is not None:
+        fieldnames.insert(fieldnames.index("state") + 1, "region")
     if results:
         with open(output_path, "w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
@@ -476,5 +535,6 @@ if __name__ == "__main__":
     )
     parser.add_argument("-o", "--output", default="output/ski_areas_analyzed.csv", help="Output CSV file")
     parser.add_argument("-b", "--boundaries", default="boundaries", help="Directory with Natural Earth admin 0/1 shapefiles")
+    parser.add_argument("-r", "--region", default=None, help="Region slug (e.g. iceland); added as column for elevation merge")
     args = parser.parse_args()
-    analyze(args.winter_sports, args.osm_nearby, args.output, boundaries_dir=args.boundaries)
+    analyze(args.winter_sports, args.osm_nearby, args.output, boundaries_dir=args.boundaries, region=args.region)

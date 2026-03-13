@@ -1,0 +1,5 @@
+# Optional: for scripts/register_iceberg.py (Iceberg registration after combine).
+# Install with: pip install -r requirements-iceberg.txt
+-r requirements.txt
+pyiceberg[pyarrow,pandas,glue]>=0.6
+boto3>=1.28

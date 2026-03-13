@@ -56,37 +56,70 @@ def run_ogr2ogr(pbf_path: Path, geojson_path: Path) -> bool:
         return False
 
 
-def extract_one(pbf_path: Path, out_geojson: Path, expressions: list, label: str) -> int:
-    """Filter PBF by expressions, convert to GeoJSON; return feature count."""
+def run_ogr2ogr_filtered(pbf_path: Path, geojson_path: Path, layer: str, where: str) -> bool:
+    """Extract from PBF using ogr2ogr with SQL WHERE (GDAL fallback when osmium fails)."""
+    tmp = geojson_path.parent / "tmp_ogr_filtered.geojson"
+    cmd = [
+        "ogr2ogr", "-f", "GeoJSON", "-t_srs", "EPSG:4326",
+        "-sql", f"SELECT * FROM {layer} WHERE {where}",
+        str(tmp), str(pbf_path),
+    ]
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        if tmp.exists() and tmp.stat().st_size > 50:
+            data = json.loads(tmp.read_text(encoding="utf-8"))
+            features = data.get("features", [])
+            if features:
+                geojson_path.write_text(
+                    json.dumps({"type": "FeatureCollection", "features": features}, indent=2),
+                    encoding="utf-8",
+                )
+                tmp.unlink(missing_ok=True)
+                return True
+    except (FileNotFoundError, subprocess.CalledProcessError, json.JSONDecodeError):
+        pass
+    tmp.unlink(missing_ok=True)
+    return False
+
+
+def extract_one(pbf_path: Path, out_geojson: Path, expressions: list, label: str, gdal_fallback: tuple[str, str] | None = None) -> int:
+    """Filter PBF by expressions, convert to GeoJSON; return feature count.
+    If osmium fails and gdal_fallback is (layer, where), try ogr2ogr on full PBF."""
     filtered_pbf = out_geojson.with_suffix(".filtered.osm.pbf")
-    if not run_osmium_filter(pbf_path, filtered_pbf, expressions):
+    osmium_ok = run_osmium_filter(pbf_path, filtered_pbf, expressions)
+    if osmium_ok and filtered_pbf.exists() and filtered_pbf.stat().st_size > 0:
+        if run_ogr2ogr(filtered_pbf, out_geojson):
+            filtered_pbf.unlink(missing_ok=True)
+            data = json.loads(out_geojson.read_text(encoding="utf-8"))
+            features = data.get("features", [])
+            if not features and isinstance(data, dict):
+                for v in data.values():
+                    if isinstance(v, dict) and "features" in v:
+                        features.extend(v["features"])
+                if features:
+                    out_geojson.write_text(
+                        json.dumps({"type": "FeatureCollection", "features": features}, indent=2),
+                        encoding="utf-8",
+                    )
+            n = len(features)
+            print(f"Saved {n} features to {out_geojson}")
+            return n
+        filtered_pbf.unlink(missing_ok=True)
+
+    if not osmium_ok and gdal_fallback:
+        layer, where = gdal_fallback
+        print(f"osmium failed; trying ogr2ogr on full PBF ({label})...", file=sys.stderr)
+        if run_ogr2ogr_filtered(pbf_path, out_geojson, layer, where):
+            data = json.loads(out_geojson.read_text(encoding="utf-8"))
+            n = len(data.get("features", []))
+            print(f"Saved {n} features to {out_geojson}")
+            return n
+    elif not osmium_ok:
         print(f"osmium tags-filter ({label}) failed.", file=sys.stderr)
-        return 0
-    if not filtered_pbf.exists() or filtered_pbf.stat().st_size == 0:
-        out_geojson.write_text('{"type":"FeatureCollection","features":[]}', encoding="utf-8")
-        filtered_pbf.unlink(missing_ok=True)
-        print(f"No {label} found. Wrote empty {out_geojson.name}")
-        return 0
-    if not run_ogr2ogr(filtered_pbf, out_geojson):
-        out_geojson.write_text('{"type":"FeatureCollection","features":[]}', encoding="utf-8")
-        filtered_pbf.unlink(missing_ok=True)
-        return 0
-    filtered_pbf.unlink(missing_ok=True)
-    data = json.loads(out_geojson.read_text(encoding="utf-8"))
-    features = data.get("features", [])
-    # Handle ogr2ogr fallback that may write layer names as top-level keys
-    if not features and isinstance(data, dict):
-        for v in data.values():
-            if isinstance(v, dict) and "features" in v:
-                features.extend(v["features"])
-        if features:
-            out_geojson.write_text(
-                json.dumps({"type": "FeatureCollection", "features": features}, indent=2),
-                encoding="utf-8",
-            )
-    n = len(features)
-    print(f"Saved {n} features to {out_geojson}")
-    return n
+
+    out_geojson.write_text('{"type":"FeatureCollection","features":[]}', encoding="utf-8")
+    print(f"No {label} found. Wrote empty {out_geojson.name}")
+    return 0
 
 
 def extract_lifts_and_pistes(pbf_path: Path, output_dir: Path) -> None:
@@ -104,9 +137,9 @@ def extract_lifts_and_pistes(pbf_path: Path, output_dir: Path) -> None:
     # Same style as pbf_to_geojson: wr/ for ways and relations; add nodes for point features (e.g. lift stations)
     lift_expr = ["n/aerialway", "w/aerialway", "r/aerialway"]
     piste_expr = ["n/piste:type", "w/piste:type", "r/piste:type"]
-
-    extract_one(pbf_path, lifts_path, lift_expr, "lifts")
-    extract_one(pbf_path, pistes_path, piste_expr, "pistes")
+    # GDAL fallback when osmium fails (e.g. England BlobHeader): lines layer has aerialway; piste in other_tags
+    extract_one(pbf_path, lifts_path, lift_expr, "lifts", gdal_fallback=("lines", "aerialway IS NOT NULL"))
+    extract_one(pbf_path, pistes_path, piste_expr, "pistes", gdal_fallback=("lines", "other_tags LIKE '%piste:type%'"))
     print("Done.")
 
 

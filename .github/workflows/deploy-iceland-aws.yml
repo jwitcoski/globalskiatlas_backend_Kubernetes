@@ -22,6 +22,7 @@ on:
         type: choice
         options:
           - iceland
+          - japan
           - north-america
           - south-america
           - europe
@@ -100,6 +101,9 @@ jobs:
             iceland) PBF_URL="https://download.geofabrik.de/europe/iceland-latest.osm.pbf"
                      TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-small"
                      OSM_CLUSTER_DIST="" ;;
+            japan) PBF_URL="https://download.geofabrik.de/asia/japan-latest.osm.pbf"
+                     TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-large"
+                     OSM_CLUSTER_DIST="200000" ;;
             north-america|europe|asia) PBF_URL="https://download.geofabrik.de/${REGION_NAME}-latest.osm.pbf"
                      TASK_DEFINITION="globalskiatlas-backend-k8s-pipeline-xlarge"
                      OSM_CLUSTER_DIST="200000" ;;

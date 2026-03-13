@@ -14,24 +14,17 @@
 
 So Iceland is about **7× faster** end-to-end; enrich alone went from ~12.5 min to ~7 s (~115×).
 
-(Original enrich breakdown before fix: step 1 4.8 s, step 2 (lifts) 347.7 s, step 3 (pistes) 396.9 s, step 4 0.1 s.)
-
 ---
 
-## Where to fix (performance issues)
+## OOM and clustering
 
-### 1. Enrich step — **fixed**
+The pipeline runs **per region** (from `config/regions.yaml`). Each region downloads its PBF, extracts winter_sports, then runs **osm_nearby** — extracting OSM data within ~2 km of each ski area.
 
-- **Issue**: For every lift and piste feature, `_lookup_country_state()` was called and **read both Natural Earth shapefiles from disk** and ran a spatial join. So 145 lifts ⇒ 290 shapefile reads; 184 pistes ⇒ 368 more. That’s why lifts took ~348 s and pistes ~397 s (~2 s per feature).
-- **Fix (implemented)**: Boundaries are loaded **once** via `_load_boundaries()`; `_batch_lookup_country_state()` does a single sjoin of all centroids against countries and states. In `_run_enrich_all`, the same cache is passed to all four steps. Ski-area lookups use an STRtree when available (`_build_ski_area_index` / `_ski_area_at_point_indexed`) so many areas scale well.
+- **Issue**: If a region has many ski areas spread across a large PBF, a single merged bbox can cover too much area → osmium extracts nearly the full PBF → OOM.
+- **Fix**: **Cluster by proximity** (default 300 km). Ski areas within `cluster_dist_m` share one extract; distant clusters get separate extracts. Memory = max(cluster extract size), not region-sized.
+- **Config**: `cluster_dist_m` in `regions.yaml` overrides the default. Smaller = more clusters = less memory. Used for Italy nord-est/nord-ovest (30 km), Russia central-fed-district (20 km), US ski states and Canadian provinces (25 km).
 
-### 2. osm_nearby (extract_nearby_from_pbf.py) — **fixed** (twice)
-
-- **Issue 1**: It looped **per ski area** and ran `osmium extract -b <bbox> <full_pbf>`. With 500 areas (e.g. North America) that was 500 full PBF reads. That did not scale.
-- **Fix 1**: One **merged bbox** over all ski areas (with radius buffer) → **single** `osmium extract` and **single** ogr2ogr per layer. Then in Python, for each extracted feature we compute its centroid, check which ski area(s) are within `radius_m` (haversine), and emit one element per (feature, ski area) so output shape is unchanged.
-
-- **Issue 2 (OOM)**: When ski areas span a continent (Africa: Morocco + Lesotho; South America: Chile + Argentina), the merged bbox covers the **whole continent**. Osmium then extracts nearly the full PBF (e.g. 4 GB Africa) → ogr2ogr to GeoJSON (10–20× larger) → OOM on small/medium tasks.
-- **Fix 2**: **Cluster by proximity** (default 300 km). Ski areas within 300 km share one extract; distant clusters get separate extracts. Morocco and Lesotho become 2 clusters with small bboxes; Chile/Argentina may be 1–2 clusters. Memory = max(cluster extract size), not continent-sized.
+Regions with no sub-regions and large PBFs (e.g. Baden-Württemberg 601 MB, Bayern 793 MB, Netherlands 1.3 GB) were split into Geofabrik sub-regions to avoid OOM.
 
 ---
 
@@ -47,51 +40,27 @@ So Iceland is about **7× faster** end-to-end; enrich alone went from ~12.5 min 
 | analyze + export_parquet | seconds |
 | **Total** | **9m 44s** |
 
-So **~10 min for 373 MB** and 28 ski areas. North America is **~43× the PBF size** (16 GB vs 0.37 GB) and **~15–25× the ski areas** (500 vs 28); PBF-bound steps (extract, osm_nearby, lifts_pistes) dominate and scale with file size. That supports a **4–7 h** total for NA (see below).
+~10 min for 373 MB and 28 ski areas.
 
 ---
 
-## North America estimate
+## North America: per-region runs
 
-Rough scale:
+North America is split by **Canada** (provinces) and **US** (states). Each run processes one PBF (e.g. California ~600 MB, Colorado ~250 MB).
 
-- **Geofabrik**: `north-america-latest.osm.pbf` **~15–17 GB** (2024–25); subregions e.g. us-west ~1.2 GB, us-northeast ~400 MB, canada ~2.2 GB.
-- **Ski areas**: order of **300–700** (US + Canada).
-- **Lifts/pistes**: order of **15k–30k** lifts and **25k–50k+** pistes (and osm_near elements can be 100k+).
+| Region type | PBF size (approx) | Est. runtime | Notes |
+|-------------|-------------------|--------------|-------|
+| Small state (Vermont, NH) | ~50–150 MB | 5–15 min | |
+| Medium state (Colorado, Utah) | ~200–350 MB | 15–45 min | `cluster_dist_m: 25000` |
+| Large state (California, NY) | ~500–650 MB | 30–90 min | `cluster_dist_m: 25000` |
+| Canadian province (AB, BC, ON, QC) | ~200–600 MB | 20–60 min | `cluster_dist_m: 25000` |
 
-### If we had **no** optimizations (for comparison)
-
-| Phase | North America (e.g. 500 areas) |
-|-------|---------------------------------|
-| Download | ~10–30 min |
-| Extract (winter_sports) | ~30–60 min |
-| osm_nearby | **100+ hours (infeasible)** — 500 × full PBF read |
-| enrich_geojson | **~1–3 days** — shapefile read per feature |
-| **Total** | **Days to a week+** |
-
-### With **both fixes** (current pipeline, calibrated from NZ)
-
-| Phase | North America (rough) |
-|-------|------------------------|
-| Download | **~15–45 min** | 15–17 GB at 5–20 MB/s |
-| Extract (winter_sports) | **~30–60 min** | One pass over full PBF |
-| osm_nearby | **~1.5–3.5 hours** | One merged bbox extract + filter (scales with PBF size) |
-| lifts_and_pistes | **~30–90 min** | One pass over full PBF |
-| enrich_geojson | **~10–30 min** | Boundaries once, batch sjoin, STRtree (scales with feature count) |
-| analyze + export_parquet | **~2–5 min** |
-| **Total** | **~4–7 hours** | Overnight run; run a subregion first (e.g. us-northeast) to get real timings |
-
-### Practical approach
-
-1. **Optimize enrich** (load shapefiles once, index/batch lookups).
-2. **Optimize osm_nearby** (one or few PBF extracts, then tag by ski area).
-3. **Test on a subregion** first (e.g. `us-northeast` or `us-west` or a single state if available) to get real timings and validate.
-4. Then run full North America (or continent in one go) with the optimized pipeline.
+**Total North America**: Sum of all region runtimes; sequential runs can take 4–7+ hours for the full continent. Use `--from-slug` to resume after a region.
 
 ---
 
 ## Summary
 
-- **Iceland**: **Before** ~13–14 min (enrich ~12.5 min). **After both fixes** ~30 s (enrich ~7 s). ~7× faster end-to-end.
-- **New Zealand**: **9m 44s** for 373 MB PBF, 28 areas, 947 lifts, 676 pistes (enrich 12.2 s). Calibration point for larger regions.
-- **North America**: **Before** fixes: infeasible (days to a week+). **With both fixes**: **~4–7 hours** (15–17 GB PBF; download 15–45 min, extract 30–60 min, osm_nearby 1.5–3.5 h, lifts_pistes 30–90 min, enrich 10–30 min). Run a subregion first (e.g. us-northeast) to calibrate.
+- **Iceland**: ~2 min end-to-end (enrich fix + single extract).
+- **New Zealand**: ~10 min for 373 MB PBF.
+- **North America**: Per-state/province; 5–90 min per region depending on size; 4–7+ hours for full continent. OOM avoided via `cluster_dist_m` and Geofabrik sub-regions where applicable.

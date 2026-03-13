@@ -27,6 +27,31 @@ def run_osmium_filter(pbf_path: Path, out_pbf: Path) -> bool:
         return False
 
 
+def run_ogr2ogr_filtered(pbf_path: Path, geojson_path: Path) -> bool:
+    """Extract winter_sports directly from PBF using ogr2ogr SQL (GDAL fallback when osmium fails).
+    Uses multipolygons only; GDAL osmconf.ini exposes landuse for that layer."""
+    all_features = []
+    tmp = geojson_path.parent / "tmp_ws.geojson"
+    # multipolygons has landuse attribute; lines/points do not in default osmconf
+    cmd = [
+        "ogr2ogr", "-f", "GeoJSON", "-t_srs", "EPSG:4326",
+        "-sql", "SELECT * FROM multipolygons WHERE landuse='winter_sports'",
+        str(tmp), str(pbf_path),
+    ]
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        if tmp.exists() and tmp.stat().st_size > 50:
+            data = json.loads(tmp.read_text())
+            all_features.extend(data.get("features", []))
+    except (FileNotFoundError, subprocess.CalledProcessError, json.JSONDecodeError):
+        pass
+    tmp.unlink(missing_ok=True)
+    if all_features:
+        geojson_path.write_text(json.dumps({"type": "FeatureCollection", "features": all_features}, indent=2))
+        return True
+    return False
+
+
 def run_ogr2ogr(pbf_path: Path, geojson_path: Path) -> bool:
     """Convert PBF to GeoJSON using ogr2ogr (GDAL). Merges multipolygons + lines + points."""
     all_features = []
@@ -57,6 +82,15 @@ def run_ogr2ogr(pbf_path: Path, geojson_path: Path) -> bool:
         return False
 
 
+def _print_feature_count(geojson_path: Path) -> None:
+    try:
+        data = json.loads(geojson_path.read_text())
+        n = len(data.get("features", []))
+        print(f"Saved {n} features to {geojson_path}")
+    except Exception:
+        pass
+
+
 def main():
     pbf_path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("/db/planet.osm.pbf")
     out_path = Path(sys.argv[2]) if len(sys.argv) > 2 else Path("/data/ski_areas.geojson")
@@ -69,39 +103,27 @@ def main():
     filtered_pbf = out_path.with_suffix(".filtered.osm.pbf")
 
     print("Extracting landuse=winter_sports from PBF...")
-    if not run_osmium_filter(pbf_path, filtered_pbf):
-        print("Error: osmium not found. Install osmium-tool.", file=sys.stderr)
-        sys.exit(1)
+    osmium_ok = run_osmium_filter(pbf_path, filtered_pbf)
 
-    if not filtered_pbf.exists() or filtered_pbf.stat().st_size == 0:
-        print("No winter_sports features found. Writing empty GeoJSON.")
-        out_path.write_text('{"type":"FeatureCollection","features":[]}')
+    if osmium_ok and filtered_pbf.exists() and filtered_pbf.stat().st_size > 0:
+        print("Converting to GeoJSON...")
+        if run_ogr2ogr(filtered_pbf, out_path):
+            filtered_pbf.unlink(missing_ok=True)
+            _print_feature_count(out_path)
+            print("Done.")
+            return
         filtered_pbf.unlink(missing_ok=True)
+
+    # Fallback: osmium failed (e.g. BlobHeader limit on large Geofabrik extracts) or produced nothing
+    if not osmium_ok:
+        print("osmium failed; trying ogr2ogr directly on full PBF...", file=sys.stderr)
+    if run_ogr2ogr_filtered(pbf_path, out_path):
+        _print_feature_count(out_path)
+        print("Done.")
         return
 
-    print("Converting to GeoJSON...")
-    if not run_ogr2ogr(filtered_pbf, out_path):
-        print("Error: ogr2ogr failed. Falling back to empty GeoJSON.", file=sys.stderr)
-        out_path.write_text('{"type":"FeatureCollection","features":[]}')
-    else:
-        # Merge multipolygons layer if present; ogr2ogr creates multiple layers
-        try:
-            data = json.loads(out_path.read_text())
-            if isinstance(data, dict) and "type" in data:
-                print(f"Saved {len(data.get('features', []))} features to {out_path}")
-            else:
-                # Might be layernames as keys
-                all_features = []
-                for v in data.values() if isinstance(data, dict) else []:
-                    if isinstance(v, dict) and "features" in v:
-                        all_features.extend(v["features"])
-                if all_features:
-                    merged = {"type": "FeatureCollection", "features": all_features}
-                    out_path.write_text(json.dumps(merged, indent=2))
-                    print(f"Saved {len(all_features)} features to {out_path}")
-        except Exception:
-            pass
-
+    print("No winter_sports features found. Writing empty GeoJSON.")
+    out_path.write_text('{"type":"FeatureCollection","features":[]}')
     filtered_pbf.unlink(missing_ok=True)
     print("Done.")
 

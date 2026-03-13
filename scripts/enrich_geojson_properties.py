@@ -426,9 +426,13 @@ def _run_enrich_all(data_dir: Path, boundaries_dir: Path) -> None:
     # Load boundaries once for all steps (avoids hundreds of shapefile reads)
     boundaries_cache = _load_boundaries(boundaries_dir)
 
-    def step(n: int, total: int, name: str, fn, *args, **kwargs) -> None:
+    def step(n: int, total: int, name: str, path: Path, fn, *args, **kwargs) -> None:
         sys.stdout.flush()
         sys.stderr.flush()
+        if not path.exists():
+            print(f"Enrich step {n}/{total}: {name} ... skipping (file not found)", file=sys.stderr)
+            sys.stderr.flush()
+            return
         step_start = time.perf_counter()
         print(f"Enrich step {n}/{total}: {name} ...", file=sys.stderr)
         sys.stderr.flush()
@@ -443,10 +447,10 @@ def _run_enrich_all(data_dir: Path, boundaries_dir: Path) -> None:
             sys.stderr.flush()
             raise
 
-    step(1, 4, "ski_areas.geojson", enrich_geojson, ski_areas_path, boundaries_dir, None, is_ski_areas_file=True, boundaries_cache=boundaries_cache)
-    step(2, 4, "lifts.geojson", enrich_geojson, lifts_path, boundaries_dir, ski_areas_path, is_ski_areas_file=False, boundaries_cache=boundaries_cache)
-    step(3, 4, "pistes.geojson", enrich_geojson, pistes_path, boundaries_dir, ski_areas_path, is_ski_areas_file=False, boundaries_cache=boundaries_cache)
-    step(4, 4, "osm_near_winter_sports.json", enrich_osm_nearby_json, osm_path, boundaries_dir, ski_areas_path, boundaries_cache=boundaries_cache)
+    step(1, 4, "ski_areas.geojson", ski_areas_path, enrich_geojson, ski_areas_path, boundaries_dir, None, is_ski_areas_file=True, boundaries_cache=boundaries_cache)
+    step(2, 4, "lifts.geojson", lifts_path, enrich_geojson, lifts_path, boundaries_dir, ski_areas_path, is_ski_areas_file=False, boundaries_cache=boundaries_cache)
+    step(3, 4, "pistes.geojson", pistes_path, enrich_geojson, pistes_path, boundaries_dir, ski_areas_path, is_ski_areas_file=False, boundaries_cache=boundaries_cache)
+    step(4, 4, "osm_near_winter_sports.json", osm_path, enrich_osm_nearby_json, osm_path, boundaries_dir, ski_areas_path, boundaries_cache=boundaries_cache)
     total_elapsed = time.perf_counter() - pipeline_start
     print(f"All 4 enrich steps completed in {total_elapsed:.1f}s", file=sys.stderr)
     sys.stderr.flush()

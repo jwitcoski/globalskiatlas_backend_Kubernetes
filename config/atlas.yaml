@@ -1,0 +1,46 @@
+# Phase 4: Atlas map generation — QGIS template, data-to-map script, S3, mapper workflow.
+# Paths are relative to repo root unless absolute.
+
+# Template project (create in QGIS; script copies and replaces layer datasources).
+template:
+  resort: atlas/map_gen/templates/atlas_resort_template.qgz
+  # overview: atlas/map_gen/templates/atlas_overview_template.qgz  # optional
+
+# CRS for template and exported layers. Use worldwide CRS for global atlas.
+# EPSG:4326 = WGS 84 (buffer in degrees); EPSG:4087 = World Equidistant Cylindrical (buffer in metres).
+crs: "EPSG:4326"
+buffer_map_units: 0.0  # optional buffer around resort for clip (in CRS units; 0 = no buffer)
+
+# Page sizes and dimensions (mm). Layout names in QGIS can match these keys.
+# small = 1/4 page, medium = 1/2, large = full, mega = 2-page spread.
+page_sizes:
+  small:
+    width_mm: 105
+    height_mm: 148
+  medium:
+    width_mm: 210
+    height_mm: 148
+  large:
+    width_mm: 420
+    height_mm: 297
+  mega:
+    width_mm: 420
+    height_mm: 594
+
+# Print resolution for export (mapper workflow).
+dpi: 300
+
+# S3 buckets (configurable; ensure IAM allows s3:PutObject, s3:GetObject, s3:ListBucket).
+# Work: per-resort .qgz + GeoJSON/GeoPackage for mappers to download and edit.
+# Final: exported map images (PNG/PDF) after mapper export.
+s3:
+  work_bucket: globalskiatlas-atlas-work
+  work_prefix: work
+  final_bucket: globalskiatlas-atlas-images
+  final_prefix: final
+
+# Local work directory (script writes per-resort data here before optional --upload).
+work_dir: atlas_work
+
+# Input directory for combined Parquet (default when running from repo root).
+input_dir: output/combined

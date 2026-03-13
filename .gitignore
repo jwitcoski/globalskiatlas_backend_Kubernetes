@@ -10,6 +10,10 @@ __pycache__/
 # Generated output
 output/
 osm_batches/
+cache/
+atlas_work/
+# Argos translation cache (cache/ above also covers this)
+cache/name_translations.json
 *.log
 
 # Env / secrets

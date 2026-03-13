@@ -12,10 +12,10 @@ Goal: run the pipeline for **the entire world** and serve a map that stays fast 
 | **Protomaps / BBBike** | Custom extracts by bbox | Smaller regions |
 | **Planet** | Full planet ~70+ GB (or smaller “planet with history”) | Single global run if you have the hardware and time |
 
-**Practical path:** Run the pipeline **per continent** (or large region) using Geofabrik PBFs. Each run produces `output/` (GeoJSON + Parquet). Then either:
+**Practical path:** Run the pipeline **per region** using Geofabrik PBFs. Regions are defined in `config/regions.yaml`. Each run processes one PBF (country, state, or sub-region) and writes to `output/<continent>/<slug>/`. Large areas use **sub-regions** (e.g. Baden-Württemberg → 4 Bezirke; Netherlands → 12 provinces) or **cluster_dist_m** to avoid OOM. Then either:
 
 - **Option A (simplest):** Keep one dataset per region; frontend or router chooses region (e.g. by URL or viewport).
-- **Option B (single globe):** Merge all regional Parquet files into one set (e.g. `ski_areas.parquet`, `lifts.parquet`, … for the world) and feed that into the **serving** step below.
+- **Option B (single globe):** Run `scripts/combine_regions.py` to merge regional Parquet files into one set (e.g. `ski_areas_analyzed.parquet` for the world) and feed that into the **serving** step below.
 
 ---
 
@@ -29,9 +29,9 @@ Current design is ready for large inputs:
 
 For world you will:
 
-- Run the pipeline **once per continent** (or per Geofabrik region), then optionally merge Parquet.
-- Expect **hours per continent** (see RUN_TIME_AND_NA_ESTIMATE.md); planet = sum of continents or one very long run.
-- Consider **parallel runs** (e.g. one container/job per continent) and merge Parquet at the end.
+- Run the pipeline **once per region** (from `config/regions.yaml`), then merge with `scripts/combine_regions.py`.
+- Use `run_region_local.py` for local per-region runs, or ECS for full-continent runs (see docs).
+- Expect **minutes to hours per region** depending on PBF size; full Europe or North America = 4–7+ hours sequential. OOM is avoided via sub-regions and `cluster_dist_m` (see RUN_BY_REGION.md).
 
 No fundamental pipeline redesign needed; scale is about how you chunk the planet and how you **serve** the result.
 
@@ -109,7 +109,7 @@ MapLibre is the right long-term choice for a global map: it’s built for vector
 
 ## 7. Checklist: from “one region” to “entire world”
 
-- [ ] Run pipeline for each continent (or desired regions); merge or keep per-region Parquet.
+- [ ] Run pipeline for each region (from `config/regions.yaml`); use `combine_regions.py` to merge Parquet.
 - [ ] Add **viewport bbox** support to API and frontend (request data only for current view).
 - [ ] (Optional) Add DuckDB spatial or PostGIS so bbox queries don’t load full Parquet into memory.
 - [ ] **Tile pipeline:** GeoJSON/Parquet → tippecanoe → PMTiles (or MBTiles); host the result.
@@ -141,7 +141,7 @@ Ballpark for **build vector tiles once a month** (world scale) and **host in S3*
 
 ## 9. Summary
 
-- **Data:** Planet = multiple continental PBF runs (or one planet run); merge Parquet if you want one global dataset.
+- **Data:** Regions from `config/regions.yaml`; each run downloads a Geofabrik PBF, extracts ski data, and writes Parquet. Merge with `combine_regions.py` for a global dataset. OOM avoided via sub-regions and `cluster_dist_m`; see RUN_BY_REGION.md.
 - **Pipeline:** Already scalable (single extract, batch enrich, Parquet); run per region, then merge.
 - **Serving:** At world scale, **do not** send the whole globe as one GeoJSON. Use a **viewport/bbox API** for a stepping stone and **vector tiles (e.g. PMTiles)** for production.
 - **Frontend:** Move to **MapLibre** and a **vector tile source** for the “entire world” experience.

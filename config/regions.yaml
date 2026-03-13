@@ -1,0 +1,808 @@
+# Geofabrik regions for ski atlas pipeline.
+# Output: output/<continent>/ for full continents, output/<continent>/<slug>/ for split.
+# PBFs >1GB may need more RAM or Fargate; run smaller regions locally first.
+
+# --- Full continents (no split): output/africa/, output/south-america/, output/australia-oceania/
+full_continents:
+  - continent: africa
+    pbf_url: https://download.geofabrik.de/africa-latest.osm.pbf
+  - continent: south-america
+    pbf_url: https://download.geofabrik.de/south-america-latest.osm.pbf
+  - continent: australia-oceania
+    pbf_url: https://download.geofabrik.de/australia-oceania-latest.osm.pbf
+
+# --- North America: by province/state (all <1GB except CA 1.2GB, BC/ON/QC 0.9–1.1GB, Nunavut 1.3GB).
+# Greenland, Mexico stay as single; Canada and US split by province/state.
+north_america:
+  - slug: greenland
+    pbf_url: https://download.geofabrik.de/north-america/greenland-latest.osm.pbf
+  - slug: mexico
+    pbf_url: https://download.geofabrik.de/north-america/mexico-latest.osm.pbf
+  # Canada: provinces/territories
+  - slug: canada/alberta
+    pbf_url: https://download.geofabrik.de/north-america/canada/alberta-latest.osm.pbf
+    cluster_dist_m: 25000  # many ski areas; smaller clusters to avoid OOM
+  - slug: canada/british-columbia
+    pbf_url: https://download.geofabrik.de/north-america/canada/british-columbia-latest.osm.pbf
+    cluster_dist_m: 25000  # many ski areas; smaller clusters to avoid OOM
+  - slug: canada/manitoba
+    pbf_url: https://download.geofabrik.de/north-america/canada/manitoba-latest.osm.pbf
+  - slug: canada/new-brunswick
+    pbf_url: https://download.geofabrik.de/north-america/canada/new-brunswick-latest.osm.pbf
+  - slug: canada/newfoundland-and-labrador
+    pbf_url: https://download.geofabrik.de/north-america/canada/newfoundland-and-labrador-latest.osm.pbf
+  - slug: canada/northwest-territories
+    pbf_url: https://download.geofabrik.de/north-america/canada/northwest-territories-latest.osm.pbf
+  - slug: canada/nova-scotia
+    pbf_url: https://download.geofabrik.de/north-america/canada/nova-scotia-latest.osm.pbf
+  - slug: canada/nunavut
+    pbf_url: https://download.geofabrik.de/north-america/canada/nunavut-latest.osm.pbf
+  - slug: canada/ontario
+    pbf_url: https://download.geofabrik.de/north-america/canada/ontario-latest.osm.pbf
+    cluster_dist_m: 25000  # many ski areas; smaller clusters to avoid OOM
+  - slug: canada/prince-edward-island
+    pbf_url: https://download.geofabrik.de/north-america/canada/prince-edward-island-latest.osm.pbf
+  - slug: canada/quebec
+    pbf_url: https://download.geofabrik.de/north-america/canada/quebec-latest.osm.pbf
+    cluster_dist_m: 25000  # many ski areas; smaller clusters to avoid OOM
+  - slug: canada/saskatchewan
+    pbf_url: https://download.geofabrik.de/north-america/canada/saskatchewan-latest.osm.pbf
+  - slug: canada/yukon
+    pbf_url: https://download.geofabrik.de/north-america/canada/yukon-latest.osm.pbf
+  # US: states (CA 1.2GB; most others <500MB)
+  - slug: us/alabama
+    pbf_url: https://download.geofabrik.de/north-america/us/alabama-latest.osm.pbf
+  - slug: us/alaska
+    pbf_url: https://download.geofabrik.de/north-america/us/alaska-latest.osm.pbf
+  - slug: us/arizona
+    pbf_url: https://download.geofabrik.de/north-america/us/arizona-latest.osm.pbf
+  - slug: us/arkansas
+    pbf_url: https://download.geofabrik.de/north-america/us/arkansas-latest.osm.pbf
+  - slug: us/california
+    pbf_url: https://download.geofabrik.de/north-america/us/california-latest.osm.pbf
+    cluster_dist_m: 25000  # many ski areas; smaller clusters to avoid OOM
+  - slug: us/colorado
+    pbf_url: https://download.geofabrik.de/north-america/us/colorado-latest.osm.pbf
+    cluster_dist_m: 25000  # many ski areas; smaller clusters to avoid OOM
+  - slug: us/connecticut
+    pbf_url: https://download.geofabrik.de/north-america/us/connecticut-latest.osm.pbf
+  - slug: us/delaware
+    pbf_url: https://download.geofabrik.de/north-america/us/delaware-latest.osm.pbf
+  - slug: us/district-of-columbia
+    pbf_url: https://download.geofabrik.de/north-america/us/district-of-columbia-latest.osm.pbf
+  - slug: us/florida
+    pbf_url: https://download.geofabrik.de/north-america/us/florida-latest.osm.pbf
+  - slug: us/georgia
+    pbf_url: https://download.geofabrik.de/north-america/us/georgia-latest.osm.pbf
+  - slug: us/hawaii
+    pbf_url: https://download.geofabrik.de/north-america/us/hawaii-latest.osm.pbf
+  - slug: us/idaho
+    pbf_url: https://download.geofabrik.de/north-america/us/idaho-latest.osm.pbf
+  - slug: us/illinois
+    pbf_url: https://download.geofabrik.de/north-america/us/illinois-latest.osm.pbf
+  - slug: us/indiana
+    pbf_url: https://download.geofabrik.de/north-america/us/indiana-latest.osm.pbf
+  - slug: us/iowa
+    pbf_url: https://download.geofabrik.de/north-america/us/iowa-latest.osm.pbf
+  - slug: us/kansas
+    pbf_url: https://download.geofabrik.de/north-america/us/kansas-latest.osm.pbf
+  - slug: us/kentucky
+    pbf_url: https://download.geofabrik.de/north-america/us/kentucky-latest.osm.pbf
+  - slug: us/louisiana
+    pbf_url: https://download.geofabrik.de/north-america/us/louisiana-latest.osm.pbf
+  - slug: us/maine
+    pbf_url: https://download.geofabrik.de/north-america/us/maine-latest.osm.pbf
+  - slug: us/maryland
+    pbf_url: https://download.geofabrik.de/north-america/us/maryland-latest.osm.pbf
+  - slug: us/massachusetts
+    pbf_url: https://download.geofabrik.de/north-america/us/massachusetts-latest.osm.pbf
+  - slug: us/michigan
+    pbf_url: https://download.geofabrik.de/north-america/us/michigan-latest.osm.pbf
+    cluster_dist_m: 25000  # many ski areas; smaller clusters to avoid OOM
+  - slug: us/minnesota
+    pbf_url: https://download.geofabrik.de/north-america/us/minnesota-latest.osm.pbf
+  - slug: us/mississippi
+    pbf_url: https://download.geofabrik.de/north-america/us/mississippi-latest.osm.pbf
+  - slug: us/missouri
+    pbf_url: https://download.geofabrik.de/north-america/us/missouri-latest.osm.pbf
+  - slug: us/montana
+    pbf_url: https://download.geofabrik.de/north-america/us/montana-latest.osm.pbf
+  - slug: us/nebraska
+    pbf_url: https://download.geofabrik.de/north-america/us/nebraska-latest.osm.pbf
+  - slug: us/nevada
+    pbf_url: https://download.geofabrik.de/north-america/us/nevada-latest.osm.pbf
+  - slug: us/new-hampshire
+    pbf_url: https://download.geofabrik.de/north-america/us/new-hampshire-latest.osm.pbf
+    cluster_dist_m: 25000  # many ski areas; smaller clusters to avoid OOM
+  - slug: us/new-jersey
+    pbf_url: https://download.geofabrik.de/north-america/us/new-jersey-latest.osm.pbf
+  - slug: us/new-mexico
+    pbf_url: https://download.geofabrik.de/north-america/us/new-mexico-latest.osm.pbf
+  - slug: us/new-york
+    pbf_url: https://download.geofabrik.de/north-america/us/new-york-latest.osm.pbf
+    cluster_dist_m: 25000  # many ski areas; smaller clusters to avoid OOM
+  - slug: us/north-carolina
+    pbf_url: https://download.geofabrik.de/north-america/us/north-carolina-latest.osm.pbf
+  - slug: us/north-dakota
+    pbf_url: https://download.geofabrik.de/north-america/us/north-dakota-latest.osm.pbf
+  - slug: us/ohio
+    pbf_url: https://download.geofabrik.de/north-america/us/ohio-latest.osm.pbf
+  - slug: us/oklahoma
+    pbf_url: https://download.geofabrik.de/north-america/us/oklahoma-latest.osm.pbf
+  - slug: us/oregon
+    pbf_url: https://download.geofabrik.de/north-america/us/oregon-latest.osm.pbf
+  - slug: us/pennsylvania
+    pbf_url: https://download.geofabrik.de/north-america/us/pennsylvania-latest.osm.pbf
+    cluster_dist_m: 25000  # many ski areas; smaller clusters to avoid OOM
+  - slug: us/puerto-rico
+    pbf_url: https://download.geofabrik.de/north-america/us/puerto-rico-latest.osm.pbf
+  - slug: us/rhode-island
+    pbf_url: https://download.geofabrik.de/north-america/us/rhode-island-latest.osm.pbf
+  - slug: us/south-carolina
+    pbf_url: https://download.geofabrik.de/north-america/us/south-carolina-latest.osm.pbf
+  - slug: us/south-dakota
+    pbf_url: https://download.geofabrik.de/north-america/us/south-dakota-latest.osm.pbf
+  - slug: us/tennessee
+    pbf_url: https://download.geofabrik.de/north-america/us/tennessee-latest.osm.pbf
+  - slug: us/texas
+    pbf_url: https://download.geofabrik.de/north-america/us/texas-latest.osm.pbf
+  - slug: us/utah
+    pbf_url: https://download.geofabrik.de/north-america/us/utah-latest.osm.pbf
+    cluster_dist_m: 25000  # many ski areas; smaller clusters to avoid OOM
+  - slug: us/vermont
+    pbf_url: https://download.geofabrik.de/north-america/us/vermont-latest.osm.pbf
+    cluster_dist_m: 25000  # many ski areas; smaller clusters to avoid OOM
+  - slug: us/virginia
+    pbf_url: https://download.geofabrik.de/north-america/us/virginia-latest.osm.pbf
+  - slug: us/washington
+    pbf_url: https://download.geofabrik.de/north-america/us/washington-latest.osm.pbf
+  - slug: us/west-virginia
+    pbf_url: https://download.geofabrik.de/north-america/us/west-virginia-latest.osm.pbf
+  - slug: us/wisconsin
+    pbf_url: https://download.geofabrik.de/north-america/us/wisconsin-latest.osm.pbf
+  - slug: us/wyoming
+    pbf_url: https://download.geofabrik.de/north-america/us/wyoming-latest.osm.pbf
+  - slug: us/us-virgin-islands
+    pbf_url: https://download.geofabrik.de/north-america/us/us-virgin-islands-latest.osm.pbf
+
+# --- Europe: all except Monaco, Vatican City, Malta (Geofabrik has no Vatican extract).
+# France, Germany, Italy, Spain, UK split by subregion to avoid OOM. Switzerland 499 MB single.
+europe:
+  - slug: albania
+    pbf_url: https://download.geofabrik.de/europe/albania-latest.osm.pbf
+  - slug: andorra
+    pbf_url: https://download.geofabrik.de/europe/andorra-latest.osm.pbf
+  # Austria: by Bundesland via geo2day (Geofabrik has no Austria subregions). 29–190 MB each.
+  - slug: austria/burgenland
+    pbf_url: https://geo2day.com/europe/austria/burgenland.pbf
+  - slug: austria/karnten
+    pbf_url: https://geo2day.com/europe/austria/karnten.pbf
+  - slug: austria/niederosterreich
+    pbf_url: https://geo2day.com/europe/austria/niederosterreich.pbf
+  - slug: austria/oberosterreich
+    pbf_url: https://geo2day.com/europe/austria/oberosterreich.pbf
+  - slug: austria/salzburg
+    pbf_url: https://geo2day.com/europe/austria/salzburg.pbf
+  - slug: austria/steiermark
+    pbf_url: https://geo2day.com/europe/austria/steiermark.pbf
+  - slug: austria/tirol
+    pbf_url: https://geo2day.com/europe/austria/tirol.pbf
+  - slug: austria/vorarlberg
+    pbf_url: https://geo2day.com/europe/austria/vorarlberg.pbf
+  - slug: austria/wien
+    pbf_url: https://geo2day.com/europe/austria/wien.pbf
+  - slug: azores
+    pbf_url: https://download.geofabrik.de/europe/azores-latest.osm.pbf
+  - slug: belarus
+    pbf_url: https://download.geofabrik.de/europe/belarus-latest.osm.pbf
+  - slug: belgium
+    pbf_url: https://download.geofabrik.de/europe/belgium-latest.osm.pbf
+  - slug: bosnia-herzegovina
+    pbf_url: https://download.geofabrik.de/europe/bosnia-herzegovina-latest.osm.pbf
+  - slug: bulgaria
+    pbf_url: https://download.geofabrik.de/europe/bulgaria-latest.osm.pbf
+  - slug: croatia
+    pbf_url: https://download.geofabrik.de/europe/croatia-latest.osm.pbf
+  - slug: cyprus
+    pbf_url: https://download.geofabrik.de/europe/cyprus-latest.osm.pbf
+  # Czech Republic: 877 MB, 194 ski areas. No Geofabrik subregions; use cluster to avoid OOM.
+  - slug: czech-republic
+    pbf_url: https://download.geofabrik.de/europe/czech-republic-latest.osm.pbf
+    cluster_dist_m: 40000
+  - slug: denmark
+    pbf_url: https://download.geofabrik.de/europe/denmark-latest.osm.pbf
+  - slug: estonia
+    pbf_url: https://download.geofabrik.de/europe/estonia-latest.osm.pbf
+  - slug: faroe-islands
+    pbf_url: https://download.geofabrik.de/europe/faroe-islands-latest.osm.pbf
+  # Finland: Geofabrik has no sub-regions; use chunked processing to avoid OOM (~674 MB PBF).
+  - slug: finland
+    pbf_url: https://download.geofabrik.de/europe/finland-latest.osm.pbf
+    cluster_dist_m: 50000
+  # France: by region (32–490 MB each; avoids OOM on full 4.6 GB france PBF)
+  - slug: france/alsace
+    pbf_url: https://download.geofabrik.de/europe/france/alsace-latest.osm.pbf
+  - slug: france/aquitaine
+    pbf_url: https://download.geofabrik.de/europe/france/aquitaine-latest.osm.pbf
+  - slug: france/auvergne
+    pbf_url: https://download.geofabrik.de/europe/france/auvergne-latest.osm.pbf
+  - slug: france/basse-normandie
+    pbf_url: https://download.geofabrik.de/europe/france/basse-normandie-latest.osm.pbf
+  - slug: france/bourgogne
+    pbf_url: https://download.geofabrik.de/europe/france/bourgogne-latest.osm.pbf
+  - slug: france/bretagne
+    pbf_url: https://download.geofabrik.de/europe/france/bretagne-latest.osm.pbf
+  - slug: france/centre
+    pbf_url: https://download.geofabrik.de/europe/france/centre-latest.osm.pbf
+  - slug: france/champagne-ardenne
+    pbf_url: https://download.geofabrik.de/europe/france/champagne-ardenne-latest.osm.pbf
+  - slug: france/corse
+    pbf_url: https://download.geofabrik.de/europe/france/corse-latest.osm.pbf
+  - slug: france/franche-comte
+    pbf_url: https://download.geofabrik.de/europe/france/franche-comte-latest.osm.pbf
+  - slug: france/guadeloupe
+    pbf_url: https://download.geofabrik.de/europe/france/guadeloupe-latest.osm.pbf
+  - slug: france/guyane
+    pbf_url: https://download.geofabrik.de/europe/france/guyane-latest.osm.pbf
+  - slug: france/haute-normandie
+    pbf_url: https://download.geofabrik.de/europe/france/haute-normandie-latest.osm.pbf
+  - slug: france/ile-de-france
+    pbf_url: https://download.geofabrik.de/europe/france/ile-de-france-latest.osm.pbf
+  - slug: france/languedoc-roussillon
+    pbf_url: https://download.geofabrik.de/europe/france/languedoc-roussillon-latest.osm.pbf
+  - slug: france/limousin
+    pbf_url: https://download.geofabrik.de/europe/france/limousin-latest.osm.pbf
+  - slug: france/lorraine
+    pbf_url: https://download.geofabrik.de/europe/france/lorraine-latest.osm.pbf
+  - slug: france/martinique
+    pbf_url: https://download.geofabrik.de/europe/france/martinique-latest.osm.pbf
+  - slug: france/mayotte
+    pbf_url: https://download.geofabrik.de/europe/france/mayotte-latest.osm.pbf
+  - slug: france/midi-pyrenees
+    pbf_url: https://download.geofabrik.de/europe/france/midi-pyrenees-latest.osm.pbf
+  - slug: france/nord-pas-de-calais
+    pbf_url: https://download.geofabrik.de/europe/france/nord-pas-de-calais-latest.osm.pbf
+  - slug: france/pays-de-la-loire
+    pbf_url: https://download.geofabrik.de/europe/france/pays-de-la-loire-latest.osm.pbf
+  - slug: france/picardie
+    pbf_url: https://download.geofabrik.de/europe/france/picardie-latest.osm.pbf
+  - slug: france/poitou-charentes
+    pbf_url: https://download.geofabrik.de/europe/france/poitou-charentes-latest.osm.pbf
+  - slug: france/provence-alpes-cote-d-azur
+    pbf_url: https://download.geofabrik.de/europe/france/provence-alpes-cote-d-azur-latest.osm.pbf
+  - slug: france/reunion
+    pbf_url: https://download.geofabrik.de/europe/france/reunion-latest.osm.pbf
+  - slug: france/rhone-alpes
+    pbf_url: https://download.geofabrik.de/europe/france/rhone-alpes-latest.osm.pbf
+    cluster_dist_m: 40000
+  - slug: georgia
+    pbf_url: https://download.geofabrik.de/europe/georgia-latest.osm.pbf
+  # Germany: by Bundesland (20–854 MB each; avoids OOM on full 4.4 GB germany PBF)
+  # Baden-Württemberg full (601 MB) OOMs on extract_nearby; use sub-regions (115–197 MB each):
+  - slug: germany/baden-wuerttemberg/tuebingen-regbez
+    pbf_url: https://download.geofabrik.de/europe/germany/baden-wuerttemberg/tuebingen-regbez-latest.osm.pbf
+  - slug: germany/baden-wuerttemberg/freiburg-regbez
+    pbf_url: https://download.geofabrik.de/europe/germany/baden-wuerttemberg/freiburg-regbez-latest.osm.pbf
+  - slug: germany/baden-wuerttemberg/karlsruhe-regbez
+    pbf_url: https://download.geofabrik.de/europe/germany/baden-wuerttemberg/karlsruhe-regbez-latest.osm.pbf
+  - slug: germany/baden-wuerttemberg/stuttgart-regbez
+    pbf_url: https://download.geofabrik.de/europe/germany/baden-wuerttemberg/stuttgart-regbez-latest.osm.pbf
+  # Bayern full (793 MB) OOMs; use sub-regions (79–237 MB each):
+  - slug: germany/bayern/oberpfalz
+    pbf_url: https://download.geofabrik.de/europe/germany/bayern/oberpfalz-latest.osm.pbf
+  - slug: germany/bayern/mittelfranken
+    pbf_url: https://download.geofabrik.de/europe/germany/bayern/mittelfranken-latest.osm.pbf
+  - slug: germany/bayern/niederbayern
+    pbf_url: https://download.geofabrik.de/europe/germany/bayern/niederbayern-latest.osm.pbf
+  - slug: germany/bayern/oberfranken
+    pbf_url: https://download.geofabrik.de/europe/germany/bayern/oberfranken-latest.osm.pbf
+  - slug: germany/bayern/unterfranken
+    pbf_url: https://download.geofabrik.de/europe/germany/bayern/unterfranken-latest.osm.pbf
+  - slug: germany/bayern/schwaben
+    pbf_url: https://download.geofabrik.de/europe/germany/bayern/schwaben-latest.osm.pbf
+  - slug: germany/bayern/oberbayern
+    pbf_url: https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf
+  - slug: germany/berlin
+    pbf_url: https://download.geofabrik.de/europe/germany/berlin-latest.osm.pbf
+  - slug: germany/brandenburg
+    pbf_url: https://download.geofabrik.de/europe/germany/brandenburg-latest.osm.pbf
+  - slug: germany/bremen
+    pbf_url: https://download.geofabrik.de/europe/germany/bremen-latest.osm.pbf
+  - slug: germany/hamburg
+    pbf_url: https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf
+  - slug: germany/hessen
+    pbf_url: https://download.geofabrik.de/europe/germany/hessen-latest.osm.pbf
+  - slug: germany/mecklenburg-vorpommern
+    pbf_url: https://download.geofabrik.de/europe/germany/mecklenburg-vorpommern-latest.osm.pbf
+  - slug: germany/niedersachsen
+    pbf_url: https://download.geofabrik.de/europe/germany/niedersachsen-latest.osm.pbf
+  - slug: germany/nordrhein-westfalen
+    pbf_url: https://download.geofabrik.de/europe/germany/nordrhein-westfalen-latest.osm.pbf
+  - slug: germany/rheinland-pfalz
+    pbf_url: https://download.geofabrik.de/europe/germany/rheinland-pfalz-latest.osm.pbf
+  - slug: germany/saarland
+    pbf_url: https://download.geofabrik.de/europe/germany/saarland-latest.osm.pbf
+  - slug: germany/sachsen
+    pbf_url: https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf
+  - slug: germany/sachsen-anhalt
+    pbf_url: https://download.geofabrik.de/europe/germany/sachsen-anhalt-latest.osm.pbf
+  - slug: germany/schleswig-holstein
+    pbf_url: https://download.geofabrik.de/europe/germany/schleswig-holstein-latest.osm.pbf
+  - slug: germany/thueringen
+    pbf_url: https://download.geofabrik.de/europe/germany/thueringen-latest.osm.pbf
+  - slug: greece
+    pbf_url: https://download.geofabrik.de/europe/greece-latest.osm.pbf
+  - slug: guernsey-jersey
+    pbf_url: https://download.geofabrik.de/europe/guernsey-jersey-latest.osm.pbf
+  - slug: hungary
+    pbf_url: https://download.geofabrik.de/europe/hungary-latest.osm.pbf
+  - slug: iceland
+    pbf_url: https://download.geofabrik.de/europe/iceland-latest.osm.pbf
+  - slug: ireland-and-northern-ireland
+    pbf_url: https://download.geofabrik.de/europe/ireland-and-northern-ireland-latest.osm.pbf
+  - slug: isle-of-man
+    pbf_url: https://download.geofabrik.de/europe/isle-of-man-latest.osm.pbf
+  # Italy: by macro region (199–577 MB each; avoids OOM on full 2 GB italy PBF)
+  - slug: italy/centro
+    pbf_url: https://download.geofabrik.de/europe/italy/centro-latest.osm.pbf
+  - slug: italy/isole
+    pbf_url: https://download.geofabrik.de/europe/italy/isole-latest.osm.pbf
+  - slug: italy/nord-est
+    pbf_url: https://download.geofabrik.de/europe/italy/nord-est-latest.osm.pbf
+    cluster_dist_m: 30000  # 577 MB; no sub-regions; smaller clusters to avoid OOM
+  - slug: italy/nord-ovest
+    pbf_url: https://download.geofabrik.de/europe/italy/nord-ovest-latest.osm.pbf
+    cluster_dist_m: 30000  # 544 MB; no sub-regions; smaller clusters to avoid OOM
+  - slug: italy/sud
+    pbf_url: https://download.geofabrik.de/europe/italy/sud-latest.osm.pbf
+  - slug: kosovo
+    pbf_url: https://download.geofabrik.de/europe/kosovo-latest.osm.pbf
+  - slug: latvia
+    pbf_url: https://download.geofabrik.de/europe/latvia-latest.osm.pbf
+  - slug: liechtenstein
+    pbf_url: https://download.geofabrik.de/europe/liechtenstein-latest.osm.pbf
+  - slug: lithuania
+    pbf_url: https://download.geofabrik.de/europe/lithuania-latest.osm.pbf
+  - slug: luxembourg
+    pbf_url: https://download.geofabrik.de/europe/luxembourg-latest.osm.pbf
+  - slug: macedonia
+    pbf_url: https://download.geofabrik.de/europe/macedonia-latest.osm.pbf
+  - slug: moldova
+    pbf_url: https://download.geofabrik.de/europe/moldova-latest.osm.pbf
+  - slug: montenegro
+    pbf_url: https://download.geofabrik.de/europe/montenegro-latest.osm.pbf
+  # Netherlands full (1.3 GB) OOMs; use provinces (32–195 MB each):
+  - slug: netherlands/flevoland
+    pbf_url: https://download.geofabrik.de/europe/netherlands/flevoland-latest.osm.pbf
+  - slug: netherlands/zeeland
+    pbf_url: https://download.geofabrik.de/europe/netherlands/zeeland-latest.osm.pbf
+  - slug: netherlands/groningen
+    pbf_url: https://download.geofabrik.de/europe/netherlands/groningen-latest.osm.pbf
+  - slug: netherlands/drenthe
+    pbf_url: https://download.geofabrik.de/europe/netherlands/drenthe-latest.osm.pbf
+  - slug: netherlands/friesland
+    pbf_url: https://download.geofabrik.de/europe/netherlands/friesland-latest.osm.pbf
+  - slug: netherlands/utrecht
+    pbf_url: https://download.geofabrik.de/europe/netherlands/utrecht-latest.osm.pbf
+  - slug: netherlands/limburg
+    pbf_url: https://download.geofabrik.de/europe/netherlands/limburg-latest.osm.pbf
+  - slug: netherlands/overijssel
+    pbf_url: https://download.geofabrik.de/europe/netherlands/overijssel-latest.osm.pbf
+  - slug: netherlands/gelderland
+    pbf_url: https://download.geofabrik.de/europe/netherlands/gelderland-latest.osm.pbf
+  - slug: netherlands/noord-holland
+    pbf_url: https://download.geofabrik.de/europe/netherlands/noord-holland-latest.osm.pbf
+  - slug: netherlands/noord-brabant
+    pbf_url: https://download.geofabrik.de/europe/netherlands/noord-brabant-latest.osm.pbf
+  - slug: netherlands/zuid-holland
+    pbf_url: https://download.geofabrik.de/europe/netherlands/zuid-holland-latest.osm.pbf
+  # Norway: by fylke via geo2day (1.3 GB single; 45–162 MB per region). Lots of ski resorts.
+  - slug: norway/akershus
+    pbf_url: https://geo2day.com/europe/norway/akershus.pbf
+  - slug: norway/aust-agder
+    pbf_url: https://geo2day.com/europe/norway/aust-agder.pbf
+  - slug: norway/buskerud
+    pbf_url: https://geo2day.com/europe/norway/buskerud.pbf
+  - slug: norway/finnmark
+    pbf_url: https://geo2day.com/europe/norway/finnmark.pbf
+  - slug: norway/hedmark
+    pbf_url: https://geo2day.com/europe/norway/hedmark.pbf
+  - slug: norway/hordaland
+    pbf_url: https://geo2day.com/europe/norway/hordaland.pbf
+  - slug: norway/moere-og-romsdal
+    pbf_url: https://geo2day.com/europe/norway/moere_og_romsdal.pbf
+  - slug: norway/nordland
+    pbf_url: https://geo2day.com/europe/norway/nordland.pbf
+  - slug: norway/oestfold
+    pbf_url: https://geo2day.com/europe/norway/oestfold.pbf
+  - slug: norway/oppland
+    pbf_url: https://geo2day.com/europe/norway/oppland.pbf
+  - slug: norway/oslo
+    pbf_url: https://geo2day.com/europe/norway/oslo.pbf
+  - slug: norway/rogaland
+    pbf_url: https://geo2day.com/europe/norway/rogaland.pbf
+  - slug: norway/sogn-og-fjordane
+    pbf_url: https://geo2day.com/europe/norway/sogn_og_fjordane.pbf
+  - slug: norway/svalbard
+    pbf_url: https://geo2day.com/europe/norway/svalbard.pbf
+  - slug: norway/telemark
+    pbf_url: https://geo2day.com/europe/norway/telemark.pbf
+  - slug: norway/troendelag
+    pbf_url: https://geo2day.com/europe/norway/troendelag.pbf
+  - slug: norway/troms
+    pbf_url: https://geo2day.com/europe/norway/troms.pbf
+  - slug: norway/vest-agder
+    pbf_url: https://geo2day.com/europe/norway/vest-agder.pbf
+  - slug: norway/vestfold
+    pbf_url: https://geo2day.com/europe/norway/vestfold.pbf
+  # Poland: by voivodeship via geo2day (1.64 GB single; 45–235 MB each). Ski areas in south.
+  - slug: poland/dolnoslaskie
+    pbf_url: https://geo2day.com/europe/poland/dolnoslaskie.pbf
+  - slug: poland/kujawsko-pomorskie
+    pbf_url: https://geo2day.com/europe/poland/kujawsko_pomorskie.pbf
+  - slug: poland/lodzkie
+    pbf_url: https://geo2day.com/europe/poland/lodzkie.pbf
+  - slug: poland/lubelskie
+    pbf_url: https://geo2day.com/europe/poland/lubelskie.pbf
+  - slug: poland/lubuskie
+    pbf_url: https://geo2day.com/europe/poland/lubuskie.pbf
+  - slug: poland/malopolskie
+    pbf_url: https://geo2day.com/europe/poland/malopolskie.pbf
+  - slug: poland/mazowieckie
+    pbf_url: https://geo2day.com/europe/poland/mazowieckie.pbf
+  - slug: poland/opolskie
+    pbf_url: https://geo2day.com/europe/poland/opolskie.pbf
+  - slug: poland/podkarpackie
+    pbf_url: https://geo2day.com/europe/poland/podkarpackie.pbf
+  - slug: poland/podlaskie
+    pbf_url: https://geo2day.com/europe/poland/podlaskie.pbf
+  - slug: poland/pomorskie
+    pbf_url: https://geo2day.com/europe/poland/pomorskie.pbf
+  - slug: poland/slaskie
+    pbf_url: https://geo2day.com/europe/poland/slaskie.pbf
+  - slug: poland/swietokrzyskie
+    pbf_url: https://geo2day.com/europe/poland/swietokrzyskie.pbf
+  - slug: poland/warminsko-mazurskie
+    pbf_url: https://geo2day.com/europe/poland/warminsko_mazurskie.pbf
+  - slug: poland/wielkopolskie
+    pbf_url: https://geo2day.com/europe/poland/wielkopolskie.pbf
+  - slug: poland/zachodniopomorskie
+    pbf_url: https://geo2day.com/europe/poland/zachodniopomorskie.pbf
+  - slug: portugal
+    pbf_url: https://download.geofabrik.de/europe/portugal-latest.osm.pbf
+  - slug: romania
+    pbf_url: https://download.geofabrik.de/europe/romania-latest.osm.pbf
+  # Russia: by federal district (38–814 MB each; avoids OOM on full 3.8 GB russia PBF)
+  - slug: russia/central-fed-district
+    pbf_url: https://download.geofabrik.de/russia/central-fed-district-latest.osm.pbf
+    cluster_dist_m: 20000  # 814 MB; no sub-regions; smaller clusters to avoid OOM
+  - slug: russia/crimean-fed-district
+    pbf_url: https://download.geofabrik.de/russia/crimean-fed-district-latest.osm.pbf
+  - slug: russia/far-eastern-fed-district
+    pbf_url: https://download.geofabrik.de/russia/far-eastern-fed-district-latest.osm.pbf
+  - slug: russia/kaliningrad
+    pbf_url: https://download.geofabrik.de/russia/kaliningrad-latest.osm.pbf
+  - slug: russia/north-caucasus-fed-district
+    pbf_url: https://download.geofabrik.de/russia/north-caucasus-fed-district-latest.osm.pbf
+  - slug: russia/northwestern-fed-district
+    pbf_url: https://download.geofabrik.de/russia/northwestern-fed-district-latest.osm.pbf
+  - slug: russia/siberian-fed-district
+    pbf_url: https://download.geofabrik.de/russia/siberian-fed-district-latest.osm.pbf
+  - slug: russia/south-fed-district
+    pbf_url: https://download.geofabrik.de/russia/south-fed-district-latest.osm.pbf
+  - slug: russia/ural-fed-district
+    pbf_url: https://download.geofabrik.de/russia/ural-fed-district-latest.osm.pbf
+  - slug: russia/volga-fed-district
+    pbf_url: https://download.geofabrik.de/russia/volga-fed-district-latest.osm.pbf
+  - slug: serbia
+    pbf_url: https://download.geofabrik.de/europe/serbia-latest.osm.pbf
+  # Slovakia: by kraj via geo2day (280 MB single; 25–47 MB each). Alpine ski country.
+  - slug: slovakia/banskobystricky
+    pbf_url: https://geo2day.com/europe/slovakia/banskobystricky.pbf
+  - slug: slovakia/bratislavsky
+    pbf_url: https://geo2day.com/europe/slovakia/bratislavsky.pbf
+  - slug: slovakia/kosicky
+    pbf_url: https://geo2day.com/europe/slovakia/kosicky.pbf
+  - slug: slovakia/nitriansky
+    pbf_url: https://geo2day.com/europe/slovakia/nitriansky.pbf
+  - slug: slovakia/presovsky
+    pbf_url: https://geo2day.com/europe/slovakia/presovsky.pbf
+  - slug: slovakia/trenciansky
+    pbf_url: https://geo2day.com/europe/slovakia/trenciansky.pbf
+  - slug: slovakia/trnavsky
+    pbf_url: https://geo2day.com/europe/slovakia/trnavsky.pbf
+  - slug: slovakia/zilinsky
+    pbf_url: https://geo2day.com/europe/slovakia/zilinsky.pbf
+  - slug: slovenia
+    pbf_url: https://download.geofabrik.de/europe/slovenia-latest.osm.pbf
+  # Spain: by autonomous community (11–245 MB each; avoids OOM on full 1.3 GB spain PBF)
+  - slug: spain/andalucia
+    pbf_url: https://download.geofabrik.de/europe/spain/andalucia-latest.osm.pbf
+  - slug: spain/aragon
+    pbf_url: https://download.geofabrik.de/europe/spain/aragon-latest.osm.pbf
+  - slug: spain/asturias
+    pbf_url: https://download.geofabrik.de/europe/spain/asturias-latest.osm.pbf
+  - slug: spain/cantabria
+    pbf_url: https://download.geofabrik.de/europe/spain/cantabria-latest.osm.pbf
+  - slug: spain/castilla-la-mancha
+    pbf_url: https://download.geofabrik.de/europe/spain/castilla-la-mancha-latest.osm.pbf
+  - slug: spain/castilla-y-leon
+    pbf_url: https://download.geofabrik.de/europe/spain/castilla-y-leon-latest.osm.pbf
+  - slug: spain/cataluna
+    pbf_url: https://download.geofabrik.de/europe/spain/cataluna-latest.osm.pbf
+  - slug: spain/ceuta
+    pbf_url: https://download.geofabrik.de/europe/spain/ceuta-latest.osm.pbf
+  - slug: spain/extremadura
+    pbf_url: https://download.geofabrik.de/europe/spain/extremadura-latest.osm.pbf
+  - slug: spain/galicia
+    pbf_url: https://download.geofabrik.de/europe/spain/galicia-latest.osm.pbf
+  - slug: spain/islas-baleares
+    pbf_url: https://download.geofabrik.de/europe/spain/islas-baleares-latest.osm.pbf
+  - slug: spain/la-rioja
+    pbf_url: https://download.geofabrik.de/europe/spain/la-rioja-latest.osm.pbf
+  - slug: spain/madrid
+    pbf_url: https://download.geofabrik.de/europe/spain/madrid-latest.osm.pbf
+  - slug: spain/melilla
+    pbf_url: https://download.geofabrik.de/europe/spain/melilla-latest.osm.pbf
+  - slug: spain/murcia
+    pbf_url: https://download.geofabrik.de/europe/spain/murcia-latest.osm.pbf
+  - slug: spain/navarra
+    pbf_url: https://download.geofabrik.de/europe/spain/navarra-latest.osm.pbf
+  - slug: spain/pais-vasco
+    pbf_url: https://download.geofabrik.de/europe/spain/pais-vasco-latest.osm.pbf
+  - slug: spain/valencia
+    pbf_url: https://download.geofabrik.de/europe/spain/valencia-latest.osm.pbf
+  # Sweden: by län via geo2day (758 MB single; 9–102 MB each). Lots of ski resorts.
+  - slug: sweden/blekinge
+    pbf_url: https://geo2day.com/europe/sweden/blekinge.pbf
+  - slug: sweden/dalarna
+    pbf_url: https://geo2day.com/europe/sweden/dalarna.pbf
+  - slug: sweden/gavleborg
+    pbf_url: https://geo2day.com/europe/sweden/gavleborg.pbf
+  - slug: sweden/gotland
+    pbf_url: https://geo2day.com/europe/sweden/gotland.pbf
+  - slug: sweden/halland
+    pbf_url: https://geo2day.com/europe/sweden/halland.pbf
+  - slug: sweden/jamtland
+    pbf_url: https://geo2day.com/europe/sweden/jamtland.pbf
+  - slug: sweden/jonkoping
+    pbf_url: https://geo2day.com/europe/sweden/jonkoping.pbf
+  - slug: sweden/kalmar
+    pbf_url: https://geo2day.com/europe/sweden/kalmar.pbf
+  - slug: sweden/kronoberg
+    pbf_url: https://geo2day.com/europe/sweden/kronoberg.pbf
+  - slug: sweden/norrbotten
+    pbf_url: https://geo2day.com/europe/sweden/norrbotten.pbf
+  - slug: sweden/orebro
+    pbf_url: https://geo2day.com/europe/sweden/orebro.pbf
+  - slug: sweden/ostergotland
+    pbf_url: https://geo2day.com/europe/sweden/ostergotland.pbf
+  - slug: sweden/skane
+    pbf_url: https://geo2day.com/europe/sweden/skane.pbf
+  - slug: sweden/sodermanland
+    pbf_url: https://geo2day.com/europe/sweden/sodermanland.pbf
+  - slug: sweden/stockholm
+    pbf_url: https://geo2day.com/europe/sweden/stockholm.pbf
+  - slug: sweden/uppsala
+    pbf_url: https://geo2day.com/europe/sweden/uppsala.pbf
+  - slug: sweden/varmland
+    pbf_url: https://geo2day.com/europe/sweden/varmland.pbf
+  - slug: sweden/vasterbotten
+    pbf_url: https://geo2day.com/europe/sweden/vasterbotten.pbf
+  - slug: sweden/vasternorrland
+    pbf_url: https://geo2day.com/europe/sweden/vasternorrland.pbf
+  - slug: sweden/vastmanland
+    pbf_url: https://geo2day.com/europe/sweden/vastmanland.pbf
+  - slug: sweden/vastra-gotaland
+    pbf_url: https://geo2day.com/europe/sweden/vastra_gotaland.pbf
+  # Switzerland: by canton via geo2day (499 MB single; 2–70 MB each). Major ski country.
+  - slug: switzerland/aargau
+    pbf_url: https://geo2day.com/europe/switzerland/aargau.pbf
+  - slug: switzerland/appenzell-ausserrhoden
+    pbf_url: https://geo2day.com/europe/switzerland/appenzell_ausserrhoden.pbf
+  - slug: switzerland/appenzell-innerrhoden
+    pbf_url: https://geo2day.com/europe/switzerland/appenzell_innerrhoden.pbf
+  - slug: switzerland/basel-landschaft
+    pbf_url: https://geo2day.com/europe/switzerland/basel_landschaft.pbf
+  - slug: switzerland/basel-stadt
+    pbf_url: https://geo2day.com/europe/switzerland/basel_stadt.pbf
+  - slug: switzerland/bern
+    pbf_url: https://geo2day.com/europe/switzerland/bern.pbf
+  - slug: switzerland/fribourg
+    pbf_url: https://geo2day.com/europe/switzerland/fribourg.pbf
+  - slug: switzerland/geneva
+    pbf_url: https://geo2day.com/europe/switzerland/geneva.pbf
+  - slug: switzerland/glarus
+    pbf_url: https://geo2day.com/europe/switzerland/glarus.pbf
+  - slug: switzerland/grisons
+    pbf_url: https://geo2day.com/europe/switzerland/grisons.pbf
+  - slug: switzerland/jura
+    pbf_url: https://geo2day.com/europe/switzerland/jura.pbf
+  - slug: switzerland/lucerne
+    pbf_url: https://geo2day.com/europe/switzerland/lucerne.pbf
+  - slug: switzerland/neuchatel
+    pbf_url: https://geo2day.com/europe/switzerland/neuchatel.pbf
+  - slug: switzerland/nidwalden
+    pbf_url: https://geo2day.com/europe/switzerland/nidwalden.pbf
+  - slug: switzerland/obwalden
+    pbf_url: https://geo2day.com/europe/switzerland/obwalden.pbf
+  - slug: switzerland/saint-gallen
+    pbf_url: https://geo2day.com/europe/switzerland/saint_gallen.pbf
+  - slug: switzerland/schaffhausen
+    pbf_url: https://geo2day.com/europe/switzerland/schaffhausen.pbf
+  - slug: switzerland/schwyz
+    pbf_url: https://geo2day.com/europe/switzerland/schwyz.pbf
+  - slug: switzerland/solothurn
+    pbf_url: https://geo2day.com/europe/switzerland/solothurn.pbf
+  - slug: switzerland/thurgau
+    pbf_url: https://geo2day.com/europe/switzerland/thurgau.pbf
+  - slug: switzerland/ticino
+    pbf_url: https://geo2day.com/europe/switzerland/ticino.pbf
+  - slug: switzerland/uri
+    pbf_url: https://geo2day.com/europe/switzerland/uri.pbf
+  - slug: switzerland/valais
+    pbf_url: https://geo2day.com/europe/switzerland/valais.pbf
+  - slug: switzerland/vaud
+    pbf_url: https://geo2day.com/europe/switzerland/vaud.pbf
+  - slug: switzerland/zug
+    pbf_url: https://geo2day.com/europe/switzerland/zug.pbf
+  - slug: switzerland/zurich
+    pbf_url: https://geo2day.com/europe/switzerland/zurich.pbf
+  - slug: turkey
+    pbf_url: https://download.geofabrik.de/europe/turkey-latest.osm.pbf
+  - slug: ukraine
+    pbf_url: https://download.geofabrik.de/europe/ukraine-latest.osm.pbf
+  # United Kingdom: by constituent country (134 MB–1.5 GB; avoids OOM on full 2 GB UK PBF)
+  - slug: united-kingdom/bermuda
+    pbf_url: https://download.geofabrik.de/europe/united-kingdom/bermuda-latest.osm.pbf
+  # England: use canonical Geofabrik URL (united-kingdom); full extract may hit osmium BlobHeader limit
+  - slug: united-kingdom/england
+    pbf_url: https://download.geofabrik.de/europe/united-kingdom/england-latest.osm.pbf
+    cluster_dist_m: 20000  # 1.5 GB; smaller clusters to avoid OOM
+  - slug: united-kingdom/falklands
+    pbf_url: https://download.geofabrik.de/europe/united-kingdom/falklands-latest.osm.pbf
+  - slug: united-kingdom/scotland
+    pbf_url: https://download.geofabrik.de/europe/united-kingdom/scotland-latest.osm.pbf
+  - slug: united-kingdom/wales
+    pbf_url: https://download.geofabrik.de/europe/united-kingdom/wales-latest.osm.pbf
+  # Excluded: malta, monaco (per user request)
+
+# --- Asia: skip Vietnam, Cambodia, Indonesia, and other very tropical countries.
+# Included: China, Nepal, India, Japan, South Korea, Taiwan, Kazakhstan, Iran, etc.
+asia:
+  - slug: afghanistan
+    pbf_url: https://download.geofabrik.de/asia/afghanistan-latest.osm.pbf
+  - slug: armenia
+    pbf_url: https://download.geofabrik.de/asia/armenia-latest.osm.pbf
+  - slug: azerbaijan
+    pbf_url: https://download.geofabrik.de/asia/azerbaijan-latest.osm.pbf
+  - slug: bhutan
+    pbf_url: https://download.geofabrik.de/asia/bhutan-latest.osm.pbf
+  # China: by province (all <160MB; avoids OOM on full 1.4GB China)
+  - slug: china/anhui
+    pbf_url: https://download.geofabrik.de/asia/china/anhui-latest.osm.pbf
+  - slug: china/beijing
+    pbf_url: https://download.geofabrik.de/asia/china/beijing-latest.osm.pbf
+  - slug: china/chongqing
+    pbf_url: https://download.geofabrik.de/asia/china/chongqing-latest.osm.pbf
+  - slug: china/fujian
+    pbf_url: https://download.geofabrik.de/asia/china/fujian-latest.osm.pbf
+  - slug: china/gansu
+    pbf_url: https://download.geofabrik.de/asia/china/gansu-latest.osm.pbf
+  - slug: china/guangdong
+    pbf_url: https://download.geofabrik.de/asia/china/guangdong-latest.osm.pbf
+  - slug: china/guangxi
+    pbf_url: https://download.geofabrik.de/asia/china/guangxi-latest.osm.pbf
+  - slug: china/guizhou
+    pbf_url: https://download.geofabrik.de/asia/china/guizhou-latest.osm.pbf
+  - slug: china/hainan
+    pbf_url: https://download.geofabrik.de/asia/china/hainan-latest.osm.pbf
+  - slug: china/hebei
+    pbf_url: https://download.geofabrik.de/asia/china/hebei-latest.osm.pbf
+  - slug: china/heilongjiang
+    pbf_url: https://download.geofabrik.de/asia/china/heilongjiang-latest.osm.pbf
+  - slug: china/henan
+    pbf_url: https://download.geofabrik.de/asia/china/henan-latest.osm.pbf
+  - slug: china/hong-kong
+    pbf_url: https://download.geofabrik.de/asia/china/hong-kong-latest.osm.pbf
+  - slug: china/hubei
+    pbf_url: https://download.geofabrik.de/asia/china/hubei-latest.osm.pbf
+  - slug: china/hunan
+    pbf_url: https://download.geofabrik.de/asia/china/hunan-latest.osm.pbf
+  - slug: china/inner-mongolia
+    pbf_url: https://download.geofabrik.de/asia/china/inner-mongolia-latest.osm.pbf
+  - slug: china/jiangsu
+    pbf_url: https://download.geofabrik.de/asia/china/jiangsu-latest.osm.pbf
+  - slug: china/jiangxi
+    pbf_url: https://download.geofabrik.de/asia/china/jiangxi-latest.osm.pbf
+  - slug: china/jilin
+    pbf_url: https://download.geofabrik.de/asia/china/jilin-latest.osm.pbf
+  - slug: china/liaoning
+    pbf_url: https://download.geofabrik.de/asia/china/liaoning-latest.osm.pbf
+  - slug: china/macau
+    pbf_url: https://download.geofabrik.de/asia/china/macau-latest.osm.pbf
+  - slug: china/ningxia
+    pbf_url: https://download.geofabrik.de/asia/china/ningxia-latest.osm.pbf
+  - slug: china/qinghai
+    pbf_url: https://download.geofabrik.de/asia/china/qinghai-latest.osm.pbf
+  - slug: china/shaanxi
+    pbf_url: https://download.geofabrik.de/asia/china/shaanxi-latest.osm.pbf
+  - slug: china/shandong
+    pbf_url: https://download.geofabrik.de/asia/china/shandong-latest.osm.pbf
+  - slug: china/shanghai
+    pbf_url: https://download.geofabrik.de/asia/china/shanghai-latest.osm.pbf
+  - slug: china/shanxi
+    pbf_url: https://download.geofabrik.de/asia/china/shanxi-latest.osm.pbf
+  - slug: china/sichuan
+    pbf_url: https://download.geofabrik.de/asia/china/sichuan-latest.osm.pbf
+  - slug: china/tianjin
+    pbf_url: https://download.geofabrik.de/asia/china/tianjin-latest.osm.pbf
+  - slug: china/tibet
+    pbf_url: https://download.geofabrik.de/asia/china/tibet-latest.osm.pbf
+  - slug: china/xinjiang
+    pbf_url: https://download.geofabrik.de/asia/china/xinjiang-latest.osm.pbf
+  - slug: china/yunnan
+    pbf_url: https://download.geofabrik.de/asia/china/yunnan-latest.osm.pbf
+  - slug: china/zhejiang
+    pbf_url: https://download.geofabrik.de/asia/china/zhejiang-latest.osm.pbf
+  - slug: india
+    pbf_url: https://download.geofabrik.de/asia/india-latest.osm.pbf
+  - slug: iran
+    pbf_url: https://download.geofabrik.de/asia/iran-latest.osm.pbf
+  - slug: iraq
+    pbf_url: https://download.geofabrik.de/asia/iraq-latest.osm.pbf
+  - slug: israel-and-palestine
+    pbf_url: https://download.geofabrik.de/asia/israel-and-palestine-latest.osm.pbf
+  # Japan: by Geofabrik subregion (83–459 MB each; avoids OOM on full 2.2 GB japan PBF)
+  - slug: japan/chubu
+    pbf_url: https://download.geofabrik.de/asia/japan/chubu-latest.osm.pbf
+  - slug: japan/chugoku
+    pbf_url: https://download.geofabrik.de/asia/japan/chugoku-latest.osm.pbf
+  - slug: japan/hokkaido
+    pbf_url: https://download.geofabrik.de/asia/japan/hokkaido-latest.osm.pbf
+  - slug: japan/kansai
+    pbf_url: https://download.geofabrik.de/asia/japan/kansai-latest.osm.pbf
+  - slug: japan/kanto
+    pbf_url: https://download.geofabrik.de/asia/japan/kanto-latest.osm.pbf
+  - slug: japan/kyushu
+    pbf_url: https://download.geofabrik.de/asia/japan/kyushu-latest.osm.pbf
+  - slug: japan/shikoku
+    pbf_url: https://download.geofabrik.de/asia/japan/shikoku-latest.osm.pbf
+  - slug: japan/tohoku
+    pbf_url: https://download.geofabrik.de/asia/japan/tohoku-latest.osm.pbf
+  - slug: jordan
+    pbf_url: https://download.geofabrik.de/asia/jordan-latest.osm.pbf
+  - slug: kazakhstan
+    pbf_url: https://download.geofabrik.de/asia/kazakhstan-latest.osm.pbf
+  - slug: kyrgyzstan
+    pbf_url: https://download.geofabrik.de/asia/kyrgyzstan-latest.osm.pbf
+  - slug: lebanon
+    pbf_url: https://download.geofabrik.de/asia/lebanon-latest.osm.pbf
+  - slug: mongolia
+    pbf_url: https://download.geofabrik.de/asia/mongolia-latest.osm.pbf
+  - slug: nepal
+    pbf_url: https://download.geofabrik.de/asia/nepal-latest.osm.pbf
+  - slug: north-korea
+    pbf_url: https://download.geofabrik.de/asia/north-korea-latest.osm.pbf
+  - slug: pakistan
+    pbf_url: https://download.geofabrik.de/asia/pakistan-latest.osm.pbf
+  - slug: south-korea
+    pbf_url: https://download.geofabrik.de/asia/south-korea-latest.osm.pbf
+  - slug: sri-lanka
+    pbf_url: https://download.geofabrik.de/asia/sri-lanka-latest.osm.pbf
+  - slug: syria
+    pbf_url: https://download.geofabrik.de/asia/syria-latest.osm.pbf
+  - slug: taiwan
+    pbf_url: https://download.geofabrik.de/asia/taiwan-latest.osm.pbf
+  - slug: tajikistan
+    pbf_url: https://download.geofabrik.de/asia/tajikistan-latest.osm.pbf
+  - slug: turkmenistan
+    pbf_url: https://download.geofabrik.de/asia/turkmenistan-latest.osm.pbf
+  - slug: uzbekistan
+    pbf_url: https://download.geofabrik.de/asia/uzbekistan-latest.osm.pbf
+  - slug: yemen
+    pbf_url: https://download.geofabrik.de/asia/yemen-latest.osm.pbf
+  - slug: gcc-states
+    pbf_url: https://download.geofabrik.de/asia/gcc-states-latest.osm.pbf
+  # Excluded: vietnam, cambodia, indonesia, laos, thailand, philippines,
+  # malaysia-singapore-brunei, bangladesh, east-timor (tropical)

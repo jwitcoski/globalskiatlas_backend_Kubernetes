@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Union
 import geopandas as gpd
 import pandas as pd
 from shapely.geometry import Point, Polygon, LineString
+from shapely import make_valid
 
 
 def _get_centroid(element: dict) -> Optional[tuple]:
@@ -190,14 +191,61 @@ def osm_nearby_to_geoparquet(
     if limit:
         print(f"(Limited to first {limit} elements)")
     rows = _osm_elements_to_rows(elements, limit)
-    gdf = gpd.GeoDataFrame(rows, crs="EPSG:4326")
+    if not rows:
+        gdf = gpd.GeoDataFrame(columns=["osm_type", "osm_id", "winter_sports_id", "winter_sports_name", "country", "state", "tags", "geometry"], crs="EPSG:4326")
+    else:
+        gdf = gpd.GeoDataFrame(rows, crs="EPSG:4326")
     gdf.to_parquet(output_path, index=False)
     print(f"Saved {len(gdf)} OSM elements to {output_path}")
     return output_path
 
 
+def _sanitize_geometries(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Fix or drop invalid geometries so GeoParquet write succeeds (valid LinearRings)."""
+    from shapely import is_valid
+
+    def _is_acceptable(geom):
+        if geom is None or geom.is_empty:
+            return False
+        if geom.geom_type == "Point":
+            return True
+        if geom.geom_type == "Polygon":
+            if geom.exterior is None or len(geom.exterior.coords) < 3:
+                return False
+            for ring in geom.interiors:
+                if len(ring.coords) < 3:
+                    return False
+            return True
+        if geom.geom_type == "MultiPolygon":
+            return all(_is_acceptable(p) for p in geom.geoms)
+        return False
+
+    geoms = []
+    for idx, geom in enumerate(gdf.geometry):
+        if geom is None or geom.is_empty:
+            geoms.append(None)
+            continue
+        if not _is_acceptable(geom):
+            try:
+                fixed = make_valid(geom)
+                if fixed is None or fixed.is_empty:
+                    geoms.append(None)
+                elif _is_acceptable(fixed):
+                    geoms.append(fixed)
+                else:
+                    geoms.append(None)
+            except Exception:
+                geoms.append(None)
+        else:
+            geoms.append(geom)
+    gdf = gdf.copy()
+    gdf["geometry"] = geoms
+    gdf = gdf[gdf.geometry.notna()].copy()
+    return gdf
+
+
 def geojson_to_geoparquet(geojson_path: Union[str, Path], output_path: Union[str, Path]) -> Path:
-    """Convert a GeoJSON file to GeoParquet."""
+    """Convert a GeoJSON file to GeoParquet. Invalid geometries are fixed or dropped."""
     geojson_path = Path(geojson_path)
     output_path = Path(output_path)
     if not geojson_path.exists():
@@ -207,6 +255,11 @@ def geojson_to_geoparquet(geojson_path: Union[str, Path], output_path: Union[str
     if not gdf.crs:
         gdf.set_crs("EPSG:4326", inplace=True)
     gdf = gdf.to_crs("EPSG:4326")
+    n_before = len(gdf)
+    gdf = _sanitize_geometries(gdf)
+    n_after = len(gdf)
+    if n_before > n_after:
+        print(f"  Dropped {n_before - n_after} feature(s) with invalid geometry", file=sys.stderr)
     gdf.to_parquet(output_path, index=False)
     print(f"Saved {len(gdf)} features to {output_path}")
     return output_path
