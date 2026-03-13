@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Iceberg stats API - Lambda reads S3 iceberg-stats/latest.json and serves at /api/iceberg-stats
+
+Parameters:
+  IcebergStatsBucket:
+    Type: String
+    Description: S3 bucket where iceberg-stats/latest.json is stored (e.g. globalskiatlas-backend-k8s-output)
+
+Resources:
+  IcebergStatsApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: $default
+
+  IcebergStatsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handler.handler
+      Runtime: python3.11
+      CodeUri: iceberg_stats/
+      Environment:
+        Variables:
+          ICEBERG_STATS_BUCKET: !Ref IcebergStatsBucket
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: s3:GetObject
+              Resource: !Sub 'arn:aws:s3:::${IcebergStatsBucket}/iceberg-stats/*'
+      Events:
+        GetStats:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref IcebergStatsApi
+            Path: /api/iceberg-stats
+            Method: get
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway base URL - append /api/iceberg-stats for the stats endpoint
+    Value: !Sub 'https://${IcebergStatsApi}.execute-api.${AWS::Region}.amazonaws.com'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiUrl'
+  IcebergStatsEndpoint:
+    Description: Full URL for the Iceberg stats JSON
+    Value: !Sub 'https://${IcebergStatsApi}.execute-api.${AWS::Region}.amazonaws.com/api/iceberg-stats'
+  IcebergStatsFunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt IcebergStatsFunction.Arn

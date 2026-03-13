@@ -6,7 +6,7 @@ The Lambda reads `s3://IcebergStatsBucket/iceberg-stats/latest.json` (populated 
 
 ## Deploy
 
-1. **Build and deploy** (from repo root or from this folder):
+1. **Build and deploy** (from this folder; requires [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html) and `aws configure`):
 
    ```bash
    cd sam-iceberg-stats
@@ -15,6 +15,12 @@ The Lambda reads `s3://IcebergStatsBucket/iceberg-stats/latest.json` (populated 
    ```
 
    When prompted, set **IcebergStatsBucket** = `globalskiatlas-backend-k8s-output` (or your bucket). Other prompts can use defaults.
+
+   **One-shot deploy** (no prompts) after first `--guided` run, or with a parameter override:
+
+   ```bash
+   sam build && sam deploy --parameter-overrides IcebergStatsBucket=globalskiatlas-backend-k8s-output
+   ```
 
 2. **Populate the JSON** (once, or on a schedule after `register_iceberg.py`):
 
