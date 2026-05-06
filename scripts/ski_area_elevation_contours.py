@@ -383,7 +383,12 @@ def _contours_from_dem(
         return []
     x = np.linspace(west, east, w)
     y = np.linspace(north, south, h)  # y north->south to match row order
-    levels = np.arange(vmin, vmax + interval * 0.5, interval)
+    # Anchor contour levels to interval boundaries (from 0), not local vmin.
+    # This ensures predictable "major" contours like x00 meters exist and
+    # can be targeted by symbology rules such as elevation_m % 100 = 0.
+    level_start = math.floor(vmin / interval) * interval
+    level_end = math.ceil(vmax / interval) * interval
+    levels = np.arange(level_start, level_end + interval * 0.5, interval)
     if len(levels) == 0:
         return []
     cs = plt.contour(x, y, dem_m, levels=levels)

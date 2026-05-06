@@ -7,7 +7,7 @@ __pycache__/
 .Python
 *.so
 
-# Generated output
+# Generated output (includes combined parquet, pmtiles_staging, pmtiles, etc.)
 output/
 osm_batches/
 cache/

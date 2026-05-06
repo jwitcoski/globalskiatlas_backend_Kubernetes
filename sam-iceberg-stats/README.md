@@ -14,7 +14,7 @@ The Lambda reads `s3://IcebergStatsBucket/iceberg-stats/latest.json` (populated 
    sam deploy --guided
    ```
 
-   When prompted, set **IcebergStatsBucket** = `globalskiatlas-backend-k8s-output` (or your bucket). Other prompts can use defaults.
+   When prompted, set **IcebergStatsBucket** = `globalskiatlas-backend-k8s-output` (or your bucket). If SAM asks *"IcebergStatsFunction has no authentication. Is this okay? [y/N]"* answer **y** (the endpoint is intentionally public for the Download Data page).
 
    **One-shot deploy** (no prompts) after first `--guided` run, or with a parameter override:
 
@@ -35,6 +35,29 @@ The Lambda reads `s3://IcebergStatsBucket/iceberg-stats/latest.json` (populated 
    - Or use the **ApiUrl** output from `sam deploy` as the origin for this behavior.
 
 After that, `https://your-domain/api/iceberg-stats` returns the JSON (or use the API Gateway URL from the stack output).
+
+## Test the API (no frontend)
+
+1. **Get the endpoint URL** (after `sam deploy`). From the repo root:
+
+   ```powershell
+   cd sam-iceberg-stats
+   sam list endpoints --output json
+   ```
+
+   Or in AWS Console: CloudFormation → your stack → **Outputs** → copy **IcebergStatsEndpoint** (or **ApiUrl** + `/api/iceberg-stats`).
+
+2. **Call it directly** (replace with your URL):
+
+   ```powershell
+   Invoke-RestMethod -Uri "https://YOUR_API_ID.execute-api.YOUR_REGION.amazonaws.com/api/iceberg-stats"
+   ```
+
+   Or with curl: `curl -s "https://YOUR_API_ID.execute-api.YOUR_REGION.amazonaws.com/api/iceberg-stats"`
+
+   - **200** + JSON (tables, counts, versioning) = API works; Lambda is reading S3.
+   - **404** = `iceberg-stats/latest.json` not in the bucket; run `scripts/upload_iceberg_stats.py --s3-bucket globalskiatlas-backend-k8s-output`.
+   - **500** = check Lambda logs in CloudWatch.
 
 ## Outputs
 

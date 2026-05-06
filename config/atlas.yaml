@@ -3,6 +3,7 @@
 
 # Template project (create in QGIS; script copies and replaces layer datasources).
 template:
+  small_medium: atlas/map_gen/templates/ski_atlas_small_medium_template.qgz
   resort: atlas/map_gen/templates/atlas_resort_template.qgz
   # overview: atlas/map_gen/templates/atlas_overview_template.qgz  # optional
 

@@ -278,6 +278,76 @@ def csv_to_parquet(csv_path: Union[str, Path], output_path: Union[str, Path]) ->
     return output_path
 
 
+def _merge_ski_orientation_into_analyzed(data_dir: Path) -> None:
+    """
+    Enrich ski_areas_analyzed.parquet with ski_north_angle/map_rotation_deg.
+
+    Source is ski_areas_elevation.parquet produced by scripts/ski_area_elevation_contours.py.
+    Join key is winter_sports_id (+ region when present in both tables).
+    """
+    analyzed_path = data_dir / "ski_areas_analyzed.parquet"
+    elevation_path = data_dir / "ski_areas_elevation.parquet"
+    if not analyzed_path.exists() or not elevation_path.exists():
+        return
+
+    analyzed = pd.read_parquet(analyzed_path)
+    elev = pd.read_parquet(elevation_path)
+
+    if "winter_sports_id" not in analyzed.columns or "winter_sports_id" not in elev.columns:
+        return
+    if "ski_north_angle" not in elev.columns:
+        return
+
+    join_cols = ["winter_sports_id"]
+    if "region" in analyzed.columns and "region" in elev.columns:
+        join_cols.append("region")
+
+    # Normalize join dtypes across pipeline outputs (csv/parquet can differ)
+    analyzed = analyzed.copy()
+    elev = elev.copy()
+    analyzed["winter_sports_id"] = analyzed["winter_sports_id"].astype(str)
+    elev["winter_sports_id"] = elev["winter_sports_id"].astype(str)
+    if "region" in join_cols:
+        analyzed["region"] = analyzed["region"].astype(str)
+        elev["region"] = elev["region"].astype(str)
+
+    orient_cols = join_cols + ["ski_north_angle"]
+    orient = elev[orient_cols].drop_duplicates(subset=join_cols)
+
+    merged = analyzed.merge(orient, on=join_cols, how="left", suffixes=("", "_elev"))
+
+    # Coalesce legacy columns from previous runs into a single canonical field
+    if "ski_north_angle" not in merged.columns:
+        if "ski_north_angle_x" in merged.columns and "ski_north_angle_y" in merged.columns:
+            merged["ski_north_angle"] = merged["ski_north_angle_x"].combine_first(
+                merged["ski_north_angle_y"]
+            )
+        elif "ski_north_angle_x" in merged.columns:
+            merged["ski_north_angle"] = merged["ski_north_angle_x"]
+        elif "ski_north_angle_y" in merged.columns:
+            merged["ski_north_angle"] = merged["ski_north_angle_y"]
+        elif "ski_north_angle_elev" in merged.columns:
+            merged["ski_north_angle"] = merged["ski_north_angle_elev"]
+    elif "ski_north_angle_elev" in merged.columns:
+        merged["ski_north_angle"] = merged["ski_north_angle"].combine_first(
+            merged["ski_north_angle_elev"]
+        )
+
+    if "ski_north_angle" in merged.columns:
+        merged["map_rotation_deg"] = merged["ski_north_angle"].round(1)
+
+    merged.to_parquet(analyzed_path, index=False)
+    matched = (
+        int(merged["ski_north_angle"].notna().sum())
+        if "ski_north_angle" in merged.columns
+        else 0
+    )
+    print(
+        f"Enriched {analyzed_path.name} with ski_north_angle/map_rotation_deg "
+        f"(matched {matched}/{len(merged)} rows)"
+    )
+
+
 def export_all_to_parquet(data_dir: Union[str, Path]) -> None:
     """Convert all pipeline outputs in data_dir to Parquet (GeoJSON and CSV → Parquet)."""
     data_dir = Path(data_dir)
@@ -298,6 +368,15 @@ def export_all_to_parquet(data_dir: Union[str, Path]) -> None:
                 print(f"Warning: failed to convert {src} -> {dst}: {e}", file=sys.stderr)
         else:
             print(f"Skipping (not found): {src}")
+
+    # Optional enrichment: carry per-resort map bearing into analyzed parquet
+    try:
+        _merge_ski_orientation_into_analyzed(data_dir)
+    except Exception as e:
+        print(
+            f"Warning: failed to enrich ski_areas_analyzed.parquet with orientation: {e}",
+            file=sys.stderr,
+        )
 
 
 if __name__ == "__main__":
