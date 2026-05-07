@@ -33,6 +33,8 @@ import geopandas as gpd
 import yaml
 
 from atlas.map_gen.layout_constants import (
+    MAIN_MAP_FRAME_HEIGHT_MM,
+    MAIN_MAP_FRAME_WIDTH_MM,
     expand_bounds_for_rotation,
     expand_bounds_to_main_map_aspect,
 )
@@ -337,6 +339,103 @@ def _set_first_layoutitem_attr_by_type(content: str, type_code: str, attr: str, 
     return content[: m.start()] + new_tag + content[m.end() :]
 
 
+def _set_layout_attr_by_name(content: str, layout_name: str, attr: str, value: str) -> str:
+    """Set an attribute on the <Layout ...> opening tag matching name="...".
+
+    QGIS may rewrite/normalize layout XML on open; this lets us clear template-linked
+    behavior (e.g. worldFileMap) deterministically.
+    """
+    token = f'name="{layout_name}"'
+    i = content.find(token)
+    if i < 0:
+        return content
+    tag_start = content.rfind("<Layout", 0, i)
+    tag_end = content.find(">", i)
+    if tag_start < 0 or tag_end < 0:
+        return content
+    tag = content[tag_start : tag_end + 1]
+    if f'{attr}="' not in tag:
+        new_tag = tag[:-1] + f' {attr}="{value}">'
+    else:
+        new_tag = re.sub(rf'{attr}="[^"]*"', f'{attr}="{value}"', tag, count=1)
+    return content[:tag_start] + new_tag + content[tag_end + 1 :]
+
+
+def _strip_layoutitem_attr_in_layout(content: str, layout_name: str, attr: str) -> str:
+    """Remove an attribute from all <LayoutItem ...> tags inside a named <Layout> block."""
+    token = f'name="{layout_name}"'
+    i = content.find(token)
+    if i < 0:
+        return content
+    layout_start = content.rfind("<Layout", 0, i)
+    layout_end = content.find("</Layout>", i)
+    if layout_start < 0 or layout_end < 0:
+        return content
+    layout_end += len("</Layout>")
+    block = content[layout_start:layout_end]
+
+    # Strip `attr="..."` from opening tags only (keep whitespace sane).
+    def _strip(m: re.Match[str]) -> str:
+        tag = m.group(0)
+        tag2 = re.sub(rf"\s+{re.escape(attr)}=\"[^\"]*\"", "", tag)
+        return tag2
+
+    block2 = re.sub(r"<LayoutItem\b[^>]*>", _strip, block)
+    if block2 == block:
+        return content
+    return content[:layout_start] + block2 + content[layout_end:]
+
+
+def _force_layoutitem_ddp_width_height_by_uuid(
+    content: str, uuid_str: str, width_mm: float, height_mm: float
+) -> str:
+    """Force data-defined Width/Height on a layout item.
+
+    QGIS serializes data-defined overrides via QgsPropertyCollection under
+    <LayoutObject><dataDefinedProperties>. Setting dataDefinedWidth/Height here
+    prevents template-linked normalization from changing item size on open/save.
+    """
+    token = f'uuid="{uuid_str}"'
+    i = content.find(token)
+    if i < 0:
+        return content
+    item_start = content.rfind("<LayoutItem", 0, i)
+    item_end = content.find("</LayoutItem>", i)
+    if item_start < 0 or item_end < 0:
+        return content
+    item_end += len("</LayoutItem>")
+    block = content[item_start:item_end]
+
+    # Locate the dataDefinedProperties block within this LayoutItem.
+    m = re.search(r"<dataDefinedProperties>[\s\S]*?</dataDefinedProperties>", block)
+    if not m:
+        return content
+
+    # Qgis::PropertyType::Static is typically enum value 1.
+    ddp = (
+        "<dataDefinedProperties>\n"
+        "          <Option type=\"Map\">\n"
+        "            <Option type=\"QString\" value=\"\" name=\"name\"/>\n"
+        "            <Option type=\"Map\" name=\"properties\">\n"
+        "              <Option type=\"Map\" name=\"dataDefinedWidth\">\n"
+        "                <Option type=\"bool\" value=\"true\" name=\"active\"/>\n"
+        "                <Option type=\"int\" value=\"1\" name=\"type\"/>\n"
+        f"                <Option type=\"QString\" value=\"{width_mm}\" name=\"val\"/>\n"
+        "              </Option>\n"
+        "              <Option type=\"Map\" name=\"dataDefinedHeight\">\n"
+        "                <Option type=\"bool\" value=\"true\" name=\"active\"/>\n"
+        "                <Option type=\"int\" value=\"1\" name=\"type\"/>\n"
+        f"                <Option type=\"QString\" value=\"{height_mm}\" name=\"val\"/>\n"
+        "              </Option>\n"
+        "            </Option>\n"
+        "            <Option type=\"QString\" value=\"collection\" name=\"type\"/>\n"
+        "          </Option>\n"
+        "        </dataDefinedProperties>"
+    )
+    block2 = block[: m.start()] + ddp + block[m.end() :]
+    return content[:item_start] + block2 + content[item_end:]
+
+
 def _set_layoutitem_child_tag_attr_by_uuid(
     content: str,
     uuid_str: str,
@@ -460,10 +559,6 @@ def patch_qgs(
         if rotation is not None:
             map_extent = expand_bounds_for_rotation(map_extent, rotation)
         content = _replace_local_extents(content, map_extent)
-        # Ensure atlas scaling doesn't override our explicit Extent on load.
-        content = _set_layoutitem_child_tag_attr_by_uuid(
-            content, _TEMPLATE_MAIN_MAP_UUID, "AtlasMap", "scalingMode", "0"
-        )
 
     if rotation is not None:
         # Update canvas <rotation> element
@@ -481,10 +576,6 @@ def patch_qgs(
         content = _set_first_layoutitem_attr_by_type(
             content, "65640", "pictureRotation", str(rotation)
         )
-        # Same safety: keep atlas scaling fixed for the main map.
-        content = _set_layoutitem_child_tag_attr_by_uuid(
-            content, _TEMPLATE_MAIN_MAP_UUID, "AtlasMap", "scalingMode", "0"
-        )
 
     # Point all combined-parquet datasources at local per-resort data files.
     content = _localize_datasources(content)
@@ -494,6 +585,51 @@ def patch_qgs(
     # Point it at a tiny parquet written by _write_resort_data() instead.
     content = _replace_maplayer_datasource(
         content, "parking", _PARKING_LAYER_DATASOURCE_LOCAL
+    )
+
+    # Main map: atlas scalingMode="2" (predefined scale / auto) can let QGIS resize the
+    # map frame on load to match the geographic extent — combined with aspect-ratio lock
+    # in the UI this shows up as width stuck at 107.95 mm but height collapsing (~110 mm).
+    # Always pin fixed scaling + canonical mm frame (even when extent/rotation branches
+    # above did not run — e.g. missing buffer row).
+    content = _set_layoutitem_child_tag_attr_by_uuid(
+        content, _TEMPLATE_MAIN_MAP_UUID, "AtlasMap", "scalingMode", "0"
+    )
+    content = _set_layoutitem_attr_by_uuid(
+        content,
+        _TEMPLATE_MAIN_MAP_UUID,
+        "size",
+        f"{MAIN_MAP_FRAME_WIDTH_MM},{MAIN_MAP_FRAME_HEIGHT_MM},mm",
+    )
+    # Lock the item in the layout to prevent QGIS from auto-resizing it on load
+    # (observed: height collapses to ~110 mm and then gets saved back into the QGZ).
+    content = _set_layoutitem_attr_by_uuid(
+        content,
+        _TEMPLATE_MAIN_MAP_UUID,
+        "positionLock",
+        "true",
+    )
+    # QGIS sometimes re-applies template item geometry on load when templateUuid is set.
+    # Clearing it prevents the map item from being treated as a template-linked item.
+    content = _set_layoutitem_attr_by_uuid(
+        content,
+        _TEMPLATE_MAIN_MAP_UUID,
+        "templateUuid",
+        "",
+    )
+    # QGIS layout can store a "worldFileMap" pointer to the map item; on open it may
+    # normalize the map item's geometry. Clear the pointer to avoid any special casing.
+    content = _set_layout_attr_by_name(content, "Ski Atlas Export", "worldFileMap", "")
+
+    # Critical: QGIS uses templateUuid linkage to "normalize" layout items on open/save.
+    # This was causing the main map to collapse to height=110.208 mm. Strip templateUuid
+    # from all layout items so the layout is no longer treated as template-linked.
+    content = _strip_layoutitem_attr_in_layout(content, "Ski Atlas Export", "templateUuid")
+
+    # Force data-defined Width/Height for the main map item so QGIS cannot
+    # normalize its geometry during open/save.
+    content = _force_layoutitem_ddp_width_height_by_uuid(
+        content, _TEMPLATE_MAIN_MAP_UUID, MAIN_MAP_FRAME_WIDTH_MM, MAIN_MAP_FRAME_HEIGHT_MM
     )
 
     return content
