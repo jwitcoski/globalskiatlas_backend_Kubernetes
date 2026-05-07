@@ -104,8 +104,8 @@ def _setup_standalone_qgis(qgis_root: Path):
 def _zoom_main_map_to_buffer(project, layout) -> bool:
     """Zoom the largest layout map item to the 1000ft buffer layer extent.
 
-    This ensures the map fills its frame correctly regardless of rotation or
-    the buffer polygon's aspect ratio. Returns True if successfully zoomed.
+    Padding + aspect expansion match data_to_qgis so the geographic span fits the
+    fixed mm map frame without letterboxing. Returns True if successfully zoomed.
     """
     from qgis.core import QgsCoordinateTransform, QgsLayoutItemMap, QgsRectangle
 
@@ -158,6 +158,16 @@ def _zoom_main_map_to_buffer(project, layout) -> bool:
         ext.xMinimum() - dx, ext.yMinimum() - dy,
         ext.xMaximum() + dx, ext.yMaximum() + dy,
     )
+    from atlas.map_gen.layout_constants import expand_bounds_to_main_map_aspect
+
+    b = (
+        padded.xMinimum(),
+        padded.yMinimum(),
+        padded.xMaximum(),
+        padded.yMaximum(),
+    )
+    b2 = expand_bounds_to_main_map_aspect(b)
+    padded = QgsRectangle(b2[0], b2[1], b2[2], b2[3])
     map_crs = main_map.crs()
     layer_crs = buffer_layer.crs()
     if map_crs.isValid() and layer_crs.isValid() and map_crs != layer_crs:

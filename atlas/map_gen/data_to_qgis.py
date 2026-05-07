@@ -32,6 +32,11 @@ from typing import Any, Optional
 import geopandas as gpd
 import yaml
 
+from atlas.map_gen.layout_constants import (
+    expand_bounds_for_rotation,
+    expand_bounds_to_main_map_aspect,
+)
+
 # ── Template constants ────────────────────────────────────────────────────────
 # These must match whatever is inside ski_atlas_small_medium_template.qgz
 TEMPLATE_RESORT_NAME = "Wintergreen"
@@ -43,6 +48,8 @@ TEMPLATE_QGS_NAME = "wintergreen_map.qgs"
 TEMPLATE_ROTATION = 91.80000000000001137  # stored value in template XML
 
 # Layout page / main map frame dimensions (mm) — matches ski_atlas_small_medium_template
+# Template layout item UUIDs (from the template QGS).
+_TEMPLATE_MAIN_MAP_UUID = "{843e891d-8334-43c6-988a-58fbb894dec9}"
 # overview_resort_point memory-layer identifiers embedded in the template
 _INSET_MEM_DS_SIMPLE = "memory?geometry=Point&amp;crs=EPSG:4326"
 _INSET_MEM_DS_UID = (
@@ -195,34 +202,35 @@ def _replace_local_extents(
             lambda m, t=etag: _replace_any_extent(t, m.group(1)), content
         )
 
-    # ── Format 2: <Extent xmin="…" ymin="…" xmax="…" ymax="…" … />  ──────────
-    # Also catches <DefaultViewExtent xmin="…" …>
-    attr_re = re.compile(
-        r'(<(?:Extent|DefaultViewExtent)\s[^>]*?)'
-        r'xmin="([^"]+)"([^>]*?)'
-        r'ymin="([^"]+)"([^>]*?)'
-        r'xmax="([^"]+)"([^>]*?)'
-        r'ymax="([^"]+)"',
-        re.DOTALL,
-    )
+    # ── Format 2: <Extent .../> and <DefaultViewExtent .../>  ──────────────────
+    # Attribute order varies across QGIS versions/templates, so parse attributes
+    # by name instead of relying on a fixed order.
+    tag_re = re.compile(r"<(Extent|DefaultViewExtent)\b[^>]*?/?>", re.DOTALL)
 
-    def _replace_attr(m: re.Match) -> str:
+    def _replace_extent_tag(m: re.Match) -> str:
+        tag = m.group(0)
         try:
-            x1, y1, x2, y2 = float(m.group(2)), float(m.group(4)), float(m.group(6)), float(m.group(8))
+            xm = re.search(r'xmin="([^"]+)"', tag)
+            ym = re.search(r'ymin="([^"]+)"', tag)
+            xx = re.search(r'xmax="([^"]+)"', tag)
+            yx = re.search(r'ymax="([^"]+)"', tag)
+            if not (xm and ym and xx and yx):
+                return tag
+            x1, y1, x2, y2 = float(xm.group(1)), float(ym.group(1)), float(xx.group(1)), float(yx.group(1))
         except ValueError:
-            return m.group(0)
+            return tag
+
         # Skip projected (metres-scale) or global extents
         if abs(x1) > 360 or abs(y1) > 360 or (x2 - x1) > 5 or (y2 - y1) > 5:
-            return m.group(0)
-        return (
-            f'{m.group(1)}'
-            f'xmin="{nx1:.16f}"{m.group(3)}'
-            f'ymin="{ny1:.16f}"{m.group(5)}'
-            f'xmax="{nx2:.16f}"{m.group(7)}'
-            f'ymax="{ny2:.16f}"'
-        )
+            return tag
 
-    content = attr_re.sub(_replace_attr, content)
+        tag2 = re.sub(r'xmin="[^"]+"', f'xmin="{nx1:.16f}"', tag, count=1)
+        tag2 = re.sub(r'ymin="[^"]+"', f'ymin="{ny1:.16f}"', tag2, count=1)
+        tag2 = re.sub(r'xmax="[^"]+"', f'xmax="{nx2:.16f}"', tag2, count=1)
+        tag2 = re.sub(r'ymax="[^"]+"', f'ymax="{ny2:.16f}"', tag2, count=1)
+        return tag2
+
+    content = tag_re.sub(_replace_extent_tag, content)
 
     return content
 
@@ -295,6 +303,73 @@ def _replace_maplayer_datasource(content: str, layer_name: str, new_uri: str) ->
     if not n:
         return content
     return content[:bs] + new_block + content[be:]
+
+
+def _set_layoutitem_attr_by_uuid(content: str, uuid_str: str, attr: str, value: str) -> str:
+    """Set an attribute on the <LayoutItem ...> opening tag matching uuid="{...}"."""
+    token = f'uuid="{uuid_str}"'
+    i = content.find(token)
+    if i < 0:
+        return content
+    tag_start = content.rfind("<LayoutItem", 0, i)
+    tag_end = content.find(">", i)
+    if tag_start < 0 or tag_end < 0:
+        return content
+    tag = content[tag_start : tag_end + 1]
+    if f'{attr}="' not in tag:
+        new_tag = tag[:-1] + f' {attr}="{value}">'
+    else:
+        new_tag = re.sub(rf'{attr}="[^"]*"', f'{attr}="{value}"', tag, count=1)
+    return content[:tag_start] + new_tag + content[tag_end + 1 :]
+
+
+def _set_first_layoutitem_attr_by_type(content: str, type_code: str, attr: str, value: str) -> str:
+    """Set an attribute on the first <LayoutItem ... type="X" ...> opening tag."""
+    pat = rf"<LayoutItem\b[^>]*\btype=\"{re.escape(type_code)}\"[^>]*>"
+    m = re.search(pat, content)
+    if not m:
+        return content
+    tag = m.group(0)
+    if f'{attr}="' not in tag:
+        new_tag = tag[:-1] + f' {attr}="{value}">'
+    else:
+        new_tag = re.sub(rf'{attr}="[^"]*"', f'{attr}="{value}"', tag, count=1)
+    return content[: m.start()] + new_tag + content[m.end() :]
+
+
+def _set_layoutitem_child_tag_attr_by_uuid(
+    content: str,
+    uuid_str: str,
+    child_tag: str,
+    attr: str,
+    value: str,
+) -> str:
+    """Set an attribute on a child tag inside a specific LayoutItem block.
+
+    Example: set <AtlasMap scalingMode="..."> inside the main map LayoutItem.
+    """
+    token = f'uuid="{uuid_str}"'
+    i = content.find(token)
+    if i < 0:
+        return content
+    item_start = content.rfind("<LayoutItem", 0, i)
+    item_end = content.find("</LayoutItem>", i)
+    if item_start < 0 or item_end < 0:
+        return content
+    item_end += len("</LayoutItem>")
+    block = content[item_start:item_end]
+
+    # Find child tag (self-closing is typical in QGS XML).
+    m = re.search(rf"<{re.escape(child_tag)}\b[^>]*/>", block)
+    if not m:
+        return content
+    tag = m.group(0)
+    if f'{attr}="' not in tag:
+        new_tag = tag[:-2] + f' {attr}="{value}"/>'
+    else:
+        new_tag = re.sub(rf'{attr}="[^"]*"', f'{attr}="{value}"', tag, count=1)
+    block2 = block[: m.start()] + new_tag + block[m.end() :]
+    return content[:item_start] + block2 + content[item_end:]
 
 
 def patch_qgs(
@@ -378,9 +453,17 @@ def patch_qgs(
         rotation = (360.0 - ski_north_angle) % 360.0
 
     if buffer_bounds is not None:
-        # Zoom to the 1000ft buffer bounds (+ 5% padding). QGIS handles aspect ratio.
+        # Padded buffer bounds, then expand symmetrically so lon/lat span ratio matches
+        # the fixed print frame (avoids letterboxing inside the map item).
         map_extent = _compute_map_extent(buffer_bounds, rotation, pad=0.05)
+        map_extent = expand_bounds_to_main_map_aspect(map_extent)
+        if rotation is not None:
+            map_extent = expand_bounds_for_rotation(map_extent, rotation)
         content = _replace_local_extents(content, map_extent)
+        # Ensure atlas scaling doesn't override our explicit Extent on load.
+        content = _set_layoutitem_child_tag_attr_by_uuid(
+            content, _TEMPLATE_MAIN_MAP_UUID, "AtlasMap", "scalingMode", "0"
+        )
 
     if rotation is not None:
         # Update canvas <rotation> element
@@ -390,14 +473,17 @@ def patch_qgs(
             content,
             count=1,
         )
-        # Update main map LayoutItem mapRotation attribute.
-        # The template stores "91.8" (possibly with extra decimal digits).
-        # We replace the first occurrence (main map); inset maps use mapRotation="0".
-        content = re.sub(
-            r'mapRotation="91\.8[0-9e+\-]*"',
-            f'mapRotation="{rotation}"',
-            content,
-            count=1,
+        # Update main map LayoutItem mapRotation attribute by UUID (robust to template edits).
+        content = _set_layoutitem_attr_by_uuid(
+            content, _TEMPLATE_MAIN_MAP_UUID, "mapRotation", str(rotation)
+        )
+        # North arrow matches map orientation (first north arrow item).
+        content = _set_first_layoutitem_attr_by_type(
+            content, "65640", "pictureRotation", str(rotation)
+        )
+        # Same safety: keep atlas scaling fixed for the main map.
+        content = _set_layoutitem_child_tag_attr_by_uuid(
+            content, _TEMPLATE_MAIN_MAP_UUID, "AtlasMap", "scalingMode", "0"
         )
 
     # Point all combined-parquet datasources at local per-resort data files.
@@ -780,8 +866,48 @@ def run_resorts(
         # Look up 1000ft buffer for this resort (bounds + filtered GDF for preview)
         buffer_bounds: Optional[tuple[float, float, float, float]] = None
         resort_buffer_gdf = gpd.GeoDataFrame()
-        if buffer_gdf is not None and name_col in buffer_gdf.columns:
-            resort_buffer_gdf = buffer_gdf[buffer_gdf[name_col] == resort_name].copy()
+        if buffer_gdf is not None:
+            # Prefer matching on the same name column as ski_areas.parquet, but do it
+            # case-insensitively and trimmed to avoid whitespace/case drift across sources.
+            def _norm(s: str) -> str:
+                return str(s).strip().casefold()
+
+            # 1) Try stable IDs first (avoids name mismatches / duplicates)
+            id_pairs = []
+            for id_col in ("osm_way_id", "osm_id"):
+                if id_col in gdf.columns and id_col in buffer_gdf.columns:
+                    v = row.get(id_col)
+                    if v is not None and str(v).strip() != "" and str(v).lower() != "nan":
+                        id_pairs.append((id_col, str(v)))
+
+            for id_col, v in id_pairs:
+                try:
+                    mask = buffer_gdf[id_col].astype(str) == v
+                except Exception:
+                    continue
+                resort_buffer_gdf = buffer_gdf[mask].copy()
+                if not resort_buffer_gdf.empty:
+                    break
+
+            # 2) Fallback to name matching (casefold + trim)
+            if resort_buffer_gdf.empty:
+                candidates: list[str] = []
+                if name_col in buffer_gdf.columns:
+                    candidates.append(name_col)
+                if "name" in buffer_gdf.columns and "name" != name_col:
+                    candidates.append("name")
+                if "Ski Area" in buffer_gdf.columns and "Ski Area" != name_col:
+                    candidates.append("Ski Area")
+
+                for col in candidates:
+                    try:
+                        mask = buffer_gdf[col].astype(str).map(_norm) == _norm(resort_name)
+                    except Exception:
+                        continue
+                    resort_buffer_gdf = buffer_gdf[mask].copy()
+                    if not resort_buffer_gdf.empty:
+                        break
+
             if not resort_buffer_gdf.empty:
                 geom = resort_buffer_gdf.geometry.union_all()
                 buffer_bounds = geom.bounds  # (minx, miny, maxx, maxy)
