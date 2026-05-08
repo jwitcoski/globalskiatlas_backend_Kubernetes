@@ -477,6 +477,9 @@ def patch_qgs(
     state_name: str,
     buffer_bounds: Optional[tuple[float, float, float, float]] = None,
     ski_north_angle: Optional[float] = None,
+    centroid_lon: Optional[float] = None,
+    centroid_lat: Optional[float] = None,
+    inset_country_raw: Optional[str] = None,
 ) -> str:
     """Substitute resort name, state, map extents, rotation, and inset point into QGS XML."""
     # Replace resort name everywhere it appears in subset filters
@@ -506,6 +509,40 @@ def patch_qgs(
         f'description="Highlight {TEMPLATE_STATE_NAME}"',
         f'description="Highlight {state_name}"',
     )
+
+    # ── Overview inset: dot + host country highlight ─────────────────────────
+    # Ensure inset dot and host-country highlight are driven by the current resort
+    # (not an absolute path or USA-specific filters baked into the template).
+    #
+    # 1) overview_inset_dot LayerSet <Layer> element: replace any stale absolute path.
+    content = re.sub(
+        r'(id="overview_inset_dot"[\s\S]*?<Layer\s+source=")[^"]+(" provider="ogr" name="overview_resort_point")',
+        rf"\1{_INSET_GEOJSON_DS}\2",
+        content,
+        count=1,
+    )
+
+    # 2) Host country highlight: update any USA-specific subset/rule filters.
+    # Prefer the parquet Country field; fall back to centroid bbox heuristics.
+    country = (inset_country_raw or "").strip()
+    if not country or country.casefold() in {"nan", "none"}:
+        if centroid_lon is not None and centroid_lat is not None:
+            lon = float(centroid_lon)
+            lat = float(centroid_lat)
+            if -50 <= lat <= -5 and 108 <= lon <= 160:
+                country = "Australia"
+            elif -52 <= lat <= -28 and (160 <= lon <= 180 or -180 <= lon <= -165):
+                country = "New Zealand"
+            else:
+                country = "United States"
+        else:
+            country = "United States"
+
+    # Template uses both substring subsets ('United States%') and exact-name rules
+    # ('United States of America') across overview layers.
+    content = content.replace("United States%", f"{country}%")
+    full = "United States of America" if country == "United States" else country
+    content = content.replace("United States of America", full)
 
     # ── Inset point layer: switch memory → GeoJSON ─────────────────────────────
     # The template's overview_resort_point layer is an empty memory layer.
@@ -820,6 +857,7 @@ def process_resort(
     icon_src: Optional[Path],
     buffer_bounds: Optional[tuple[float, float, float, float]] = None,
     ski_north_angle: Optional[float] = None,
+    inset_country_raw: Optional[str] = None,
     ski_area_gdf: Optional[gpd.GeoDataFrame] = None,
     buffer_gdf: Optional[gpd.GeoDataFrame] = None,
     contours_gdf: Optional[gpd.GeoDataFrame] = None,
@@ -837,8 +875,16 @@ def process_resort(
     with zipfile.ZipFile(out_qgz, "w", zipfile.ZIP_DEFLATED) as zout:
         for info, data in items:
             if info.filename == TEMPLATE_QGS_NAME:
-                text = patch_qgs(data.decode("utf-8"), resort_name, state_name,
-                                 buffer_bounds, ski_north_angle)
+                text = patch_qgs(
+                    data.decode("utf-8"),
+                    resort_name,
+                    state_name,
+                    buffer_bounds,
+                    ski_north_angle,
+                    centroid_lon=centroid_lon,
+                    centroid_lat=centroid_lat,
+                    inset_country_raw=inset_country_raw,
+                )
                 data = text.encode("utf-8")
                 info.filename = internal_qgs
             zout.writestr(info, data)
@@ -1062,6 +1108,14 @@ def run_resorts(
 
         ski_north = ski_north_angles.get(resort_name)
 
+        inset_country_raw: Optional[str] = None
+        if "Country" in gdf.columns:
+            c = row.get("Country")
+            if c is not None:
+                cs = str(c).strip()
+                if cs and cs.casefold() not in {"nan", "none"}:
+                    inset_country_raw = cs
+
         try:
             process_resort(
                 resort_name=resort_name,
@@ -1073,6 +1127,7 @@ def run_resorts(
                 icon_src=icon_src,
                 buffer_bounds=buffer_bounds,
                 ski_north_angle=ski_north,
+                inset_country_raw=inset_country_raw,
                 ski_area_gdf=resort_ski_gdf,
                 buffer_gdf=resort_buffer_gdf,
                 contours_gdf=resort_contours,
