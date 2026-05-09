@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
 """
-Data-to-map script: ski_areas.parquet → per-resort QGIS project + PNG preview.
+Data-to-map script: ski_areas.parquet → per-resort QGIS project + layout PNG export.
 
-For each resort, copies ski_atlas_small_medium_template.qgz, patches the
-resort-name subset filters and state boundary filter, writes
-resort_inset_point.geojson, copies supporting icons, and renders a PNG
-preview image so map issues can be spotted without opening QGIS.
+For each resort, copies ski_atlas_small_medium_template.qgz, patches filters and paths,
+writes resort_inset_point.geojson, copies supporting icons, then exports the print layout
+to PNG via QgsLayoutExporter (same engine as QGIS — this is the authoritative map image).
 
 Output: atlas_work/{resort-slug}/{resort-slug}_map.qgz
-        atlas_work/{resort-slug}/{resort-slug}_preview.png
+        atlas_work/{resort-slug}/{resort-slug}_export.png   (default; QGIS layout export)
         atlas_work/{resort-slug}/resort_inset_point.geojson
         atlas_work/{resort-slug}/icons/snow_tubing_badge.svg
+
+Optional: --matplotlib-preview writes {slug}_preview.png using matplotlib only (rough QA,
+not the styled layout).
 
 Usage:
   python -m atlas.map_gen.data_to_qgis --all-resorts --region north-america/us/virginia
   python -m atlas.map_gen.data_to_qgis --all-resorts
   python -m atlas.map_gen.data_to_qgis --all-resorts --limit 3
-  python -m atlas.map_gen.data_to_qgis --all-resorts --no-preview
+  python -m atlas.map_gen.data_to_qgis --all-resorts --no-export-layout   # QGZ only (no QGIS)
 """
 from __future__ import annotations
 
@@ -126,6 +128,20 @@ def slugify(name: str) -> str:
     slug = name.lower()
     slug = re.sub(r"[^a-z0-9]+", "-", slug)
     return slug.strip("-")
+
+
+def _safe_slug_fallback(row: Any) -> str:
+    """Fallback slug when the resort name is non-ASCII (e.g. Japanese) and slugify() becomes empty."""
+    for k in ("winter_sports_id", "osm_way_id", "osm_id"):
+        v = getattr(row, "get", lambda _k, _d=None: None)(k, None)
+        if v is None:
+            continue
+        s = str(v).strip()
+        if s and s.casefold() not in {"nan", "none"}:
+            s = re.sub(r"[^0-9a-zA-Z]+", "-", s).strip("-").lower()
+            if s:
+                return f"resort-{s}"
+    return "resort"
 
 
 def _state_subset(state_name: str) -> str:
@@ -471,6 +487,78 @@ def _set_layoutitem_child_tag_attr_by_uuid(
     return content[:item_start] + block2 + content[item_end:]
 
 
+def _recenter_overview_inset_ortho(
+    content: str, lon0: float, lat0: float, extent_m: float = 6378137.0
+) -> str:
+    """Recenter the orthographic inset CRS + extent for both inset map items.
+
+    QGIS stores CRS in each LayoutItem's <crs> subtree; we only rewrite those
+    blocks to avoid disturbing other orthographic definitions elsewhere.
+    """
+
+    def _patch_layoutitem(item_id: str, xml: str) -> str:
+        tok = f'id="{item_id}"'
+        ii = xml.find(tok)
+        if ii < 0:
+            return xml
+        ss = xml.rfind("<LayoutItem", 0, ii)
+        ee = xml.find("</LayoutItem>", ii)
+        if ss < 0 or ee < 0:
+            return xml
+        ee += len("</LayoutItem>")
+        blk = xml[ss:ee]
+
+        # Update proj4 (+proj=ortho +lat_0=... +lon_0=...)
+        def _recenter_proj4(m: re.Match[str]) -> str:
+            s = m.group(0)
+            s = re.sub(r"\+lat_0=[^\s]+", f"+lat_0={lat0:.6f}", s)
+            s = re.sub(r"\+lon_0=[^\s]+", f"+lon_0={lon0:.6f}", s)
+            return s
+
+        blk = re.sub(
+            r"\+proj=ortho\s+\+lat_0=[^\s]+\s+\+lon_0=[^\s]+",
+            _recenter_proj4,
+            blk,
+        )
+
+        # Update WKT parameters (Latitude/Longitude of natural origin)
+        def _recenter_wkt(m: re.Match[str]) -> str:
+            w = m.group(0)
+            w = re.sub(
+                r'(PARAMETER\["Latitude of natural origin",)[-0-9.]+',
+                rf"\g<1>{lat0:.6f}",
+                w,
+                count=1,
+            )
+            w = re.sub(
+                r'(PARAMETER\["Longitude of natural origin",)[-0-9.]+',
+                rf"\g<1>{lon0:.6f}",
+                w,
+                count=1,
+            )
+            return w
+
+        blk = re.sub(
+            r"<wkt>[\s\S]*?METHOD\[\"Orthographic\"[\s\S]*?</wkt>",
+            _recenter_wkt,
+            blk,
+            count=1,
+        )
+
+        # Full-globe projected extent in meters for orthographic.
+        ext_tag = (
+            f'<Extent xmin="{-extent_m}" ymin="{-extent_m}" '
+            f'xmax="{extent_m}" ymax="{extent_m}"/>'
+        )
+        blk = re.sub(r"<Extent\b[^>]*/>", ext_tag, blk, count=1)
+
+        return xml[:ss] + blk + xml[ee:]
+
+    for item in ("overview_inset_map", "overview_inset_dot"):
+        content = _patch_layoutitem(item, content)
+    return content
+
+
 def patch_qgs(
     content: str,
     resort_name: str,
@@ -544,6 +632,13 @@ def patch_qgs(
     full = "United States of America" if country == "United States" else country
     content = content.replace("United States of America", full)
 
+    # 3) Globe orientation: recenter orthographic inset to resort centroid when available.
+    # This is what actually "rotates" the globe away from North America.
+    if centroid_lon is not None and centroid_lat is not None:
+        content = _recenter_overview_inset_ortho(
+            content, lon0=float(centroid_lon), lat0=float(centroid_lat)
+        )
+
     # ── Inset point layer: switch memory → GeoJSON ─────────────────────────────
     # The template's overview_resort_point layer is an empty memory layer.
     # We write resort_inset_point.geojson next to the QGZ; point the layer at it.
@@ -584,35 +679,46 @@ def patch_qgs(
     # ski_north_angle = bearing from base→summit (0=N, 90=E).
     # QGIS rotation R puts geographic bearing (360-R) at screen-top.
     # To put the summit at the top: R = (360 - ski_north_angle) % 360
-    rotation: Optional[float] = None
+    #
+    # When ski_north_angle is missing (typical outside US elevation parquet), we must
+    # still override the template rotation (~Wintergreen 88°); otherwise worldwide maps
+    # stay wrongly tilted and feel like the wrong projection.
     if ski_north_angle is not None:
         rotation = (360.0 - ski_north_angle) % 360.0
+    else:
+        rotation = 0.0
 
     if buffer_bounds is not None:
         # Padded buffer bounds, then expand symmetrically so lon/lat span ratio matches
         # the fixed print frame (avoids letterboxing inside the map item).
         map_extent = _compute_map_extent(buffer_bounds, rotation, pad=0.05)
         map_extent = expand_bounds_to_main_map_aspect(map_extent)
-        if rotation is not None:
-            map_extent = expand_bounds_for_rotation(map_extent, rotation)
+        map_extent = expand_bounds_for_rotation(map_extent, rotation)
         content = _replace_local_extents(content, map_extent)
 
-    if rotation is not None:
-        # Update canvas <rotation> element
-        content = re.sub(
-            r"<rotation>[^<]+</rotation>",
-            f"<rotation>{rotation}</rotation>",
-            content,
-            count=1,
-        )
-        # Update main map LayoutItem mapRotation attribute by UUID (robust to template edits).
-        content = _set_layoutitem_attr_by_uuid(
-            content, _TEMPLATE_MAIN_MAP_UUID, "mapRotation", str(rotation)
-        )
-        # North arrow matches map orientation (first north arrow item).
-        content = _set_first_layoutitem_attr_by_type(
-            content, "65640", "pictureRotation", str(rotation)
-        )
+    # Update canvas <rotation> element
+    content = re.sub(
+        r"<rotation>[^<]+</rotation>",
+        f"<rotation>{rotation}</rotation>",
+        content,
+        count=1,
+    )
+    # Update main map LayoutItem mapRotation attribute by UUID (robust to template edits).
+    content = _set_layoutitem_attr_by_uuid(
+        content, _TEMPLATE_MAIN_MAP_UUID, "mapRotation", str(rotation)
+    )
+    # North arrow matches map orientation (first north arrow item).
+    content = _set_first_layoutitem_attr_by_type(
+        content, "65640", "pictureRotation", str(rotation)
+    )
+
+    # Main map uses empty LayerSet + project layers; inset dot layer was template-unchecked.
+    content = re.sub(
+        r'(<layer-tree-layer\b[^>]*\bname="overview_resort_point"[^>]*\bchecked=")Qt::Unchecked(")',
+        r"\1Qt::Checked\2",
+        content,
+        count=1,
+    )
 
     # Point all combined-parquet datasources at local per-resort data files.
     content = _localize_datasources(content)
@@ -862,10 +968,12 @@ def process_resort(
     buffer_gdf: Optional[gpd.GeoDataFrame] = None,
     contours_gdf: Optional[gpd.GeoDataFrame] = None,
     pistes_gdf: Optional[gpd.GeoDataFrame] = None,
-    preview: bool = True,
+    preview: bool = False,
 ) -> bool:
     resort_dir.mkdir(parents=True, exist_ok=True)
-    slug = slugify(resort_name)
+    # For non-ASCII resort names (e.g. Japanese), slugify() can become empty.
+    # Use the resort directory name (already stabilized in run_resorts) as fallback.
+    slug = slugify(resort_name) or resort_dir.name
     out_qgz = resort_dir / f"{slug}_map.qgz"
     internal_qgs = f"{slug}_map.qgs"
 
@@ -930,8 +1038,17 @@ def run_resorts(
     resort_id: Optional[str] = None,
     region_filter: Optional[str] = None,
     limit: Optional[int] = None,
-    preview: bool = True,
+    preview: bool = False,
+    export_layout: bool = False,
+    export_dpi: int = 150,
 ) -> int:
+    # Windows console defaults can be cp1252; ensure we can print non-ASCII resort names.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
     ski_areas_path = input_dir / "ski_areas.parquet"
     if not ski_areas_path.exists():
         print(f"Missing {ski_areas_path}", file=sys.stderr)
@@ -964,6 +1081,10 @@ def run_resorts(
 
     name_col = "Ski Area" if "Ski Area" in gdf.columns else "name"
     state_col = "State" if "State" in gdf.columns else None
+
+    # Duplicate rows can appear for the same OSM way in combined parquet; --resort should yield one map.
+    if resort_id and len(gdf) > 1 and name_col in gdf.columns:
+        gdf = gdf.drop_duplicates(subset=[name_col], keep="first").copy()
 
     # Load 1000ft buffer for extent replacement + preview
     buffer_gdf: Optional[gpd.GeoDataFrame] = None
@@ -1035,7 +1156,7 @@ def run_resorts(
             continue
         state_name = str(row.get(state_col) or "").strip() if state_col else ""
         centroid = row.geometry.centroid
-        slug = slugify(resort_name)
+        slug = slugify(resort_name) or _safe_slug_fallback(row)
 
         if slug in seen_slugs:
             seen_slugs[slug] += 1
@@ -1147,6 +1268,12 @@ def run_resorts(
             count += 1
             rotation_str = f"  rotation={(360 - ski_north) % 360:.1f}°" if ski_north else ""
             print(f"  {slug}  ({resort_name}, {state_name}){rotation_str}")
+            if export_layout:
+                from atlas.map_gen.export_layouts import export_qgz
+
+                # Must match process_resort filename: slugify(name) or resort_dir.name
+                file_slug = slugify(resort_name) or slug
+                export_qgz(resort_dir / f"{file_slug}_map.qgz", dpi=export_dpi, overwrite=True)
         except Exception as e:
             print(f"  Error [{resort_name}]: {e}", file=sys.stderr)
 
@@ -1163,12 +1290,24 @@ def main() -> int:
     parser.add_argument("--region", type=str, default=None, help="Filter by region (e.g. north-america/us/virginia)")
     parser.add_argument("--all-resorts", action="store_true")
     parser.add_argument("--limit", type=int, default=None)
-    parser.add_argument("--no-preview", action="store_true",
-                        help="Skip PNG preview generation (faster)")
-    parser.add_argument("--export-layout", action="store_true",
-                        help="Export QGIS print layout as PNG after generation (requires QGIS Python)")
+    parser.add_argument(
+        "--matplotlib-preview",
+        action="store_true",
+        help="Also write {slug}_preview.png via matplotlib (not the print layout)",
+    )
+    parser.add_argument(
+        "--no-export-layout",
+        action="store_true",
+        help="Skip QGIS print layout export ({slug}_export.png); QGZ only",
+    )
     parser.add_argument("--dpi", type=int, default=150,
-                        help="DPI for layout export (default: 150)")
+                        help="DPI for layout PNG export (default: 150)")
+    parser.add_argument(
+        "--qgis-root",
+        type=Path,
+        default=None,
+        help="QGIS install root if not auto-detected (layout export only)",
+    )
     args = parser.parse_args()
 
     if not args.all_resorts and not args.resort and not args.region:
@@ -1184,31 +1323,40 @@ def main() -> int:
     if not work_dir.is_absolute():
         work_dir = root / work_dir
 
-    count = run_resorts(
-        input_dir,
-        work_dir,
-        config,
-        resort_id=args.resort,
-        region_filter=args.region,
-        limit=args.limit,
-        preview=not args.no_preview,
-    )
-    print(f"\nProcessed {count} resort(s). Output: {work_dir}/")
+    export_layout = not args.no_export_layout
+    if export_layout:
+        from atlas.map_gen.export_layouts import ensure_headless_qgis_initialized
 
-    if args.export_layout and count > 0:
-        print("\nExporting QGIS layouts...")
-        from atlas.map_gen.export_layouts import main as export_main  # type: ignore
-        import sys as _sys
-        _orig = _sys.argv
-        _sys.argv = ["export_layouts.py", "--work-dir", str(work_dir), "--dpi", str(args.dpi)]
-        if args.region:
-            pass  # export_layouts scans all QGZ; already filtered by region above
         try:
-            export_main()
-        except SystemExit:
-            pass
-        finally:
-            _sys.argv = _orig
+            ensure_headless_qgis_initialized(args.qgis_root)
+        except RuntimeError as e:
+            print(f"\n{e}", file=sys.stderr)
+            print(
+                "Tip: use --no-export-layout to build QGZ files without QGIS, "
+                "then run atlas\\map_gen\\run_export_layouts.bat",
+                file=sys.stderr,
+            )
+            return 2
+
+    try:
+        count = run_resorts(
+            input_dir,
+            work_dir,
+            config,
+            resort_id=args.resort,
+            region_filter=args.region,
+            limit=args.limit,
+            preview=args.matplotlib_preview,
+            export_layout=export_layout,
+            export_dpi=args.dpi,
+        )
+    finally:
+        if export_layout:
+            from atlas.map_gen.export_layouts import shutdown_headless_qgis_if_initialized
+
+            shutdown_headless_qgis_if_initialized()
+
+    print(f"\nProcessed {count} resort(s). Output: {work_dir}/")
 
     return 0
 

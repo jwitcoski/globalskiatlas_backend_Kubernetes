@@ -56,7 +56,6 @@ def main() -> int:
         config,
         resort_id=args.resort,
         region_filter=args.region,
-        all_resorts=args.resort is None,
         limit=1,
     )
     if count == 0:

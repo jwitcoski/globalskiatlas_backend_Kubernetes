@@ -70,11 +70,22 @@ echo Using QGIS at: %QGIS_ROOT%
 :: Repo root (script paths are relative to here)
 cd /d "%~dp0..\.."
 set "QT_QPA_PLATFORM=offscreen"
+:: Ensure Qt can find system fonts in headless exports (prevents "tofu" squares).
+if exist "C:\Windows\Fonts" (
+    set "QT_QPA_FONTDIR=C:\Windows\Fonts"
+)
 
 :: Prefer python-qgis.bat — loads o4w_env + Qt/GDAL DLL paths so PyQGIS imports work on Windows.
 if exist "%QGIS_ROOT%\bin\python-qgis.bat" (
     echo Using Python-QGIS wrapper: %QGIS_ROOT%\bin\python-qgis.bat
     call "%QGIS_ROOT%\bin\python-qgis.bat" atlas\map_gen\export_layouts.py %*
+    endlocal & exit /b %ERRORLEVEL%
+)
+
+:: Standalone QGIS often ships python-qgis-ltr.bat instead of python-qgis.bat.
+if exist "%QGIS_ROOT%\bin\python-qgis-ltr.bat" (
+    echo Using Python-QGIS LTR wrapper: %QGIS_ROOT%\bin\python-qgis-ltr.bat
+    call "%QGIS_ROOT%\bin\python-qgis-ltr.bat" atlas\map_gen\export_layouts.py %*
     endlocal & exit /b %ERRORLEVEL%
 )
 

@@ -18,6 +18,10 @@ import time
 from pathlib import Path
 from typing import Optional
 
+if os.name == "nt":
+    # Headless Qt sometimes fails to discover Windows fonts, resulting in "tofu" squares in exports.
+    os.environ.setdefault("QT_QPA_FONTDIR", r"C:\Windows\Fonts")
+
 
 LAYOUT_NAME = "Ski Atlas Export"
 
@@ -99,6 +103,54 @@ def _setup_standalone_qgis(qgis_root: Path):
             os.environ["PATH"] = d + ";" + current_path
 
 
+# Singleton headless app so data_to_qgis can export each QGZ in-process without re-init per file.
+_headless_qgis_app = None
+_headless_qgis_app_owned = False
+
+
+def ensure_headless_qgis_initialized(qgis_root: Optional[Path] = None) -> None:
+    """Start one global QgsApplication unless already running (e.g. inside QGIS).
+
+    Raises RuntimeError if QGIS cannot be located or initialized.
+    """
+    global _headless_qgis_app, _headless_qgis_app_owned
+    if _headless_qgis_app is not None:
+        return
+    try:
+        import qgis.core  # noqa: F401
+    except ImportError:
+        root = qgis_root or _find_qgis_root()
+        if root is None:
+            raise RuntimeError(
+                "QGIS Python bindings are not available and no QGIS installation was found. "
+                "Set QGIS_PREFIX_PATH, pass --qgis-root, or run via atlas\\map_gen\\run_export_layouts.bat"
+            )
+        print(f"Using QGIS at: {root}")
+        _setup_standalone_qgis(root)
+
+    from qgis.core import QgsApplication
+
+    existing = QgsApplication.instance()
+    if existing is not None:
+        _headless_qgis_app = existing
+        _headless_qgis_app_owned = False
+        return
+
+    _headless_qgis_app = QgsApplication([], False)
+    _headless_qgis_app.initQgis()
+    _headless_qgis_app_owned = True
+
+
+def shutdown_headless_qgis_if_initialized() -> None:
+    global _headless_qgis_app, _headless_qgis_app_owned
+    if _headless_qgis_app is None:
+        return
+    if _headless_qgis_app_owned:
+        _headless_qgis_app.exitQgis()
+    _headless_qgis_app = None
+    _headless_qgis_app_owned = False
+
+
 # ── Export logic ─────────────────────────────────────────────────────────────
 
 def _zoom_main_map_to_buffer(project, layout) -> bool:
@@ -158,7 +210,10 @@ def _zoom_main_map_to_buffer(project, layout) -> bool:
         ext.xMinimum() - dx, ext.yMinimum() - dy,
         ext.xMaximum() + dx, ext.yMaximum() + dy,
     )
-    from atlas.map_gen.layout_constants import expand_bounds_to_main_map_aspect
+    from atlas.map_gen.layout_constants import (
+        expand_bounds_for_rotation,
+        expand_bounds_to_main_map_aspect,
+    )
 
     b = (
         padded.xMinimum(),
@@ -167,7 +222,8 @@ def _zoom_main_map_to_buffer(project, layout) -> bool:
         padded.yMaximum(),
     )
     b2 = expand_bounds_to_main_map_aspect(b)
-    padded = QgsRectangle(b2[0], b2[1], b2[2], b2[3])
+    b3 = expand_bounds_for_rotation(b2, float(main_map.mapRotation()))
+    padded = QgsRectangle(b3[0], b3[1], b3[2], b3[3])
     map_crs = main_map.crs()
     layer_crs = buffer_layer.crs()
     if map_crs.isValid() and layer_crs.isValid() and map_crs != layer_crs:
@@ -188,12 +244,7 @@ def export_qgz(qgz_path: Path, dpi: int, overwrite: bool) -> bool:
 
     Returns True on success, False on failure.
     """
-    from qgis.core import (
-        QgsApplication,
-        QgsProject,
-        QgsPrintLayout,
-        QgsLayoutExporter,
-    )
+    from qgis.core import QgsProject, QgsPrintLayout, QgsLayoutExporter
 
     out_png = qgz_path.with_name(qgz_path.stem.replace("_map", "") + "_export.png")
     if out_png.exists() and not overwrite:
@@ -260,6 +311,13 @@ def main():
         "--qgis-root", type=Path, default=None,
         help="Path to QGIS installation root (auto-detected if omitted)",
     )
+    parser.add_argument(
+        "--slug",
+        action="append",
+        default=None,
+        metavar="DIR",
+        help="Only export atlas_work/<slug>/*_map.qgz (repeat for multiple resorts)",
+    )
     args = parser.parse_args()
 
     # ── Resolve work directory ────────────────────────────────────────────────
@@ -288,45 +346,39 @@ def main():
         sys.exit(1)
 
     qgz_files = sorted(work_dir.rglob("*_map.qgz"))
+    if args.slug:
+        want = set(args.slug)
+        qgz_files = [p for p in qgz_files if p.parent.name in want]
+        if not qgz_files:
+            print(f"No *_map.qgz matched --slug {sorted(want)!r} under {work_dir}")
+            sys.exit(0)
+
     if not qgz_files:
         print(f"No *_map.qgz files found under {work_dir}")
         sys.exit(0)
 
-    print(f"Found {len(qgz_files)} QGZ file(s) under {work_dir}")
+    print(f"Found {len(qgz_files)} QGZ file(s) to export under {work_dir}")
 
-    # ── Set up QGIS Python environment (only needed for standalone use) ───────
     try:
-        import qgis.core  # already available (running inside QGIS Python)
-    except ImportError:
-        qgis_root = args.qgis_root or _find_qgis_root()
-        if qgis_root is None:
-            print(
-                "\nERROR: QGIS installation not found.\n"
-                "Set QGIS_PREFIX_PATH in your environment, or pass --qgis-root.\n"
-                "Or run via: atlas\\map_gen\\run_export_layouts.bat"
-            )
-            sys.exit(2)
-        print(f"Using QGIS at: {qgis_root}")
-        _setup_standalone_qgis(qgis_root)
-
-    # ── Initialise QgsApplication (headless) ─────────────────────────────────
-    from qgis.core import QgsApplication
-    qgs = QgsApplication([], False)
-    qgs.initQgis()
+        ensure_headless_qgis_initialized(args.qgis_root)
+    except RuntimeError as e:
+        print(f"\nERROR: {e}", file=sys.stderr)
+        sys.exit(2)
 
     ok = 0
     fail = 0
     t0 = time.time()
 
-    for qgz in qgz_files:
-        slug = qgz.parent.name
-        print(f"{slug}")
-        if export_qgz(qgz, dpi=args.dpi, overwrite=args.overwrite):
-            ok += 1
-        else:
-            fail += 1
-
-    qgs.exitQgis()
+    try:
+        for qgz in qgz_files:
+            slug = qgz.parent.name
+            print(f"{slug}")
+            if export_qgz(qgz, dpi=args.dpi, overwrite=args.overwrite):
+                ok += 1
+            else:
+                fail += 1
+    finally:
+        shutdown_headless_qgis_if_initialized()
 
     elapsed = time.time() - t0
     print(f"\nDone: {ok} exported, {fail} failed  ({elapsed:.1f}s)")
