@@ -487,14 +487,33 @@ def _set_layoutitem_child_tag_attr_by_uuid(
     return content[:item_start] + block2 + content[item_end:]
 
 
-def _recenter_overview_inset_ortho(
-    content: str, lon0: float, lat0: float, extent_m: float = 6378137.0
-) -> str:
-    """Recenter the orthographic inset CRS + extent for both inset map items.
+def _fmt_proj_angle(v: float) -> str:
+    s = f"{v:.8f}".rstrip("0").rstrip(".")
+    return "0" if s in {"", "-0"} else s
 
-    QGIS stores CRS in each LayoutItem's <crs> subtree; we only rewrite those
-    blocks to avoid disturbing other orthographic definitions elsewhere.
-    """
+
+def _recenter_overview_inset_ortho(content: str, lon0: float, lat0: float) -> str:
+    """Globe-style locator: orthographic CRS centered on the resort (both inset map items)."""
+
+    lat_s = _fmt_proj_angle(float(lat0))
+    lon_s = _fmt_proj_angle(float(lon0))
+    proj4 = (
+        f"+proj=ortho +lat_0={lat_s} +lon_0={lon_s} "
+        "+x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs +type=crs"
+    )
+    crs_xml = f"""        <crs>
+          <spatialrefsys nativeFormat="Wkt">
+            <wkt></wkt>
+            <proj4>{proj4}</proj4>
+            <srsid>0</srsid>
+            <srid>0</srid>
+            <authid></authid>
+            <description>Orthographic</description>
+            <projectionacronym></projectionacronym>
+            <ellipsoidacronym>EPSG:7030</ellipsoidacronym>
+            <geographicflag>false</geographicflag>
+          </spatialrefsys>
+        </crs>"""
 
     def _patch_layoutitem(item_id: str, xml: str) -> str:
         tok = f'id="{item_id}"'
@@ -507,56 +526,57 @@ def _recenter_overview_inset_ortho(
             return xml
         ee += len("</LayoutItem>")
         blk = xml[ss:ee]
-
-        # Update proj4 (+proj=ortho +lat_0=... +lon_0=...)
-        def _recenter_proj4(m: re.Match[str]) -> str:
-            s = m.group(0)
-            s = re.sub(r"\+lat_0=[^\s]+", f"+lat_0={lat0:.6f}", s)
-            s = re.sub(r"\+lon_0=[^\s]+", f"+lon_0={lon0:.6f}", s)
-            return s
-
         blk = re.sub(
-            r"\+proj=ortho\s+\+lat_0=[^\s]+\s+\+lon_0=[^\s]+",
-            _recenter_proj4,
-            blk,
-        )
-
-        # Update WKT parameters (Latitude/Longitude of natural origin)
-        def _recenter_wkt(m: re.Match[str]) -> str:
-            w = m.group(0)
-            w = re.sub(
-                r'(PARAMETER\["Latitude of natural origin",)[-0-9.]+',
-                rf"\g<1>{lat0:.6f}",
-                w,
-                count=1,
-            )
-            w = re.sub(
-                r'(PARAMETER\["Longitude of natural origin",)[-0-9.]+',
-                rf"\g<1>{lon0:.6f}",
-                w,
-                count=1,
-            )
-            return w
-
-        blk = re.sub(
-            r"<wkt>[\s\S]*?METHOD\[\"Orthographic\"[\s\S]*?</wkt>",
-            _recenter_wkt,
+            r"<crs>\s*<spatialrefsys[\s\S]*?</spatialrefsys>\s*</crs>",
+            crs_xml.strip(),
             blk,
             count=1,
         )
-
-        # Full-globe projected extent in meters for orthographic.
-        ext_tag = (
-            f'<Extent xmin="{-extent_m}" ymin="{-extent_m}" '
-            f'xmax="{extent_m}" ymax="{extent_m}"/>'
-        )
-        blk = re.sub(r"<Extent\b[^>]*/>", ext_tag, blk, count=1)
-
         return xml[:ss] + blk + xml[ee:]
 
     for item in ("overview_inset_map", "overview_inset_dot"):
         content = _patch_layoutitem(item, content)
     return content
+
+
+def _boost_overview_resort_point_marker(content: str) -> str:
+    """Inset resort star: black fill, slightly larger + heavier outline (readable over country tint)."""
+    tok = "<layername>overview_resort_point</layername>"
+    li = content.find(tok)
+    if li < 0:
+        return content
+    bs = content.rfind("<maplayer", 0, li)
+    be = content.find("</maplayer>", li)
+    if bs < 0 or be < 0:
+        return content
+    block = content[bs:be]
+    sm = block.find('class="SimpleMarker"')
+    if sm < 0:
+        return content
+    sm_end = block.find("</layer>", sm)
+    if sm_end < 0:
+        return content
+    frag = block[sm:sm_end]
+    frag = re.sub(
+        r'<Option type="QString" value="[^"]*" name="color"/>',
+        '<Option type="QString" value="0,0,0,255,rgb:0,0,0,1" name="color"/>',
+        frag,
+        count=1,
+    )
+    frag = re.sub(
+        r'<Option type="QString" value="[^"]*" name="size"/>',
+        '<Option type="QString" value="4" name="size"/>',
+        frag,
+        count=1,
+    )
+    frag = re.sub(
+        r'<Option type="QString" value="[^"]*" name="outline_width"/>',
+        '<Option type="QString" value="0.35" name="outline_width"/>',
+        frag,
+        count=1,
+    )
+    block = block[:sm] + frag + block[sm_end:]
+    return content[:bs] + block + content[be:]
 
 
 def patch_qgs(
@@ -632,8 +652,7 @@ def patch_qgs(
     full = "United States of America" if country == "United States" else country
     content = content.replace("United States of America", full)
 
-    # 3) Globe orientation: recenter orthographic inset to resort centroid when available.
-    # This is what actually "rotates" the globe away from North America.
+    # 3) Locator inset: orthographic globe centered on resort (template framing / extent unchanged).
     if centroid_lon is not None and centroid_lat is not None:
         content = _recenter_overview_inset_ortho(
             content, lon0=float(centroid_lon), lat0=float(centroid_lat)
@@ -674,6 +693,8 @@ def patch_qgs(
         f'provider="memory" source="{_INSET_MEM_DS_UID}"',
         f'provider="ogr" source="{_INSET_GEOJSON_DS}"',
     )
+
+    content = _boost_overview_resort_point_marker(content)
 
     # ── Map extents and rotation ───────────────────────────────────────────────
     # ski_north_angle = bearing from base→summit (0=N, 90=E).
