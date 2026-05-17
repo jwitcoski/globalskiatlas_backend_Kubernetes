@@ -2,13 +2,54 @@
 
 from __future__ import annotations
 
-# ski_atlas_small_medium_template.qgz — main map LayoutItem (mm)
+from typing import Literal
+
+# ski_atlas_small_medium_template.qgz (fallback / legacy) — main map LayoutItem (mm)
 MAIN_MAP_FRAME_WIDTH_MM = 107.95
 MAIN_MAP_FRAME_HEIGHT_MM = 139.7
+
+LayoutTier = Literal[
+    "small",
+    "medium",
+    "large",
+    "mega",
+    "small_medium",
+    "small_landscape",
+    "medium_landscape",
+    "large_landscape",
+    "mega_landscape",
+]
+
+
+def main_map_frame_mm(tier: LayoutTier | str) -> tuple[float, float]:
+    """Main trail-map frame size (mm); export page matches this (InDesign places copy separately).
+
+    small/medium: compact plates. large: A4 width × half height. mega: full A4.
+    *_landscape tiers swap width and height vs the base tier so users can pick orientation.
+    """
+    key = str(tier).strip().lower()
+    m: dict[str, tuple[float, float]] = {
+        "small": (105.0, 74.25),
+        "medium": (105.0, 148.5),
+        "large": (210.0, 148.5),
+        "mega": (210.0, 297.0),
+        "small_medium": (MAIN_MAP_FRAME_WIDTH_MM, MAIN_MAP_FRAME_HEIGHT_MM),
+        # Swapped dimensions (see build_atlas_layout_templates).
+        "small_landscape": (74.25, 105.0),
+        "medium_landscape": (148.5, 105.0),
+        "large_landscape": (148.5, 210.0),
+        "mega_landscape": (297.0, 210.0),
+    }
+    if key not in m:
+        raise KeyError(f"Unknown layout tier {tier!r}")
+    return m[key]
 
 
 def expand_bounds_to_main_map_aspect(
     bounds: tuple[float, float, float, float],
+    *,
+    frame_width_mm: float | None = None,
+    frame_height_mm: float | None = None,
 ) -> tuple[float, float, float, float]:
     """Symmetrically expand xmin..ymax so (xmax-xmin)/(ymax-ymin) matches the layout frame.
 
@@ -27,7 +68,9 @@ def expand_bounds_to_main_map_aspect(
         return bounds
     import math
 
-    target_wh = MAIN_MAP_FRAME_WIDTH_MM / MAIN_MAP_FRAME_HEIGHT_MM
+    fw = frame_width_mm if frame_width_mm is not None else MAIN_MAP_FRAME_WIDTH_MM
+    fh = frame_height_mm if frame_height_mm is not None else MAIN_MAP_FRAME_HEIGHT_MM
+    target_wh = fw / fh
 
     lat_mid = (ymin + ymax) / 2.0
     cos_lat = max(0.01, math.cos(math.radians(lat_mid)))

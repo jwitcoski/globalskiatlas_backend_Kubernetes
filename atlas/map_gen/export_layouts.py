@@ -153,6 +153,35 @@ def shutdown_headless_qgis_if_initialized() -> None:
 
 # ── Export logic ─────────────────────────────────────────────────────────────
 
+
+def _layout_map_frame_mm(layout, main_map) -> tuple[float, float]:
+    """Map item width/height in millimeters (matches data_to_qgis frame for each tier)."""
+    ls = main_map.sizeWithUnits()
+    try:
+        from qgis.core import Qgis
+
+        mm_unit = Qgis.LayoutUnit.LayoutMillimeters
+    except (ImportError, AttributeError):
+        from qgis.core import QgsUnitTypes
+
+        mm_unit = QgsUnitTypes.LayoutMillimeters
+    try:
+        mm = layout.convertFromLayoutUnits(ls, mm_unit)
+        fw, fh = float(mm.width()), float(mm.height())
+        if fw > 0 and fh > 0:
+            return fw, fh
+    except Exception:
+        pass
+    if ls.units() == mm_unit:
+        return float(ls.width()), float(ls.height())
+    from atlas.map_gen.layout_constants import (
+        MAIN_MAP_FRAME_HEIGHT_MM,
+        MAIN_MAP_FRAME_WIDTH_MM,
+    )
+
+    return MAIN_MAP_FRAME_WIDTH_MM, MAIN_MAP_FRAME_HEIGHT_MM
+
+
 def _zoom_main_map_to_buffer(project, layout) -> bool:
     """Zoom the largest layout map item to the 1000ft buffer layer extent.
 
@@ -221,7 +250,10 @@ def _zoom_main_map_to_buffer(project, layout) -> bool:
         padded.xMaximum(),
         padded.yMaximum(),
     )
-    b2 = expand_bounds_to_main_map_aspect(b)
+    fw_mm, fh_mm = _layout_map_frame_mm(layout, main_map)
+    b2 = expand_bounds_to_main_map_aspect(
+        b, frame_width_mm=fw_mm, frame_height_mm=fh_mm
+    )
     b3 = expand_bounds_for_rotation(b2, float(main_map.mapRotation()))
     padded = QgsRectangle(b3[0], b3[1], b3[2], b3[3])
     map_crs = main_map.crs()

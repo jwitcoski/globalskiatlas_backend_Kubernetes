@@ -3,30 +3,57 @@
 
 # Template project (create in QGIS; script copies and replaces layer datasources).
 template:
+  small: atlas/map_gen/templates/ski_atlas_small_template.qgz
+  medium: atlas/map_gen/templates/ski_atlas_medium_template.qgz
+  large: atlas/map_gen/templates/ski_atlas_large_template.qgz
+  mega: atlas/map_gen/templates/ski_atlas_mega_template.qgz
+  small_landscape: atlas/map_gen/templates/ski_atlas_small_landscape_template.qgz
+  medium_landscape: atlas/map_gen/templates/ski_atlas_medium_landscape_template.qgz
+  large_landscape: atlas/map_gen/templates/ski_atlas_large_landscape_template.qgz
+  mega_landscape: atlas/map_gen/templates/ski_atlas_mega_landscape_template.qgz
+  # Used when pistes.parquet is missing or tier small_medium (legacy Wintergreen geometry).
+  fallback: atlas/map_gen/templates/ski_atlas_small_medium_template.qgz
   small_medium: atlas/map_gen/templates/ski_atlas_small_medium_template.qgz
   resort: atlas/map_gen/templates/atlas_resort_template.qgz
   # overview: atlas/map_gen/templates/atlas_overview_template.qgz  # optional
+
+# Piste counts → layout tier (override mega per resort with mega_resorts).
+trail_tiers:
+  small_max: 9      # <= → small (¼ page)
+  medium_max: 30    # <= → medium (½ page); above → large until mega
+  mega_resorts: []  # resort names → mega tier (single A4 210×297 map plate)
 
 # CRS for template and exported layers. Use worldwide CRS for global atlas.
 # EPSG:4326 = WGS 84 (buffer in degrees); EPSG:4087 = World Equidistant Cylindrical (buffer in metres).
 crs: "EPSG:4326"
 buffer_map_units: 0.0  # optional buffer around resort for clip (in CRS units; 0 = no buffer)
 
-# Page sizes and dimensions (mm). Layout names in QGIS can match these keys.
-# small = 1/4 page, medium = 1/2, large = full, mega = 2-page spread.
+# Page sizes (mm) = PNG export = map plate only (copy goes in InDesign).
 page_sizes:
   small:
     width_mm: 105
-    height_mm: 148
+    height_mm: 74.25
   medium:
-    width_mm: 210
-    height_mm: 148
+    width_mm: 105
+    height_mm: 148.5
   large:
-    width_mm: 420
-    height_mm: 297
+    width_mm: 210
+    height_mm: 148.5
   mega:
-    width_mm: 420
-    height_mm: 594
+    width_mm: 210
+    height_mm: 297
+  small_landscape:
+    width_mm: 74.25
+    height_mm: 105
+  medium_landscape:
+    width_mm: 148.5
+    height_mm: 105
+  large_landscape:
+    width_mm: 148.5
+    height_mm: 210
+  mega_landscape:
+    width_mm: 297
+    height_mm: 210
 
 # Print resolution for export (mapper workflow).
 dpi: 300

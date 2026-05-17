@@ -410,16 +410,33 @@ def _contours_from_dem(
     return segments
 
 
+_ID_FALLBACK_KEYS = (
+    "winter_sports_id",
+    "osm_id",
+    "id",
+    "osm_way_id",
+    "osm_relation_id",
+)
+
+
+def _first_non_na_id(row: gpd.GeoSeries) -> Any:
+    """First usable ski/OSM id from a row. Skips NaN (Python's ``nan or x`` wrongly stops at nan)."""
+    for k in _ID_FALLBACK_KEYS:
+        v = row.get(k)
+        if v is None:
+            continue
+        try:
+            if pd.isna(v):
+                continue
+        except TypeError:
+            pass
+        return v
+    return None
+
+
 def _ski_area_id(row: gpd.GeoSeries) -> Tuple[Any, Any]:
-    """Stable id for join: (winter_sports_id or osm_way_id or osm_relation_id or osm_id, region)."""
-    ws_id = row.get("winter_sports_id")
-    if pd.isna(ws_id) or ws_id is None:
-        ws_id = (
-            row.get("osm_id")
-            or row.get("id")
-            or row.get("osm_way_id")
-            or row.get("osm_relation_id")
-        )
+    """Stable id for join: (winter_sports_id or osm_id / id / osm_way_id / osm_relation_id, region)."""
+    ws_id = _first_non_na_id(row)
     region = row.get("region", "")
     return ws_id, region
 
@@ -695,13 +712,15 @@ def main() -> None:
                 geom_b = r.geometry
                 if geom_b is None or geom_b.is_empty or isinstance(geom_b, Point):
                     continue
-                ws_id_b = r.get("winter_sports_id") or r.get("osm_id") or r.get("id")
+                ws_id_b = _first_non_na_id(r)
                 region_b = str(r.get("region", "")) if r.get("region") is not None and not pd.isna(r.get("region")) else ""
                 if ws_id_b is None:
                     continue
-                # Add both (int, region) and (str, region) for robust lookup
-                boundaries_by_key[(int(ws_id_b), region_b)] = geom_b
-                boundaries_by_key[(str(ws_id_b), region_b)] = geom_b
+                try:
+                    boundaries_by_key[(int(ws_id_b), region_b)] = geom_b
+                    boundaries_by_key[(str(ws_id_b), region_b)] = geom_b
+                except (ValueError, TypeError):
+                    boundaries_by_key[(str(ws_id_b), region_b)] = geom_b
             print(f"Loaded {len(boundaries_by_key)} ski area boundaries from {boundaries_path}")
         except Exception as e:
             print(f"  Warning: could not load boundaries from {boundaries_path}: {e}", file=sys.stderr)
@@ -773,7 +792,7 @@ def main() -> None:
         geom = r.geometry
         if geom is None or geom.is_empty or isinstance(geom, Point):
             continue
-        ws_id_b = r.get("winter_sports_id") or r.get("osm_id") or r.get("id")
+        ws_id_b = _first_non_na_id(r)
         region_b = str(r.get("region", "")) if r.get("region") is not None and not pd.isna(r.get("region")) else ""
         if ws_id_b is None:
             continue

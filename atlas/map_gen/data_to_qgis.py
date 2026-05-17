@@ -6,10 +6,16 @@ For each resort, copies ski_atlas_small_medium_template.qgz, patches filters and
 writes resort_inset_point.geojson, copies supporting icons, then exports the print layout
 to PNG via QgsLayoutExporter (same engine as QGIS — this is the authoritative map image).
 
-Output: atlas_work/{resort-slug}/{resort-slug}_map.qgz
-        atlas_work/{resort-slug}/{resort-slug}_export.png   (default; QGIS layout export)
-        atlas_work/{resort-slug}/resort_inset_point.geojson
-        atlas_work/{resort-slug}/icons/snow_tubing_badge.svg
+For each resort (default trail-based tier), writes **portrait and landscape** print
+layouts at the same logical size so users can compare: portrait in
+``atlas_work/{slug}/``, landscape in ``atlas_work/{slug}-layout-{tier}-landscape/``.
+``--all-layout-tiers`` still emits all eight size/orientation folders.
+
+Output (typical):
+  atlas_work/{slug}/{slug}_map.qgz
+  atlas_work/{slug}/{slug}_export.png
+  atlas_work/{slug}-layout-{tier}-landscape/{slug}-layout-{tier}-landscape_map.qgz
+  atlas_work/{slug}-layout-{tier}-landscape/{slug}-layout-{tier}-landscape_export.png
 
 Optional: --matplotlib-preview writes {slug}_preview.png using matplotlib only (rough QA,
 not the styled layout).
@@ -35,10 +41,9 @@ import geopandas as gpd
 import yaml
 
 from atlas.map_gen.layout_constants import (
-    MAIN_MAP_FRAME_HEIGHT_MM,
-    MAIN_MAP_FRAME_WIDTH_MM,
     expand_bounds_for_rotation,
     expand_bounds_to_main_map_aspect,
+    main_map_frame_mm,
 )
 
 # ── Template constants ────────────────────────────────────────────────────────
@@ -588,8 +593,10 @@ def patch_qgs(
     centroid_lon: Optional[float] = None,
     centroid_lat: Optional[float] = None,
     inset_country_raw: Optional[str] = None,
+    layout_tier: str = "small_medium",
 ) -> str:
     """Substitute resort name, state, map extents, rotation, and inset point into QGS XML."""
+    map_w_mm, map_h_mm = main_map_frame_mm(layout_tier)
     # Replace resort name everywhere it appears in subset filters
     content = content.replace(TEMPLATE_RESORT_NAME, resort_name)
 
@@ -713,7 +720,11 @@ def patch_qgs(
         # Padded buffer bounds, then expand symmetrically so lon/lat span ratio matches
         # the fixed print frame (avoids letterboxing inside the map item).
         map_extent = _compute_map_extent(buffer_bounds, rotation, pad=0.05)
-        map_extent = expand_bounds_to_main_map_aspect(map_extent)
+        map_extent = expand_bounds_to_main_map_aspect(
+            map_extent,
+            frame_width_mm=map_w_mm,
+            frame_height_mm=map_h_mm,
+        )
         map_extent = expand_bounds_for_rotation(map_extent, rotation)
         content = _replace_local_extents(content, map_extent)
 
@@ -763,7 +774,7 @@ def patch_qgs(
         content,
         _TEMPLATE_MAIN_MAP_UUID,
         "size",
-        f"{MAIN_MAP_FRAME_WIDTH_MM},{MAIN_MAP_FRAME_HEIGHT_MM},mm",
+        f"{map_w_mm},{map_h_mm},mm",
     )
     # Lock the item in the layout to prevent QGIS from auto-resizing it on load
     # (observed: height collapses to ~110 mm and then gets saved back into the QGZ).
@@ -793,7 +804,7 @@ def patch_qgs(
     # Force data-defined Width/Height for the main map item so QGIS cannot
     # normalize its geometry during open/save.
     content = _force_layoutitem_ddp_width_height_by_uuid(
-        content, _TEMPLATE_MAIN_MAP_UUID, MAIN_MAP_FRAME_WIDTH_MM, MAIN_MAP_FRAME_HEIGHT_MM
+        content, _TEMPLATE_MAIN_MAP_UUID, map_w_mm, map_h_mm
     )
 
     return content
@@ -990,13 +1001,16 @@ def process_resort(
     contours_gdf: Optional[gpd.GeoDataFrame] = None,
     pistes_gdf: Optional[gpd.GeoDataFrame] = None,
     preview: bool = False,
+    layout_tier: str = "small_medium",
+    project_slug: Optional[str] = None,
 ) -> bool:
     resort_dir.mkdir(parents=True, exist_ok=True)
     # For non-ASCII resort names (e.g. Japanese), slugify() can become empty.
     # Use the resort directory name (already stabilized in run_resorts) as fallback.
-    slug = slugify(resort_name) or resort_dir.name
-    out_qgz = resort_dir / f"{slug}_map.qgz"
-    internal_qgs = f"{slug}_map.qgs"
+    # project_slug: folder basename for *_map.qgz (e.g. camelback-mountain-resort-layout-large).
+    file_slug = project_slug or slugify(resort_name) or resort_dir.name
+    out_qgz = resort_dir / f"{file_slug}_map.qgz"
+    internal_qgs = f"{file_slug}_map.qgs"
 
     with zipfile.ZipFile(template_path, "r") as zin:
         items = [(info, zin.read(info.filename)) for info in zin.infolist()]
@@ -1013,6 +1027,7 @@ def process_resort(
                     centroid_lon=centroid_lon,
                     centroid_lat=centroid_lat,
                     inset_country_raw=inset_country_raw,
+                    layout_tier=layout_tier,
                 )
                 data = text.encode("utf-8")
                 info.filename = internal_qgs
@@ -1052,6 +1067,114 @@ def _find_icon(work_dir: Path) -> Optional[Path]:
     return None
 
 
+def _resolve_layout_tier(
+    resort_name: str,
+    n_trails: int,
+    tiers_cfg: dict[str, Any],
+    override: Optional[str],
+) -> str:
+    allowed = {
+        "small",
+        "medium",
+        "large",
+        "mega",
+        "small_medium",
+        "small_landscape",
+        "medium_landscape",
+        "large_landscape",
+        "mega_landscape",
+    }
+    if override:
+        o = override.strip().lower()
+        if o not in allowed:
+            raise ValueError(
+                f"--layout-tier must be one of {sorted(allowed)}, got {override!r}"
+            )
+        return o
+    mega_names = {
+        str(x).strip().casefold()
+        for x in (tiers_cfg.get("mega_resorts") or [])
+        if str(x).strip()
+    }
+    if resort_name.strip().casefold() in mega_names:
+        return "mega"
+    if n_trails < 0:
+        return "small_medium"
+    smax = int(tiers_cfg.get("small_max", 9))
+    mmax = int(tiers_cfg.get("medium_max", 30))
+    if n_trails <= smax:
+        return "small"
+    if n_trails <= mmax:
+        return "medium"
+    return "large"
+
+
+def _landscape_pair_for_print_tier(tier: str) -> Optional[str]:
+    """If *tier* is a portrait print size, return the matching *_landscape tier id."""
+    t = tier.strip().lower()
+    if t in ("small", "medium", "large", "mega"):
+        return f"{t}_landscape"
+    return None
+
+
+def _default_tier_runs(
+    slug: str,
+    lt: str,
+    *,
+    config: dict[str, Any],
+) -> list[tuple[str, str, Optional[str]]]:
+    """Single-resort mode: portrait + landscape when templates exist; else one run.
+
+    Portrait stays in ``work_dir/{slug}/`` (legacy path). Landscape twin uses
+    ``{slug}-layout-{tier}-landscape/`` so both exports are easy to find.
+    """
+    ls = _landscape_pair_for_print_tier(lt)
+    if ls is None:
+        # Legacy Wintergreen geometry / no paired landscape template.
+        return [(lt, slug, None)]
+    ls_path = _template_qgz_for_tier(config, ls)
+    if not ls_path.exists():
+        return [(lt, slug, None)]
+    base = f"{slug}-layout-{lt}"
+    return [
+        (lt, slug, None),
+        (ls, f"{base}-landscape", f"{base}-landscape"),
+    ]
+
+
+def _template_qgz_for_tier(config: dict[str, Any], tier: str) -> Path:
+    tc = config.get("template") or {}
+    fallback_rel = tc.get("fallback") or tc.get(
+        "small_medium",
+        "atlas/map_gen/templates/ski_atlas_small_medium_template.qgz",
+    )
+    rel_by_tier = {
+        "small": tc.get("small", "atlas/map_gen/templates/ski_atlas_small_template.qgz"),
+        "medium": tc.get("medium", "atlas/map_gen/templates/ski_atlas_medium_template.qgz"),
+        "large": tc.get("large", "atlas/map_gen/templates/ski_atlas_large_template.qgz"),
+        "mega": tc.get("mega", "atlas/map_gen/templates/ski_atlas_mega_template.qgz"),
+        "small_landscape": tc.get(
+            "small_landscape",
+            "atlas/map_gen/templates/ski_atlas_small_landscape_template.qgz",
+        ),
+        "medium_landscape": tc.get(
+            "medium_landscape",
+            "atlas/map_gen/templates/ski_atlas_medium_landscape_template.qgz",
+        ),
+        "large_landscape": tc.get(
+            "large_landscape",
+            "atlas/map_gen/templates/ski_atlas_large_landscape_template.qgz",
+        ),
+        "mega_landscape": tc.get(
+            "mega_landscape",
+            "atlas/map_gen/templates/ski_atlas_mega_landscape_template.qgz",
+        ),
+        "small_medium": fallback_rel,
+    }
+    rel = rel_by_tier.get(tier) or fallback_rel
+    return _repo_root() / rel
+
+
 def run_resorts(
     input_dir: Path,
     work_dir: Path,
@@ -1062,6 +1185,8 @@ def run_resorts(
     preview: bool = False,
     export_layout: bool = False,
     export_dpi: int = 150,
+    layout_tier_override: Optional[str] = None,
+    all_layout_tiers: bool = False,
 ) -> int:
     # Windows console defaults can be cp1252; ensure we can print non-ASCII resort names.
     try:
@@ -1156,15 +1281,7 @@ def run_resorts(
     if elev_pts_path.exists():
         elev_points_all = gpd.read_parquet(elev_pts_path)
 
-    template_cfg = config.get("template") or {}
-    template_rel = template_cfg.get(
-        "small_medium",
-        "atlas/map_gen/templates/ski_atlas_small_medium_template.qgz",
-    )
-    template_path = _repo_root() / template_rel
-    if not template_path.exists():
-        print(f"Template not found: {template_path}", file=sys.stderr)
-        return 0
+    tiers_cfg = config.get("trail_tiers") or {}
 
     icon_src = _find_icon(work_dir)
 
@@ -1184,8 +1301,6 @@ def run_resorts(
             slug = f"{slug}-{seen_slugs[slug]}"
         else:
             seen_slugs[slug] = 0
-
-        resort_dir = work_dir / slug
 
         # Look up 1000ft buffer for this resort (bounds + filtered GDF for preview)
         buffer_bounds: Optional[tuple[float, float, float, float]] = None
@@ -1248,6 +1363,34 @@ def run_resorts(
         if pistes_all is not None and name_col in pistes_all.columns:
             resort_pistes = pistes_all[pistes_all[name_col] == resort_name].copy()
 
+        n_trails = (
+            len(resort_pistes)
+            if pistes_all is not None and name_col in pistes_all.columns
+            else -1
+        )
+
+        tier_runs: list[tuple[str, str, Optional[str]]]
+        # (layout_tier, directory_basename, project_slug or None)
+        if all_layout_tiers:
+            base_tiers = ("small", "medium", "large", "mega")
+            tier_runs = []
+            for t in base_tiers:
+                tier_runs.append((t, f"{slug}-layout-{t}", f"{slug}-layout-{t}"))
+            for t in base_tiers:
+                tl = f"{t}_landscape"
+                tier_runs.append(
+                    (
+                        tl,
+                        f"{slug}-layout-{t}-landscape",
+                        f"{slug}-layout-{t}-landscape",
+                    )
+                )
+        else:
+            lt = _resolve_layout_tier(
+                resort_name, n_trails, tiers_cfg, layout_tier_override
+            )
+            tier_runs = _default_tier_runs(slug, lt, config=config)
+
         ski_north = ski_north_angles.get(resort_name)
 
         inset_country_raw: Optional[str] = None
@@ -1258,45 +1401,63 @@ def run_resorts(
                 if cs and cs.casefold() not in {"nan", "none"}:
                     inset_country_raw = cs
 
-        try:
-            process_resort(
-                resort_name=resort_name,
-                state_name=state_name,
-                centroid_lon=centroid.x,
-                centroid_lat=centroid.y,
-                resort_dir=resort_dir,
-                template_path=template_path,
-                icon_src=icon_src,
-                buffer_bounds=buffer_bounds,
-                ski_north_angle=ski_north,
-                inset_country_raw=inset_country_raw,
-                ski_area_gdf=resort_ski_gdf,
-                buffer_gdf=resort_buffer_gdf,
-                contours_gdf=resort_contours,
-                pistes_gdf=resort_pistes,
-                preview=preview,
-            )
-            _write_resort_data(
-                resort_name=resort_name,
-                resort_dir=resort_dir,
-                ski_area_gdf=resort_ski_gdf,
-                buffer_gdf=resort_buffer_gdf,
-                contours_gdf=resort_contours,
-                pistes_gdf=resort_pistes,
-                osm_all=osm_all,
-                elev_points_all=elev_points_all,
-            )
-            count += 1
-            rotation_str = f"  rotation={(360 - ski_north) % 360:.1f}°" if ski_north else ""
-            print(f"  {slug}  ({resort_name}, {state_name}){rotation_str}")
-            if export_layout:
-                from atlas.map_gen.export_layouts import export_qgz
+        for layout_tier, dir_basename, project_slug in tier_runs:
+            resort_dir = work_dir / dir_basename
+            template_path = _template_qgz_for_tier(config, layout_tier)
+            if not template_path.exists():
+                print(
+                    f"  Missing template for layout {layout_tier!r}: {template_path}",
+                    file=sys.stderr,
+                )
+                continue
 
-                # Must match process_resort filename: slugify(name) or resort_dir.name
-                file_slug = slugify(resort_name) or slug
-                export_qgz(resort_dir / f"{file_slug}_map.qgz", dpi=export_dpi, overwrite=True)
-        except Exception as e:
-            print(f"  Error [{resort_name}]: {e}", file=sys.stderr)
+            try:
+                process_resort(
+                    resort_name=resort_name,
+                    state_name=state_name,
+                    centroid_lon=centroid.x,
+                    centroid_lat=centroid.y,
+                    resort_dir=resort_dir,
+                    template_path=template_path,
+                    icon_src=icon_src,
+                    buffer_bounds=buffer_bounds,
+                    ski_north_angle=ski_north,
+                    inset_country_raw=inset_country_raw,
+                    ski_area_gdf=resort_ski_gdf,
+                    buffer_gdf=resort_buffer_gdf,
+                    contours_gdf=resort_contours,
+                    pistes_gdf=resort_pistes,
+                    preview=preview,
+                    layout_tier=layout_tier,
+                    project_slug=project_slug,
+                )
+                _write_resort_data(
+                    resort_name=resort_name,
+                    resort_dir=resort_dir,
+                    ski_area_gdf=resort_ski_gdf,
+                    buffer_gdf=resort_buffer_gdf,
+                    contours_gdf=resort_contours,
+                    pistes_gdf=resort_pistes,
+                    osm_all=osm_all,
+                    elev_points_all=elev_points_all,
+                )
+                count += 1
+                rotation_str = f"  rotation={(360 - ski_north) % 360:.1f}°" if ski_north else ""
+                trails_part = f"  trails={n_trails}" if n_trails >= 0 else ""
+                print(
+                    f"  {dir_basename}  ({resort_name}, {state_name})  "
+                    f"layout={layout_tier}{trails_part}{rotation_str}"
+                )
+                if export_layout:
+                    from atlas.map_gen.export_layouts import export_qgz
+
+                    export_qgz(
+                        resort_dir / f"{resort_dir.name}_map.qgz",
+                        dpi=export_dpi,
+                        overwrite=True,
+                    )
+            except Exception as e:
+                print(f"  Error [{resort_name}] ({layout_tier}): {e}", file=sys.stderr)
 
     return count
 
@@ -1329,7 +1490,37 @@ def main() -> int:
         default=None,
         help="QGIS install root if not auto-detected (layout export only)",
     )
+    parser.add_argument(
+        "--layout-tier",
+        type=str,
+        default=None,
+        choices=(
+            "small",
+            "medium",
+            "large",
+            "mega",
+            "small_medium",
+            "small_landscape",
+            "medium_landscape",
+            "large_landscape",
+            "mega_landscape",
+        ),
+        help="Force print layout tier (default: from pistes count + config/trail_tiers). "
+        "Tiers small/medium/large/mega also write the paired landscape export in "
+        "{slug}-layout-{tier}-landscape/ (same logical size). "
+        "*_landscape tiers write only that orientation.",
+    )
+    parser.add_argument(
+        "--all-layout-tiers",
+        action="store_true",
+        help="Emit portrait small/medium/large/mega plus landscape variants "
+        "({slug}-layout-{tier} and {slug}-layout-{tier}-landscape) per resort "
+        "(conflicts with --layout-tier)",
+    )
     args = parser.parse_args()
+
+    if args.layout_tier and args.all_layout_tiers:
+        parser.error("Use either --layout-tier or --all-layout-tiers, not both.")
 
     if not args.all_resorts and not args.resort and not args.region:
         parser.print_help()
@@ -1370,6 +1561,8 @@ def main() -> int:
             preview=args.matplotlib_preview,
             export_layout=export_layout,
             export_dpi=args.dpi,
+            layout_tier_override=args.layout_tier,
+            all_layout_tiers=args.all_layout_tiers,
         )
     finally:
         if export_layout:
