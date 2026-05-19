@@ -149,6 +149,205 @@ def _safe_slug_fallback(row: Any) -> str:
     return "resort"
 
 
+def _normalize_winter_sports_id(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s or s.casefold() in {"nan", "none"}:
+        return None
+    try:
+        return str(int(float(s)))
+    except (TypeError, ValueError):
+        return s
+
+
+def _winter_sports_id_from_row(row: Any) -> Optional[str]:
+    for id_col in ("winter_sports_id", "osm_way_id", "osm_id"):
+        if id_col not in getattr(row, "index", row):
+            continue
+        wid = _normalize_winter_sports_id(row.get(id_col))
+        if wid:
+            return wid
+    return None
+
+
+def _ski_north_angle_for_row(
+    input_dir: Path,
+    row: Any,
+    resort_name: str,
+) -> Optional[float]:
+    """Per-resort ski_north_angle; prefers regional analyzed parquet, then combined."""
+    import pandas as pd
+
+    wid = _winter_sports_id_from_row(row)
+    region = row.get("region") if hasattr(row, "get") else None
+    paths: list[Path] = []
+    if region is not None and str(region).strip():
+        reg_path = _repo_root() / "output" / str(region).strip() / "ski_areas_analyzed.parquet"
+        if reg_path.exists():
+            paths.append(reg_path)
+    for name in ("ski_areas_analyzed.parquet", "ski_areas_elevation.parquet"):
+        p = input_dir / name
+        if p.exists():
+            paths.append(p)
+
+    for path in paths:
+        df = pd.read_parquet(path)
+        if "ski_north_angle" not in df.columns:
+            continue
+        sub = df
+        if wid and "winter_sports_id" in df.columns:
+            sub = df[df["winter_sports_id"].astype(str) == wid]
+        elif resort_name and "name" in df.columns:
+            sub = df[df["name"].astype(str).str.strip() == resort_name.strip()]
+        if sub.empty:
+            continue
+        val = sub.iloc[0]["ski_north_angle"]
+        if val is not None and not (isinstance(val, float) and pd.isna(val)):
+            return float(val)
+    return None
+
+
+def _regional_output_path(region: str, filename: str) -> Optional[Path]:
+    """Per-region pipeline output (accurate contours/elev); combined can have bad name joins."""
+    region = str(region or "").strip()
+    if not region or region.casefold() in {"nan", "none"}:
+        return None
+    p = _repo_root() / "output" / region / filename
+    return p if p.exists() else None
+
+
+def _load_regional_layer_cache(
+    regional_cache: dict[str, dict[str, Optional[gpd.GeoDataFrame]]],
+    region: str,
+    filename: str,
+) -> Optional[gpd.GeoDataFrame]:
+    region = str(region or "").strip()
+    if not region:
+        return None
+    if region not in regional_cache:
+        regional_cache[region] = {}
+    if filename not in regional_cache[region]:
+        p = _regional_output_path(region, filename)
+        if p is None:
+            regional_cache[region][filename] = None
+        else:
+            gdf = gpd.read_parquet(p)
+            if gdf.crs is None:
+                gdf = gdf.set_crs("EPSG:4326")
+            regional_cache[region][filename] = gdf
+    return regional_cache[region][filename]
+
+
+def _layer_gdf_for_resort(
+    combined: Optional[gpd.GeoDataFrame],
+    regional_cache: dict[str, dict[str, Optional[gpd.GeoDataFrame]]],
+    row: Any,
+    resort_name: str,
+    *,
+    filename: str,
+    name_col: str = "name",
+    buffer_bounds: Optional[tuple[float, float, float, float]] = None,
+) -> gpd.GeoDataFrame:
+    """Prefer regional parquet for this row's region; fall back to combined."""
+    region = str(row.get("region") or "").strip()
+    reg = _load_regional_layer_cache(regional_cache, region, filename)
+    if reg is not None and not reg.empty:
+        hit = _filter_gdf_to_resort(reg, row, resort_name, name_col=name_col)
+        if not hit.empty:
+            return hit
+    if combined is None:
+        return gpd.GeoDataFrame()
+    hit = _filter_gdf_to_resort(combined, row, resort_name, name_col=name_col)
+    if (
+        hit.empty
+        or buffer_bounds is None
+        or _bounds_intersect(buffer_bounds, tuple(hit.total_bounds))
+    ):
+        return hit
+    # Combined slice has the right name but wrong location (known combined-parquet issue).
+    return gpd.GeoDataFrame()
+
+
+def _bounds_intersect(
+    a: tuple[float, float, float, float],
+    b: tuple[float, float, float, float],
+    margin_deg: float = 0.05,
+) -> bool:
+    ax1, ay1, ax2, ay2 = a
+    bx1, by1, bx2, by2 = b
+    return not (
+        ax2 + margin_deg < bx1
+        or bx2 + margin_deg < ax1
+        or ay2 + margin_deg < by1
+        or by2 + margin_deg < ay1
+    )
+
+
+def _filter_gdf_to_resort(
+    gdf: Optional[gpd.GeoDataFrame],
+    row: Any,
+    resort_name: str,
+    *,
+    name_col: str = "name",
+) -> gpd.GeoDataFrame:
+    if gdf is None or gdf.empty:
+        return gpd.GeoDataFrame()
+
+    wid = _winter_sports_id_from_row(row)
+    if wid and "winter_sports_id" in gdf.columns:
+        hit = gdf[gdf["winter_sports_id"].astype(str) == wid]
+        if not hit.empty:
+            return hit.copy()
+
+    for col in (name_col, "name", "Ski Area"):
+        if col in gdf.columns:
+            hit = gdf[gdf[col].astype(str).str.strip() == resort_name.strip()]
+            if not hit.empty:
+                return hit.copy()
+    return gpd.GeoDataFrame()
+
+
+def _copy_template_icons(resort_dir: Path, template_path: Path, work_dir: Path) -> None:
+    """Copy lift/badge icons next to the QGZ so relative ./icons/ paths resolve."""
+    candidates = [
+        template_path.parent / "icons",
+        work_dir / "wintergreen-ski-resort" / "icons",
+        work_dir / "wintergreen" / "icons",
+        _repo_root() / "atlas_work" / "wintergreen-ski-resort" / "icons",
+        _repo_root() / "atlas_work" / "wintergreen" / "icons",
+    ]
+    src_dir = next((c for c in candidates if c.is_dir() and any(c.iterdir())), None)
+    if src_dir is None:
+        return
+    dst = resort_dir / "icons"
+    dst.mkdir(parents=True, exist_ok=True)
+    for f in src_dir.iterdir():
+        if f.is_file() and f.suffix.lower() in {".svg", ".png", ".jpg", ".jpeg"}:
+            shutil.copy2(f, dst / f.name)
+
+
+def _rewrite_icon_paths(content: str) -> str:
+    """Point symbology image paths at this resort's ./icons/ folder."""
+    return re.sub(
+        r'(?:[A-Za-z]:|\.{1,2})[^"]*[/\\]atlas_work[/\\][^"\\]+[/\\]icons[/\\]',
+        "./icons/",
+        content,
+    )
+
+
+def _ensure_map_layers_checked(content: str) -> str:
+    for layer_name in ("ski_area_contours", "ski_area_elevation_points"):
+        content = re.sub(
+            rf'(<layer-tree-layer\b[^>]*\bname="{re.escape(layer_name)}"[^>]*\bchecked=")'
+            r'Qt::Unchecked\("',
+            r'\1Qt::Checked\("',
+            content,
+            count=1,
+        )
+    return content
+
+
 def _state_subset(state_name: str) -> str:
     """Build the QGIS subset string for the state boundary layer."""
     codes = US_STATE_CODES.get(state_name)
@@ -728,10 +927,13 @@ def patch_qgs(
         map_extent = expand_bounds_for_rotation(map_extent, rotation)
         content = _replace_local_extents(content, map_extent)
 
-    # Update canvas <rotation> element
+    # Legacy contour styles in some templates reference ELEV; parquet uses elevation_m.
+    content = content.replace("&quot;ELEV&quot;", "&quot;elevation_m&quot;")
+
+    # Update map canvas rotation (do not touch label/shape rotation attributes).
     content = re.sub(
-        r"<rotation>[^<]+</rotation>",
-        f"<rotation>{rotation}</rotation>",
+        r"(<mapcanvas>[\s\S]*?<rotation>)[^<]+(</rotation>)",
+        rf"\g<1>{rotation}\g<2>",
         content,
         count=1,
     )
@@ -754,6 +956,8 @@ def patch_qgs(
 
     # Point all combined-parquet datasources at local per-resort data files.
     content = _localize_datasources(content)
+    content = _rewrite_icon_paths(content)
+    content = _ensure_map_layers_checked(content)
 
     # Parking layer uses single-symbol symbology; after localization it would share the same
     # osm_near_winter_sports Polygon slice as forests/buildings and hatch every polygon.
@@ -937,15 +1141,17 @@ def _write_resort_data(
     contours_gdf: gpd.GeoDataFrame,
     pistes_gdf: gpd.GeoDataFrame,
     osm_all: Optional[gpd.GeoDataFrame],
-    elev_points_all: Optional[gpd.GeoDataFrame],
+    elev_points_gdf: Optional[gpd.GeoDataFrame] = None,
+    row: Any = None,
 ) -> None:
     """Write per-resort clipped parquet files to resort_dir/data/.
 
     QGIS QGZ datasources point to ./data/{file}.parquet so the project loads
     only the small per-resort slice rather than the full combined dataset.
     """
+    resort_dir.mkdir(parents=True, exist_ok=True)
     data_dir = resort_dir / "data"
-    data_dir.mkdir(exist_ok=True)
+    data_dir.mkdir(parents=True, exist_ok=True)
 
     if not ski_area_gdf.empty:
         ski_area_gdf.to_parquet(data_dir / "ski_areas.parquet")
@@ -956,33 +1162,40 @@ def _write_resort_data(
     if not pistes_gdf.empty:
         pistes_gdf.to_parquet(data_dir / "pistes.parquet")
 
-    def _filter_by_name(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    def _filter_osm(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+        if row is not None:
+            hit = _filter_gdf_to_resort(gdf, row, resort_name, name_col="name")
+            if not hit.empty:
+                return hit
+        needle = resort_name.casefold()
         for col in ("Ski Area", "name"):
             if col in gdf.columns:
-                mask = gdf[col].astype(str).str.contains(resort_name, case=False, na=False)
+                mask = gdf[col].astype(str).str.casefold().str.contains(
+                    needle, na=False, regex=False
+                )
                 return gdf[mask].copy()
         return gpd.GeoDataFrame()
 
     if osm_all is not None and not osm_all.empty:
-        filtered = _filter_by_name(osm_all)
+        filtered = _filter_osm(osm_all)
         if not filtered.empty:
             filtered.to_parquet(data_dir / "osm_near_winter_sports.parquet")
             gt = filtered.geometry.geom_type.astype(str)
-            polys = filtered[gt.str.contains("Polygon", na=False)].copy()
+            polys = filtered[gt.isin(("Polygon", "MultiPolygon"))].copy()
             # JSON tags use "amenity": "parking" — excludes parking_space / parking_entrance
             # where the closing quote does not immediately follow "parking".
-            pk_mask = polys["tags"].astype(str).str.contains(
-                r'"amenity"\s*:\s*"parking"', regex=True, na=False
+            pk_mask = polys["tags"].map(
+                lambda t: bool(
+                    re.search(r'"amenity"\s*:\s*"parking"', str(t), flags=re.IGNORECASE)
+                )
             )
             parking_only = polys[pk_mask].copy()
             if parking_only.empty:
                 parking_only = polys.iloc[:0].copy()
             parking_only.to_parquet(data_dir / "osm_parking.parquet")
 
-    if elev_points_all is not None and not elev_points_all.empty:
-        filtered = _filter_by_name(elev_points_all)
-        if not filtered.empty:
-            filtered.to_parquet(data_dir / "ski_area_elevation_points.parquet")
+    if elev_points_gdf is not None and not elev_points_gdf.empty:
+        elev_points_gdf.to_parquet(data_dir / "ski_area_elevation_points.parquet")
 
 
 def process_resort(
@@ -993,6 +1206,7 @@ def process_resort(
     resort_dir: Path,
     template_path: Path,
     icon_src: Optional[Path],
+    work_dir: Optional[Path] = None,
     buffer_bounds: Optional[tuple[float, float, float, float]] = None,
     ski_north_angle: Optional[float] = None,
     inset_country_raw: Optional[str] = None,
@@ -1037,7 +1251,9 @@ def process_resort(
         make_inset_point_geojson(centroid_lon, centroid_lat), encoding="utf-8"
     )
 
-    if icon_src and icon_src.exists():
+    if template_path is not None and work_dir is not None:
+        _copy_template_icons(resort_dir, template_path, work_dir)
+    elif icon_src and icon_src.exists():
         icons_dir = resort_dir / "icons"
         icons_dir.mkdir(exist_ok=True)
         dst_icon = icons_dir / icon_src.name
@@ -1099,7 +1315,8 @@ def _resolve_layout_tier(
     if resort_name.strip().casefold() in mega_names:
         return "mega"
     if n_trails < 0:
-        return "small_medium"
+        # Unknown trail count: use small tier + landscape twin (not legacy small_medium-only).
+        return "small"
     smax = int(tiers_cfg.get("small_max", 9))
     mmax = int(tiers_cfg.get("medium_max", 30))
     if n_trails <= smax:
@@ -1134,6 +1351,11 @@ def _default_tier_runs(
         return [(lt, slug, None)]
     ls_path = _template_qgz_for_tier(config, ls)
     if not ls_path.exists():
+        print(
+            f"  WARNING: missing landscape template for {lt!r}: {ls_path} — "
+            f"only portrait will be generated for {slug}",
+            file=sys.stderr,
+        )
         return [(lt, slug, None)]
     base = f"{slug}-layout-{lt}"
     return [
@@ -1242,17 +1464,6 @@ def run_resorts(
         elif buffer_gdf.crs.to_epsg() != 4326:
             buffer_gdf = buffer_gdf.to_crs("EPSG:4326")
 
-    # Load ski_north_angle lookup from elevation parquet
-    ski_north_angles: dict[str, float] = {}
-    for elev_fname in ("ski_areas_elevation.parquet", "ski_areas_analyzed.parquet"):
-        elev_path = input_dir / elev_fname
-        if elev_path.exists():
-            import pandas as pd
-            elev_df = pd.read_parquet(elev_path, columns=["name", "ski_north_angle"])
-            for _, r in elev_df.dropna(subset=["ski_north_angle"]).iterrows():
-                ski_north_angles[str(r["name"])] = float(r["ski_north_angle"])
-            break  # use the first one found
-
     # Load contours + pistes (once, filtered per resort for both preview and local data files)
     contours_all: Optional[gpd.GeoDataFrame] = None
     pistes_all: Optional[gpd.GeoDataFrame] = None
@@ -1287,6 +1498,7 @@ def run_resorts(
 
     count = 0
     seen_slugs: dict[str, int] = {}
+    regional_cache: dict[str, dict[str, Optional[gpd.GeoDataFrame]]] = {}
 
     for _, row in gdf.iterrows():
         resort_name = str(row.get(name_col) or "").strip()
@@ -1354,14 +1566,29 @@ def run_resorts(
         # Filter ski_area row for preview
         resort_ski_gdf = gdf[gdf[name_col] == resort_name][["geometry"]].copy()
 
-        # Filter contours and pistes for preview
-        resort_contours = gpd.GeoDataFrame()
-        if contours_all is not None and "name" in contours_all.columns:
-            resort_contours = contours_all[contours_all["name"] == resort_name].copy()
+        resort_contours = _layer_gdf_for_resort(
+            contours_all,
+            regional_cache,
+            row,
+            resort_name,
+            filename="ski_area_contours.parquet",
+            name_col="name",
+            buffer_bounds=buffer_bounds,
+        )
 
-        resort_pistes = gpd.GeoDataFrame()
-        if pistes_all is not None and name_col in pistes_all.columns:
-            resort_pistes = pistes_all[pistes_all[name_col] == resort_name].copy()
+        resort_pistes = _filter_gdf_to_resort(
+            pistes_all, row, resort_name, name_col=name_col
+        )
+
+        resort_elev = _layer_gdf_for_resort(
+            elev_points_all,
+            regional_cache,
+            row,
+            resort_name,
+            filename="ski_area_elevation_points.parquet",
+            name_col="name",
+            buffer_bounds=buffer_bounds,
+        )
 
         n_trails = (
             len(resort_pistes)
@@ -1391,7 +1618,7 @@ def run_resorts(
             )
             tier_runs = _default_tier_runs(slug, lt, config=config)
 
-        ski_north = ski_north_angles.get(resort_name)
+        ski_north = _ski_north_angle_for_row(input_dir, row, resort_name)
 
         inset_country_raw: Optional[str] = None
         if "Country" in gdf.columns:
@@ -1412,6 +1639,17 @@ def run_resorts(
                 continue
 
             try:
+                _write_resort_data(
+                    resort_name=resort_name,
+                    resort_dir=resort_dir,
+                    ski_area_gdf=resort_ski_gdf,
+                    buffer_gdf=resort_buffer_gdf,
+                    contours_gdf=resort_contours,
+                    pistes_gdf=resort_pistes,
+                    osm_all=osm_all,
+                    elev_points_gdf=resort_elev,
+                    row=row,
+                )
                 process_resort(
                     resort_name=resort_name,
                     state_name=state_name,
@@ -1420,6 +1658,7 @@ def run_resorts(
                     resort_dir=resort_dir,
                     template_path=template_path,
                     icon_src=icon_src,
+                    work_dir=work_dir,
                     buffer_bounds=buffer_bounds,
                     ski_north_angle=ski_north,
                     inset_country_raw=inset_country_raw,
@@ -1430,16 +1669,6 @@ def run_resorts(
                     preview=preview,
                     layout_tier=layout_tier,
                     project_slug=project_slug,
-                )
-                _write_resort_data(
-                    resort_name=resort_name,
-                    resort_dir=resort_dir,
-                    ski_area_gdf=resort_ski_gdf,
-                    buffer_gdf=resort_buffer_gdf,
-                    contours_gdf=resort_contours,
-                    pistes_gdf=resort_pistes,
-                    osm_all=osm_all,
-                    elev_points_all=elev_points_all,
                 )
                 count += 1
                 rotation_str = f"  rotation={(360 - ski_north) % 360:.1f}°" if ski_north else ""

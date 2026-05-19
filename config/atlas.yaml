@@ -67,6 +67,14 @@ s3:
   final_bucket: globalskiatlas-atlas-images
   final_prefix: final
 
+# Wiki resort maps — both orientations per resort for curation, then pick live image.
+# Pipeline uploads: {pageId}-portrait.png and {pageId}-landscape.png
+# (see GlobalSkiAtlas_2/docs/S3_RESORT_MAPS_BUCKET.md; set {pageId}.png when chosen for wiki)
+wiki_maps:
+  bucket: globalskiatlas-resort-maps
+  region: us-east-1
+  require_both_orientations: true
+
 # Local work directory (script writes per-resort data here before optional --upload).
 work_dir: atlas_work
 

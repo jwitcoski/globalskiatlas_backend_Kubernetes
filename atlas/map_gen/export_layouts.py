@@ -13,7 +13,9 @@ Or directly with QGIS's own Python (qgis-python-env must be active):
 
 import argparse
 import os
+import shutil
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Optional
@@ -271,6 +273,11 @@ def _zoom_main_map_to_buffer(project, layout) -> bool:
     return True
 
 
+def out_png_for_qgz(qgz_path: Path) -> Path:
+    """PNG path written alongside a *_map.qgz project."""
+    return qgz_path.with_name(qgz_path.stem.replace("_map", "") + "_export.png")
+
+
 def export_qgz(qgz_path: Path, dpi: int, overwrite: bool) -> bool:
     """Export the 'Ski Atlas Export' layout from qgz_path as a PNG.
 
@@ -278,7 +285,7 @@ def export_qgz(qgz_path: Path, dpi: int, overwrite: bool) -> bool:
     """
     from qgis.core import QgsProject, QgsPrintLayout, QgsLayoutExporter
 
-    out_png = qgz_path.with_name(qgz_path.stem.replace("_map", "") + "_export.png")
+    out_png = out_png_for_qgz(qgz_path)
     if out_png.exists() and not overwrite:
         print(f"  skip (exists): {out_png.name}")
         return True
@@ -303,24 +310,55 @@ def export_qgz(qgz_path: Path, dpi: int, overwrite: bool) -> bool:
     settings = QgsLayoutExporter.ImageExportSettings()
     settings.dpi = dpi
 
-    result = exporter.exportToImage(str(out_png), settings)
-    project.clear()
+    # Write to a temp file first: GDAL raises ERROR 6 if exportToImage targets an
+    # existing PNG (even after unlink on Windows / with some QGIS builds).
+    tmp_fd, tmp_name = tempfile.mkstemp(suffix=".png", prefix="atlas_export_")
+    os.close(tmp_fd)
+    tmp_png = Path(tmp_name)
+    try:
+        from osgeo import gdal
+
+        gdal.PushErrorHandler("CPLQuietErrorHandler")
+        gdal_quiet = True
+    except Exception:
+        gdal_quiet = False
+    try:
+        result = exporter.exportToImage(str(tmp_png), settings)
+    finally:
+        if gdal_quiet:
+            try:
+                from osgeo import gdal
+
+                gdal.PopErrorHandler()
+            except Exception:
+                pass
+        project.clear()
 
     if result == QgsLayoutExporter.Success:
+        try:
+            if out_png.exists():
+                out_png.unlink()
+            shutil.move(str(tmp_png), str(out_png))
+            tmp_png = Path()  # moved; do not delete in outer finally
+        except OSError as e:
+            print(f"  ERROR moving export to {out_png.name}: {e}", file=sys.stderr)
+            return False
         size = out_png.stat().st_size // 1024
         print(f"  exported → {out_png.name}  ({size} KB)")
         return True
-    else:
-        codes = {
-            QgsLayoutExporter.PrintError: "PrintError",
-            QgsLayoutExporter.SvgLayerClipped: "SvgLayerClipped",
-            QgsLayoutExporter.MemoryError: "MemoryError",
-            QgsLayoutExporter.FileNotWritable: "FileNotWritable",
-            QgsLayoutExporter.IteratorError: "IteratorError",
-            QgsLayoutExporter.Canceled: "Canceled",
-        }
-        print(f"  ERROR exporting {qgz_path.name}: {codes.get(result, result)}")
-        return False
+
+    if tmp_png.exists():
+        tmp_png.unlink(missing_ok=True)
+    codes = {
+        QgsLayoutExporter.PrintError: "PrintError",
+        QgsLayoutExporter.SvgLayerClipped: "SvgLayerClipped",
+        QgsLayoutExporter.MemoryError: "MemoryError",
+        QgsLayoutExporter.FileNotWritable: "FileNotWritable",
+        QgsLayoutExporter.IteratorError: "IteratorError",
+        QgsLayoutExporter.Canceled: "Canceled",
+    }
+    print(f"  ERROR exporting {qgz_path.name}: {codes.get(result, result)}")
+    return False
 
 
 def main():
