@@ -259,6 +259,38 @@ def _load_regional_layer_cache(
     return regional_cache[region][filename]
 
 
+_SPATIAL_LAYER_FILES = frozenset(
+    {
+        "ski_area_contours.parquet",
+        "ski_area_elevation_points.parquet",
+    }
+)
+
+
+def _spatial_clip_regional(
+    reg: gpd.GeoDataFrame,
+    *,
+    buffer_bounds: tuple[float, float, float, float],
+    buffer_geom: Any = None,
+) -> gpd.GeoDataFrame:
+    """Clip regional contours/elev to the resort buffer (ignore mislabeled name rows)."""
+    if reg.empty:
+        return gpd.GeoDataFrame()
+    try:
+        if buffer_geom is not None and not getattr(buffer_geom, "is_empty", True):
+            hit = reg[reg.geometry.intersects(buffer_geom)].copy()
+            if not hit.empty:
+                return hit
+        from shapely.geometry import box
+
+        pad = 0.03
+        x1, y1, x2, y2 = buffer_bounds
+        bbox = box(x1 - pad, y1 - pad, x2 + pad, y2 + pad)
+        return reg[reg.geometry.intersects(bbox)].copy()
+    except Exception:
+        return gpd.GeoDataFrame()
+
+
 def _layer_gdf_for_resort(
     combined: Optional[gpd.GeoDataFrame],
     regional_cache: dict[str, dict[str, Optional[gpd.GeoDataFrame]]],
@@ -268,37 +300,35 @@ def _layer_gdf_for_resort(
     filename: str,
     name_col: str = "name",
     buffer_bounds: Optional[tuple[float, float, float, float]] = None,
+    buffer_geom: Any = None,
 ) -> gpd.GeoDataFrame:
-    """Prefer regional parquet for this row's region; fall back to combined."""
+    """Prefer regional parquet; clip contours/elev by resort buffer, not name alone."""
     region = str(row.get("region") or "").strip()
     reg = _load_regional_layer_cache(regional_cache, region, filename)
     if reg is not None and not reg.empty:
+        if buffer_bounds is not None and filename in _SPATIAL_LAYER_FILES:
+            hit = _spatial_clip_regional(
+                reg, buffer_bounds=buffer_bounds, buffer_geom=buffer_geom
+            )
+            if not hit.empty:
+                return hit
         hit = _filter_gdf_to_resort(reg, row, resort_name, name_col=name_col)
         if not hit.empty and (
             buffer_bounds is None
             or _bounds_intersect(buffer_bounds, tuple(hit.total_bounds))
         ):
             return hit
-        if buffer_bounds is not None and filename == "ski_area_contours.parquet":
+        if buffer_bounds is not None:
             wid = _winter_sports_id_from_row(row)
             if wid and "winter_sports_id" in reg.columns:
                 hit = reg[
                     reg["winter_sports_id"].map(_normalize_osm_id)
                     == _normalize_osm_id(wid)
                 ].copy()
-                if not hit.empty:
+                if not hit.empty and _bounds_intersect(
+                    buffer_bounds, tuple(hit.total_bounds)
+                ):
                     return hit
-            try:
-                from shapely.geometry import box
-
-                pad = 0.03
-                x1, y1, x2, y2 = buffer_bounds
-                bbox = box(x1 - pad, y1 - pad, x2 + pad, y2 + pad)
-                hit = reg[reg.geometry.intersects(bbox)].copy()
-                if not hit.empty:
-                    return hit
-            except Exception:
-                pass
     if combined is None:
         return gpd.GeoDataFrame()
     hit = _filter_gdf_to_resort(combined, row, resort_name, name_col=name_col)
@@ -306,54 +336,7 @@ def _layer_gdf_for_resort(
         return hit
     if buffer_bounds is None or _bounds_intersect(buffer_bounds, tuple(hit.total_bounds)):
         return hit
-    # Combined slice has the right name but wrong location (known combined-parquet issue).
     return gpd.GeoDataFrame()
-
-
-def _skadi_cache_dir(input_dir: Path) -> Path:
-    for candidate in (
-        input_dir / "cache",
-        _repo_root() / "output" / "combined" / "cache",
-        _repo_root() / "cache",
-    ):
-        if candidate.exists():
-            return candidate
-    out = input_dir / "cache"
-    out.mkdir(parents=True, exist_ok=True)
-    return out
-
-
-def _generate_contours_from_dem(
-    row: Any,
-    ski_area_gdf: gpd.GeoDataFrame,
-    cache_dir: Path,
-) -> gpd.GeoDataFrame:
-    """Build contour lines from Skadi DEM when regional parquet has none near the resort."""
-    if ski_area_gdf.empty:
-        return gpd.GeoDataFrame()
-    try:
-        scripts = _repo_root() / "scripts"
-        if str(scripts) not in sys.path:
-            sys.path.insert(0, str(scripts))
-        from ski_area_elevation_contours import process_ski_area  # type: ignore
-    except Exception as e:
-        print(f"  [contours] DEM import failed: {e}", file=sys.stderr)
-        return gpd.GeoDataFrame()
-    series = ski_area_gdf.iloc[0].copy()
-    if row is not None and hasattr(row, "index"):
-        for col in row.index:
-            if col not in series.index:
-                series[col] = row[col]
-    try:
-        _el, _eh, features, _pts, _angle = process_ski_area(
-            series, cache_dir, contour_interval=25.0
-        )
-    except Exception as e:
-        print(f"  [contours] DEM generation failed: {e}", file=sys.stderr)
-        return gpd.GeoDataFrame()
-    if not features:
-        return gpd.GeoDataFrame()
-    return gpd.GeoDataFrame.from_features(features, crs="EPSG:4326")
 
 
 def _bounds_intersect(
@@ -1873,10 +1856,21 @@ def run_resorts(
         gdf = gdf.to_crs("EPSG:4326")
 
     if "region" not in gdf.columns:
-        gdf["region"] = ""
+        gdf["region"] = region_filter or ""
 
     if region_filter:
-        gdf = gdf[gdf["region"] == region_filter].copy()
+        region_norm = str(region_filter).strip().replace("\\", "/")
+        input_norm = str(input_dir).replace("\\", "/").rstrip("/")
+        scoped_input = input_norm.endswith(region_norm)
+        region_vals = gdf["region"].astype(str).str.strip()
+        has_region_values = region_vals.ne("").any() and not region_vals.eq("nan").all()
+        if has_region_values and not scoped_input:
+            gdf = gdf[gdf["region"] == region_filter].copy()
+        elif not scoped_input:
+            gdf = gdf[region_vals == region_norm].copy()
+        else:
+            gdf = gdf.copy()
+            gdf["region"] = region_filter
 
     if resort_id:
         for id_col in ("winter_sports_id", "osm_way_id", "osm_id"):
@@ -2013,6 +2007,13 @@ def run_resorts(
             if buffer_bounds is None:
                 buffer_bounds = tuple(resort_ski_gdf.total_bounds)
 
+        buffer_geom = None
+        if not resort_buffer_gdf.empty:
+            try:
+                buffer_geom = resort_buffer_gdf.geometry.union_all()
+            except Exception:
+                buffer_geom = None
+
         resort_contours = _layer_gdf_for_resort(
             contours_all,
             regional_cache,
@@ -2021,20 +2022,14 @@ def run_resorts(
             filename="ski_area_contours.parquet",
             name_col="name",
             buffer_bounds=buffer_bounds,
+            buffer_geom=buffer_geom,
         )
-        if buffer_bounds is not None and (
-            resort_contours.empty
-            or not _bounds_intersect(buffer_bounds, tuple(resort_contours.total_bounds))
-        ):
-            if not resort_ski_gdf.empty:
-                dem_contours = _generate_contours_from_dem(
-                    row, resort_ski_gdf, _skadi_cache_dir(input_dir)
-                )
-                if not dem_contours.empty:
-                    print(
-                        f"  [contours] generated {len(dem_contours)} segments from Skadi DEM"
-                    )
-                    resort_contours = dem_contours
+        if buffer_bounds is not None and resort_contours.empty:
+            print(
+                f"  [contours] no segments in regional data for {resort_name} "
+                f"(rebuild with scripts/ski_area_elevation_contours.py)",
+                file=sys.stderr,
+            )
 
         resort_pistes = _filter_gdf_to_resort(
             pistes_all, row, resort_name, name_col=name_col
@@ -2048,7 +2043,13 @@ def run_resorts(
             filename="ski_area_elevation_points.parquet",
             name_col="name",
             buffer_bounds=buffer_bounds,
+            buffer_geom=buffer_geom,
         )
+        if buffer_bounds is not None and resort_elev.empty:
+            print(
+                f"  [elev] no points in regional data for {resort_name}",
+                file=sys.stderr,
+            )
 
         n_trails = (
             len(resort_pistes)
