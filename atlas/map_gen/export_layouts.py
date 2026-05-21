@@ -12,6 +12,7 @@ Or directly with QGIS's own Python (qgis-python-env must be active):
 """
 
 import argparse
+import json
 import os
 import shutil
 import sys
@@ -26,6 +27,15 @@ if os.name == "nt":
 
 
 LAYOUT_NAME = "Ski Atlas Export"
+
+_INSET_LAYER_NAMES = frozenset(
+    {
+        "globe_countries",
+        "overview_resort_point",
+        "overview_countries",
+        "overview_states",
+    }
+)
 
 
 # ── QGIS path auto-detection ─────────────────────────────────────────────────
@@ -278,6 +288,214 @@ def out_png_for_qgz(qgz_path: Path) -> Path:
     return qgz_path.with_name(qgz_path.stem.replace("_map", "") + "_export.png")
 
 
+def _inset_centroid_from_geojson(qgz_path: Path) -> Optional[tuple[float, float]]:
+    geojson = qgz_path.parent / "resort_inset_point.geojson"
+    if not geojson.exists():
+        return None
+    try:
+        data = json.loads(geojson.read_text(encoding="utf-8"))
+        feat = (data.get("features") or [None])[0]
+        if not feat:
+            return None
+        coords = feat.get("geometry", {}).get("coordinates")
+        if not coords or len(coords) < 2:
+            return None
+        return float(coords[0]), float(coords[1])
+    except Exception:
+        return None
+
+
+def _host_country_name(qgz_path: Path) -> str:
+    ski = qgz_path.parent / "data" / "ski_areas.parquet"
+    if ski.exists():
+        try:
+            import geopandas as gpd
+
+            g = gpd.read_parquet(ski)
+            if not g.empty and "Country" in g.columns:
+                c = str(g.iloc[0]["Country"]).strip()
+                if c and c.casefold() not in {"nan", "none"}:
+                    return c
+        except Exception:
+            pass
+    return "United States of America"
+
+
+def _ortho_crs_for_lonlat(lon: float, lat: float):
+    from qgis.core import QgsCoordinateReferenceSystem
+
+    proj4 = (
+        f"+proj=ortho +lat_0={lat} +lon_0={lon} "
+        "+x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs"
+    )
+    crs = QgsCoordinateReferenceSystem.fromProj(proj4)
+    if not crs.isValid():
+        crs = QgsCoordinateReferenceSystem.fromProj4(proj4)
+    return crs
+
+
+def _apply_globe_symbology(globe_layer, country: str) -> None:
+    """Rule renderer that paints all countries beige and highlights the host (matches Wintergreen)."""
+    from qgis.core import QgsFillSymbol, QgsRuleBasedRenderer
+
+    country_esc = country.replace("'", "''")
+    tan_sym = QgsFillSymbol.createSimple(
+        {
+            "color": "236,228,208,255",
+            "outline_color": "218,212,198,255",
+            "outline_width": "0.07",
+            "outline_width_unit": "MM",
+        }
+    )
+    rose_sym = QgsFillSymbol.createSimple(
+        {
+            "color": "218,188,184,255",
+            "outline_color": "165,138,132,255",
+            "outline_width": "0.07",
+            "outline_width_unit": "MM",
+        }
+    )
+    renderer = QgsRuleBasedRenderer(tan_sym)
+    root = renderer.rootRule()
+    rule_hi = QgsRuleBasedRenderer.Rule(rose_sym)
+    rule_hi.setFilterExpression(
+        f"\"ADMIN\" = '{country_esc}' OR \"NAME\" = '{country_esc}' "
+        f"OR \"SOVEREIGNT\" = '{country_esc}' OR \"ADMIN\" ILIKE '{country_esc}%'"
+    )
+    rule_hi.setDescription("Host country")
+    root.appendChild(rule_hi)
+    globe_layer.setRenderer(renderer)
+    globe_layer.triggerRepaint()
+
+
+def _apply_inset_star(point_layer) -> None:
+    from qgis.core import (
+        QgsMarkerSymbol,
+        QgsSimpleMarkerSymbolLayer,
+        QgsSingleSymbolRenderer,
+    )
+    from qgis.PyQt.QtGui import QColor
+
+    try:
+        from qgis.core import Qgis
+
+        mm_unit = Qgis.RenderUnit.RenderMillimeters
+    except (ImportError, AttributeError):
+        from qgis.core import QgsUnitTypes
+
+        mm_unit = QgsUnitTypes.RenderMillimeters
+
+    sym = QgsMarkerSymbol()
+    while sym.symbolLayerCount():
+        sym.deleteSymbolLayer(0)
+    star = QgsSimpleMarkerSymbolLayer()
+    star.setShape(QgsSimpleMarkerSymbolLayer.Star)
+    star.setSize(2.75)
+    star.setSizeUnit(mm_unit)
+    star.setFillColor(QColor(0, 0, 0))
+    star.setStrokeColor(QColor(255, 255, 255))
+    star.setStrokeWidth(0.35)
+    sym.appendSymbolLayer(star)
+    point_layer.setRenderer(QgsSingleSymbolRenderer(sym))
+    point_layer.triggerRepaint()
+
+
+def _fix_main_map_exclude_inset_layers(project, layout) -> None:
+    """Main map frame must not draw globe/star/overview layers (only on inset maps)."""
+    from qgis.core import QgsLayoutItemMap
+
+    for name in _INSET_LAYER_NAMES:
+        for layer in project.mapLayersByName(name):
+            node = project.layerTreeRoot().findLayer(layer.id())
+            if node is not None:
+                node.setItemVisibilityChecked(False)
+
+    main_map = None
+    max_area = 0.0
+    for item in layout.items():
+        if not isinstance(item, QgsLayoutItemMap):
+            continue
+        if item.id().startswith("overview"):
+            continue
+        area = item.sizeWithUnits().width() * item.sizeWithUnits().height()
+        if area > max_area:
+            max_area = area
+            main_map = item
+
+    if main_map is None:
+        return
+
+    main_layers = [
+        lyr
+        for lyr in project.mapLayers().values()
+        if lyr.name() not in _INSET_LAYER_NAMES and lyr.isValid()
+    ]
+    if main_layers:
+        main_map.setFollowVisibilityPreset(False)
+        main_map.setKeepLayerSet(True)
+        main_map.setLayers(main_layers)
+        main_map.refresh()
+
+
+def _fix_inset_maps_for_export(project, layout, qgz_path: Path) -> None:
+    """Headless export: ortho globe, host-country symbology, star, and ellipse clip."""
+    from qgis.core import (
+        QgsCoordinateReferenceSystem,
+        QgsCoordinateTransform,
+        QgsLayoutItemMap,
+        QgsRectangle,
+    )
+
+    globe_layers = project.mapLayersByName("globe_countries")
+    point_layers = project.mapLayersByName("overview_resort_point")
+    globe_layer = globe_layers[0] if globe_layers else None
+    point_layer = point_layers[0] if point_layers else None
+
+    if globe_layer is not None:
+        _apply_globe_symbology(globe_layer, _host_country_name(qgz_path))
+    if point_layer is not None:
+        _apply_inset_star(point_layer)
+
+    centroid = _inset_centroid_from_geojson(qgz_path)
+    ortho_crs = None
+    ortho_extent = None
+    if centroid is not None:
+        lon, lat = centroid
+        ortho_crs = _ortho_crs_for_lonlat(lon, lat)
+        if ortho_crs.isValid():
+            from atlas.map_gen.data_to_qgis import _ortho_extent_for_globe_window
+
+            xmin, ymin, xmax, ymax = _ortho_extent_for_globe_window(lon, lat)
+            ortho_extent = QgsRectangle(xmin, ymin, xmax, ymax)
+
+    clip_shape = layout.itemById("globe_clip_shape")
+
+    for item_id, layers in (
+        ("overview_inset_map", [globe_layer] if globe_layer else []),
+        ("overview_inset_dot", [point_layer] if point_layer else []),
+    ):
+        item = layout.itemById(item_id)
+        if item is None or not isinstance(item, QgsLayoutItemMap):
+            continue
+        if layers:
+            item.setFollowVisibilityPreset(False)
+            item.setKeepLayerSet(True)
+            item.setLayers(layers)
+        if ortho_crs is not None and ortho_crs.isValid():
+            item.setCrs(ortho_crs)
+        if ortho_extent is not None and not ortho_extent.isEmpty():
+            item.setExtent(ortho_extent)
+        item.setBackgroundEnabled(False)
+        item.setVisibility(True)
+        if clip_shape is not None:
+            clip = item.itemClippingSettings()
+            clip.setEnabled(True)
+            clip.setSourceItem(clip_shape)
+        item.refresh()
+
+    layout.refresh()
+
+
 def export_qgz(qgz_path: Path, dpi: int, overwrite: bool) -> bool:
     """Export the 'Ski Atlas Export' layout from qgz_path as a PNG.
 
@@ -305,6 +523,8 @@ def export_qgz(qgz_path: Path, dpi: int, overwrite: bool) -> bool:
         return False
 
     _zoom_main_map_to_buffer(project, layout)
+    _fix_main_map_exclude_inset_layers(project, layout)
+    _fix_inset_maps_for_export(project, layout, qgz_path)
 
     exporter = QgsLayoutExporter(layout)
     settings = QgsLayoutExporter.ImageExportSettings()
@@ -336,6 +556,7 @@ def export_qgz(qgz_path: Path, dpi: int, overwrite: bool) -> bool:
 
     if result == QgsLayoutExporter.Success:
         try:
+            out_png.parent.mkdir(parents=True, exist_ok=True)
             if out_png.exists():
                 out_png.unlink()
             shutil.move(str(tmp_png), str(out_png))

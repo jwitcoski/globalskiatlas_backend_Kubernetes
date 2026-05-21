@@ -26,6 +26,7 @@ from atlas.map_gen.data_to_qgis import load_config
 from atlas.map_gen.resort_map_paths import (
     atlas_slug_for_resort,
     layout_tier_for_resort,
+    normalize_region,
     resolve_export_paths,
 )
 from atlas.map_gen.wiki_page_id import wiki_page_id_from_row, wiki_row_from_parquet
@@ -135,7 +136,10 @@ def run_upload(
             n_trails = len(pistes_all[pistes_all[name_col] == resort_name])
 
         tier = layout_tier_for_resort(resort_name, n_trails, tiers_cfg)
-        paths = resolve_export_paths(work_dir, slug, tier, config=config)
+        region = normalize_region(str(row.get("region") or ""))
+        paths = resolve_export_paths(
+            work_dir, slug, tier, config=config, region=region
+        )
         portrait_path = paths.get("portrait")
         landscape_path = paths.get("landscape")
 

@@ -125,8 +125,8 @@ def main() -> int:
             )
             print(f"Generated {count} layout(s) under {work_dir}/")
             print(
-                "Each resort should have portrait ({slug}/{slug}_export.png) and "
-                "landscape ({slug}-layout-{tier}-landscape/..._export.png)."
+                "Each resort should have portrait ({region}/{slug}/{slug}_export.png) and "
+                "landscape ({region}/{slug}-layout-{tier}-landscape/..._export.png)."
             )
 
             if args.reexport and not args.skip_export:

@@ -75,7 +75,7 @@ wiki_maps:
   region: us-east-1
   require_both_orientations: true
 
-# Local work directory (script writes per-resort data here before optional --upload).
+# Local work directory; layout mirrors output/{region}/ (e.g. atlas_work/north-america/us/virginia/{slug}/).
 work_dir: atlas_work
 
 # Input directory for combined Parquet (default when running from repo root).

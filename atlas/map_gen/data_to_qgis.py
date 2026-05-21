@@ -7,15 +7,17 @@ writes resort_inset_point.geojson, copies supporting icons, then exports the pri
 to PNG via QgsLayoutExporter (same engine as QGIS — this is the authoritative map image).
 
 For each resort (default trail-based tier), writes **portrait and landscape** print
-layouts at the same logical size so users can compare: portrait in
-``atlas_work/{slug}/``, landscape in ``atlas_work/{slug}-layout-{tier}-landscape/``.
+layouts at the same logical size so users can compare. Folders mirror
+``output/{region}/`` (e.g. portrait in
+``atlas_work/north-america/us/virginia/{slug}/``, landscape in
+``.../{slug}-layout-{tier}-landscape/``).
 ``--all-layout-tiers`` still emits all eight size/orientation folders.
 
 Output (typical):
-  atlas_work/{slug}/{slug}_map.qgz
-  atlas_work/{slug}/{slug}_export.png
-  atlas_work/{slug}-layout-{tier}-landscape/{slug}-layout-{tier}-landscape_map.qgz
-  atlas_work/{slug}-layout-{tier}-landscape/{slug}-layout-{tier}-landscape_export.png
+  atlas_work/{region}/{slug}/{slug}_map.qgz
+  atlas_work/{region}/{slug}/{slug}_export.png
+  atlas_work/{region}/{slug}-layout-{tier}-landscape/..._map.qgz
+  atlas_work/{region}/{slug}-layout-{tier}-landscape/..._export.png
 
 Optional: --matplotlib-preview writes {slug}_preview.png using matplotlib only (rough QA,
 not the styled layout).
@@ -30,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import sys
@@ -133,6 +136,23 @@ def slugify(name: str) -> str:
     slug = name.lower()
     slug = re.sub(r"[^a-z0-9]+", "-", slug)
     return slug.strip("-")
+
+
+def _normalize_osm_id(v: Any) -> str:
+    """Match osm_way_id across float/int/string parquet columns."""
+    if v is None:
+        return ""
+    s = str(v).strip()
+    if not s or s.casefold() in {"nan", "none"}:
+        return ""
+    if "." in s:
+        try:
+            f = float(s)
+            if f == int(f):
+                return str(int(f))
+        except ValueError:
+            pass
+    return s
 
 
 def _safe_slug_fallback(row: Any) -> str:
@@ -254,19 +274,86 @@ def _layer_gdf_for_resort(
     reg = _load_regional_layer_cache(regional_cache, region, filename)
     if reg is not None and not reg.empty:
         hit = _filter_gdf_to_resort(reg, row, resort_name, name_col=name_col)
-        if not hit.empty:
+        if not hit.empty and (
+            buffer_bounds is None
+            or _bounds_intersect(buffer_bounds, tuple(hit.total_bounds))
+        ):
             return hit
+        if buffer_bounds is not None and filename == "ski_area_contours.parquet":
+            wid = _winter_sports_id_from_row(row)
+            if wid and "winter_sports_id" in reg.columns:
+                hit = reg[
+                    reg["winter_sports_id"].map(_normalize_osm_id)
+                    == _normalize_osm_id(wid)
+                ].copy()
+                if not hit.empty:
+                    return hit
+            try:
+                from shapely.geometry import box
+
+                pad = 0.03
+                x1, y1, x2, y2 = buffer_bounds
+                bbox = box(x1 - pad, y1 - pad, x2 + pad, y2 + pad)
+                hit = reg[reg.geometry.intersects(bbox)].copy()
+                if not hit.empty:
+                    return hit
+            except Exception:
+                pass
     if combined is None:
         return gpd.GeoDataFrame()
     hit = _filter_gdf_to_resort(combined, row, resort_name, name_col=name_col)
-    if (
-        hit.empty
-        or buffer_bounds is None
-        or _bounds_intersect(buffer_bounds, tuple(hit.total_bounds))
-    ):
+    if hit.empty:
+        return hit
+    if buffer_bounds is None or _bounds_intersect(buffer_bounds, tuple(hit.total_bounds)):
         return hit
     # Combined slice has the right name but wrong location (known combined-parquet issue).
     return gpd.GeoDataFrame()
+
+
+def _skadi_cache_dir(input_dir: Path) -> Path:
+    for candidate in (
+        input_dir / "cache",
+        _repo_root() / "output" / "combined" / "cache",
+        _repo_root() / "cache",
+    ):
+        if candidate.exists():
+            return candidate
+    out = input_dir / "cache"
+    out.mkdir(parents=True, exist_ok=True)
+    return out
+
+
+def _generate_contours_from_dem(
+    row: Any,
+    ski_area_gdf: gpd.GeoDataFrame,
+    cache_dir: Path,
+) -> gpd.GeoDataFrame:
+    """Build contour lines from Skadi DEM when regional parquet has none near the resort."""
+    if ski_area_gdf.empty:
+        return gpd.GeoDataFrame()
+    try:
+        scripts = _repo_root() / "scripts"
+        if str(scripts) not in sys.path:
+            sys.path.insert(0, str(scripts))
+        from ski_area_elevation_contours import process_ski_area  # type: ignore
+    except Exception as e:
+        print(f"  [contours] DEM import failed: {e}", file=sys.stderr)
+        return gpd.GeoDataFrame()
+    series = ski_area_gdf.iloc[0].copy()
+    if row is not None and hasattr(row, "index"):
+        for col in row.index:
+            if col not in series.index:
+                series[col] = row[col]
+    try:
+        _el, _eh, features, _pts, _angle = process_ski_area(
+            series, cache_dir, contour_interval=25.0
+        )
+    except Exception as e:
+        print(f"  [contours] DEM generation failed: {e}", file=sys.stderr)
+        return gpd.GeoDataFrame()
+    if not features:
+        return gpd.GeoDataFrame()
+    return gpd.GeoDataFrame.from_features(features, crs="EPSG:4326")
 
 
 def _bounds_intersect(
@@ -296,9 +383,17 @@ def _filter_gdf_to_resort(
 
     wid = _winter_sports_id_from_row(row)
     if wid and "winter_sports_id" in gdf.columns:
-        hit = gdf[gdf["winter_sports_id"].astype(str) == wid]
+        hit = gdf[gdf["winter_sports_id"].map(_normalize_osm_id) == _normalize_osm_id(wid)]
         if not hit.empty:
             return hit.copy()
+
+    for id_col in ("osm_way_id", "osm_id"):
+        if id_col in gdf.columns:
+            rid = _normalize_osm_id(row.get(id_col) if hasattr(row, "get") else None)
+            if rid:
+                hit = gdf[gdf[id_col].map(_normalize_osm_id) == rid]
+                if not hit.empty:
+                    return hit.copy()
 
     for col in (name_col, "name", "Ski Area"):
         if col in gdf.columns:
@@ -317,6 +412,8 @@ def _copy_template_icons(resort_dir: Path, template_path: Path, work_dir: Path) 
         _repo_root() / "atlas_work" / "wintergreen-ski-resort" / "icons",
         _repo_root() / "atlas_work" / "wintergreen" / "icons",
     ]
+    for pattern in ("**/wintergreen-ski-resort/icons", "**/wintergreen/icons"):
+        candidates.extend(p for p in work_dir.glob(pattern) if p.is_dir())
     src_dir = next((c for c in candidates if c.is_dir() and any(c.iterdir())), None)
     if src_dir is None:
         return
@@ -696,11 +793,48 @@ def _fmt_proj_angle(v: float) -> str:
     return "0" if s in {"", "-0"} else s
 
 
-def _recenter_overview_inset_ortho(content: str, lon0: float, lat0: float) -> str:
+def _ortho_extent_for_globe_window(lon0: float, lat0: float) -> tuple[float, float, float, float]:
+    """Transform a WGS84 window around the resort into ortho-map units (visible hemisphere)."""
+    import math
+
+    pad_lon, pad_lat = 55.0, 42.0
+    x1, y1 = float(lon0) - pad_lon, float(lat0) - pad_lat
+    x2, y2 = float(lon0) + pad_lon, float(lat0) + pad_lat
+    proj4 = (
+        f"+proj=ortho +lat_0={float(lat0)} +lon_0={float(lon0)} "
+        "+x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs"
+    )
+    try:
+        from pyproj import Transformer
+
+        trans = Transformer.from_crs("EPSG:4326", proj4, always_xy=True)
+        xs: list[float] = []
+        ys: list[float] = []
+        for x, y in ((x1, y1), (x2, y1), (x2, y2), (x1, y2)):
+            xo, yo = trans.transform(x, y)
+            if math.isfinite(xo) and math.isfinite(yo):
+                xs.append(float(xo))
+                ys.append(float(yo))
+        if len(xs) >= 2:
+            return min(xs), min(ys), max(xs), max(ys)
+    except Exception:
+        pass
+    m = 4_500_000.0
+    return -m, -m, m, m
+
+
+def _recenter_overview_inset_ortho(
+    content: str, lon0: float, lat0: float, extent_m: float = 6378137.0
+) -> str:
     """Globe-style locator: orthographic CRS centered on the resort (both inset map items)."""
 
     lat_s = _fmt_proj_angle(float(lat0))
     lon_s = _fmt_proj_angle(float(lon0))
+    xmin, ymin, xmax, ymax = _ortho_extent_for_globe_window(lon0, lat0)
+    extent_xml = (
+        f'<Extent xmin="{xmin:.8f}" ymin="{ymin:.8f}" '
+        f'xmax="{xmax:.8f}" ymax="{ymax:.8f}"/>'
+    )
     proj4 = (
         f"+proj=ortho +lat_0={lat_s} +lon_0={lon_s} "
         "+x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs +type=crs"
@@ -736,6 +870,7 @@ def _recenter_overview_inset_ortho(content: str, lon0: float, lat0: float) -> st
             blk,
             count=1,
         )
+        blk = re.sub(r"<Extent[^/]*/>", extent_xml, blk, count=1)
         return xml[:ss] + blk + xml[ee:]
 
     for item in ("overview_inset_map", "overview_inset_dot"):
@@ -743,24 +878,260 @@ def _recenter_overview_inset_ortho(content: str, lon0: float, lat0: float) -> st
     return content
 
 
-def _boost_overview_resort_point_marker(content: str) -> str:
-    """Inset resort star: black fill, slightly larger + heavier outline (readable over country tint)."""
-    tok = "<layername>overview_resort_point</layername>"
+def _boundaries_rel_uri(resort_dir: Path, filename: str) -> str:
+    """Relative URI from resort QGZ folder to repo ``boundaries/`` shapefile."""
+    target = (_repo_root() / "boundaries" / filename).resolve()
+    return Path(os.path.relpath(target, resort_dir.resolve())).as_posix()
+
+
+def _rewrite_boundary_datasources(content: str, resort_dir: Path) -> str:
+    """Fix ``../../boundaries/`` paths (wrong depth under ``atlas_work/{region}/``)."""
+    countries = _boundaries_rel_uri(resort_dir, "ne_10m_admin_0_countries.shp")
+    states = _boundaries_rel_uri(resort_dir, "ne_10m_admin_1_states_provinces.shp")
+    content = re.sub(
+        r"[A-Za-z]:[/\\][^\"|<]*[/\\]boundaries[/\\]ne_10m_admin_0_countries\.shp",
+        countries,
+        content,
+    )
+    content = re.sub(
+        r"[A-Za-z]:[/\\][^\"|<]*[/\\]boundaries[/\\]ne_10m_admin_1_states_provinces\.shp",
+        states,
+        content,
+    )
+    content = re.sub(
+        r"(?:\.\./)+boundaries/ne_10m_admin_0_countries\.shp",
+        countries,
+        content,
+    )
+    content = re.sub(
+        r"(?:\.\./)+boundaries/ne_10m_admin_1_states_provinces\.shp",
+        states,
+        content,
+    )
+    return content
+
+
+def _maplayer_id(content: str, layer_name: str) -> Optional[str]:
+    """Return the project <maplayer> id for ``layer_name`` (not a layer-tree reference)."""
+    tok = f"<layername>{layer_name}</layername>"
+    for m in re.finditer(r"<maplayer[\s\S]*?</maplayer>", content):
+        block = m.group(0)
+        if tok not in block:
+            continue
+        mid = re.search(r"<id>([^<]+)</id>", block)
+        if mid:
+            return mid.group(1)
+    return None
+
+
+def _enable_overview_inset_layers(content: str) -> str:
+    """Enable inset layers for layout export without showing them on the main map."""
+    for layer_id_prefix in ("globe_countries", "overview_resort_point"):
+        content = re.sub(
+            rf'(<layer-setting[^>]*\bid="{layer_id_prefix}[^"]*"[^>]*?)enabled="0"',
+            r'\1enabled="1"',
+            content,
+        )
+    return content
+
+
+_INSET_ONLY_LAYER_NAMES = frozenset(
+    {
+        "globe_countries",
+        "overview_resort_point",
+        "overview_countries",
+        "overview_states",
+    }
+)
+
+
+def _maplayer_provider(content: str, layer_id: str) -> str:
+    tok = f"<id>{layer_id}</id>"
+    li = content.find(tok)
+    if li < 0:
+        return "ogr"
+    bs = content.rfind("<maplayer", 0, li)
+    be = content.find("</maplayer>", li) + len("</maplayer>")
+    block = content[bs:be]
+    m = re.search(r"<provider[^>]*>([^<]*)</provider>", block)
+    prov = (m.group(1) if m else "ogr").strip().lower()
+    return "memory" if prov == "memory" else "ogr"
+
+
+def _ensure_globe_countries_in_layer_tree(content: str, resort_dir: Path) -> str:
+    """globe_countries must be in the layer tree or headless layout export skips it."""
+    if re.search(r'layer-tree-layer[^>]*name="globe_countries"', content):
+        return content
+    globe_id = _maplayer_id(content, "globe_countries")
+    if not globe_id:
+        return content
+    uri = _boundaries_rel_uri(resort_dir, "ne_10m_admin_0_countries.shp")
+    entry = (
+        f'    <layer-tree-layer source="{uri}" legend_split_behavior="0" '
+        f'id="{globe_id}" legend_exp="" providerKey="ogr" patch_size="-1,-1" '
+        f'name="globe_countries" expanded="1" checked="Qt::Unchecked">\n'
+        "      <customproperties>\n        <Option/>\n"
+        "      </customproperties>\n"
+        "    </layer-tree-layer>\n"
+    )
+    anchor = '<layer-tree-layer source="./resort_inset_point.geojson"'
+    if anchor in content:
+        return content.replace(anchor, entry + anchor, 1)
+    return content
+
+
+def _set_main_map_layerset_exclude_inset(content: str) -> str:
+    """Pin main map layers explicitly so inset layers never draw on the main map frame."""
+    layers: list[str] = []
+    for m in re.finditer(r"<maplayer[\s\S]*?</maplayer>", content):
+        block = m.group(0)
+        nm = re.search(r"<layername>([^<]+)</layername>", block)
+        mid = re.search(r"<id>([^<]+)</id>", block)
+        ds = re.search(r"<datasource>([^<]+)</datasource>", block)
+        if not (nm and mid and ds):
+            continue
+        name, lid, source = nm.group(1), mid.group(1), ds.group(1)
+        if name in _INSET_ONLY_LAYER_NAMES:
+            continue
+        prov = _maplayer_provider(content, lid)
+        layers.append(
+            f'          <Layer source="{source}" provider="{prov}" '
+            f'name="{name}">{lid}</Layer>'
+        )
+    if not layers:
+        return content
+    layerset = "<LayerSet>\n" + "\n".join(layers) + "\n        </LayerSet>"
+    main_tok = re.escape(_TEMPLATE_MAIN_MAP_UUID)
+
+    def _inject_layerset(match: re.Match[str]) -> str:
+        return match.group(1) + layerset
+
+    for pattern in (
+        rf"({main_tok}[\s\S]*?)<LayerSet\s*/>",
+        rf"({main_tok}[\s\S]*?)<LayerSet>[\s\S]*?</LayerSet>",
+    ):
+        content = re.sub(pattern, _inject_layerset, content, count=1)
+    content = re.sub(
+        rf'(uuid="{re.escape(_TEMPLATE_MAIN_MAP_UUID)}"[\s\S]*?)keepLayerSet="false"',
+        r'\1keepLayerSet="true"',
+        content,
+        count=1,
+    )
+    return content
+
+
+def _prepare_inset_layers_for_export(content: str, resort_dir: Path) -> str:
+    """Inset layers unchecked in the tree; inset map items use their own LayerSet at export."""
+    content = _ensure_globe_countries_in_layer_tree(content, resort_dir)
+    for layer_name in _INSET_ONLY_LAYER_NAMES:
+        content = re.sub(
+            rf'(<layer-tree-layer\b[^>]*\bname="{layer_name}"[^>]*\bchecked=")Qt::Checked(")',
+            r"\1Qt::Unchecked\2",
+            content,
+            count=1,
+        )
+    return _set_main_map_layerset_exclude_inset(content)
+
+
+def _fix_globe_countries_rule_order(content: str) -> str:
+    """Host-country rule first, beige ELSE last — template order breaks non-US fills on export."""
+    tok = "<layername>globe_countries</layername>"
     li = content.find(tok)
     if li < 0:
         return content
     bs = content.rfind("<maplayer", 0, li)
-    be = content.find("</maplayer>", li)
-    if bs < 0 or be < 0:
+    be = content.find("</maplayer>", li) + len("</maplayer>")
+    if bs < 0 or be <= bs:
         return content
     block = content[bs:be]
-    sm = block.find('class="SimpleMarker"')
-    if sm < 0:
+    rules_m = re.search(
+        r'(<rules key="\{[^"]+\}">)([\s\S]*?)(</rules>)',
+        block,
+    )
+    if not rules_m:
         return content
-    sm_end = block.find("</layer>", sm)
-    if sm_end < 0:
+    inner = rules_m.group(2)
+    host_m = re.search(
+        r'(<rule symbol="1" filter="[^"]*" description="Host country"[^/]*/>)',
+        inner,
+    )
+    else_m = re.search(r'(<rule symbol="0" key="[^"]*"/>)', inner)
+    if not host_m or not else_m:
         return content
-    frag = block[sm:sm_end]
+    else_rule = else_m.group(1)
+    if 'filter="ELSE"' not in else_rule:
+        else_rule = else_rule.replace(
+            '<rule symbol="0"',
+            '<rule symbol="0" filter="ELSE" description="Other countries"',
+            1,
+        )
+    new_rules = (
+        f"{rules_m.group(1)}\n          {host_m.group(1)}\n          {else_rule}\n        "
+        f"{rules_m.group(3)}"
+    )
+    new_block = block[: rules_m.start()] + new_rules + block[rules_m.end() :]
+    return content[:bs] + new_block + content[be:]
+
+
+def _fix_overview_inset_map_layerset(content: str, resort_dir: Path) -> str:
+    """Countries + resort star on the base inset (star also on overview_inset_dot above)."""
+    countries_uri = _boundaries_rel_uri(resort_dir, "ne_10m_admin_0_countries.shp")
+    globe_id = _maplayer_id(content, "globe_countries")
+    point_id = _maplayer_id(content, "overview_resort_point")
+    if not globe_id:
+        return content
+    layers = [
+        f'          <Layer source="{countries_uri}" provider="ogr" '
+        f'name="globe_countries">{globe_id}</Layer>',
+    ]
+    layerset = "<LayerSet>\n" + "\n".join(layers) + "\n        </LayerSet>"
+    return re.sub(
+        r'(id="overview_inset_map"[\s\S]*?)<LayerSet>[\s\S]*?</LayerSet>',
+        rf"\1{layerset}",
+        content,
+        count=1,
+    )
+
+
+def _disable_overview_inset_map_background(content: str) -> str:
+    """Template map item uses a solid ocean-blue background that hides country polygons on export."""
+    tok = 'id="overview_inset_map"'
+    ii = content.find(tok)
+    if ii < 0:
+        return content
+    ss = content.rfind("<LayoutItem", 0, ii)
+    ee = content.find("</LayoutItem>", ii) + len("</LayoutItem>")
+    blk = content[ss:ee]
+    blk = re.sub(r'\bbackground="true"', 'background="false"', blk, count=1)
+    return content[:ss] + blk + content[ee:]
+
+
+def _enable_overview_inset_dot_stack(content: str) -> str:
+    """Point-only inset map stacked above overview_inset_map (zValue 6 > 5) so the star is on top."""
+    tok = 'id="overview_inset_dot"'
+    ii = content.find(tok)
+    if ii < 0:
+        return content
+    ss = content.rfind("<LayoutItem", 0, ii)
+    ee = content.find("</LayoutItem>", ii) + len("</LayoutItem>")
+    blk = content[ss:ee]
+    blk = re.sub(r'\bvisibility="0"', 'visibility="1"', blk, count=1)
+    blk = re.sub(r'\bexcludeFromExports="1"', 'excludeFromExports="0"', blk, count=1)
+    blk = re.sub(r'\bbackground="true"', 'background="false"', blk, count=1)
+    point_id = _maplayer_id(content, "overview_resort_point")
+    if point_id:
+        layerset = (
+            "<LayerSet>\n"
+            f'          <Layer source="{_INSET_GEOJSON_DS}" provider="ogr" '
+            f'name="overview_resort_point">{point_id}</Layer>\n'
+            "        </LayerSet>"
+        )
+        blk = re.sub(r"<LayerSet>[\s\S]*?</LayerSet>", layerset, blk, count=1)
+    return content[:ss] + blk + content[ee:]
+
+
+def _patch_simple_marker_frag(frag: str) -> str:
+    """One SimpleMarker symbol layer: bold black star readable on the globe inset."""
     frag = re.sub(
         r'<Option type="QString" value="[^"]*" name="color"/>',
         '<Option type="QString" value="0,0,0,255,rgb:0,0,0,1" name="color"/>',
@@ -769,7 +1140,13 @@ def _boost_overview_resort_point_marker(content: str) -> str:
     )
     frag = re.sub(
         r'<Option type="QString" value="[^"]*" name="size"/>',
-        '<Option type="QString" value="4" name="size"/>',
+        '<Option type="QString" value="2.75" name="size"/>',
+        frag,
+        count=1,
+    )
+    frag = re.sub(
+        r'<Option type="QString" value="[^"]*" name="outline_color"/>',
+        '<Option type="QString" value="255,255,255,255,rgb:1,1,1,1" name="outline_color"/>',
         frag,
         count=1,
     )
@@ -779,7 +1156,45 @@ def _boost_overview_resort_point_marker(content: str) -> str:
         frag,
         count=1,
     )
-    block = block[:sm] + frag + block[sm_end:]
+    if 'name="name"' in frag:
+        frag = re.sub(
+            r'<Option type="QString" value="[^"]*" name="name"/>',
+            '<Option type="QString" value="star" name="name"/>',
+            frag,
+            count=1,
+        )
+    return frag
+
+
+def _boost_overview_resort_point_marker(content: str) -> str:
+    """Inset resort star: black fill, slightly larger + heavier outline (readable over country tint)."""
+    layer_id = _maplayer_id(content, "overview_resort_point")
+    if not layer_id:
+        return content
+    tok = f"<id>{layer_id}</id>"
+    li = content.find(tok)
+    if li < 0:
+        return content
+    bs = content.rfind("<maplayer", 0, li)
+    be = content.find("</maplayer>", li) + len("</maplayer>")
+    if bs < 0 or be <= bs:
+        return content
+    block = content[bs:be]
+    pos = 0
+    patched = False
+    while True:
+        sm = block.find('class="SimpleMarker"', pos)
+        if sm < 0:
+            break
+        sm_end = block.find("</layer>", sm)
+        if sm_end < 0:
+            break
+        frag = block[sm:sm_end]
+        block = block[:sm] + _patch_simple_marker_frag(frag) + block[sm_end:]
+        pos = sm + 1
+        patched = True
+    if not patched:
+        return content
     return content[:bs] + block + content[be:]
 
 
@@ -793,6 +1208,7 @@ def patch_qgs(
     centroid_lat: Optional[float] = None,
     inset_country_raw: Optional[str] = None,
     layout_tier: str = "small_medium",
+    resort_dir: Optional[Path] = None,
 ) -> str:
     """Substitute resort name, state, map extents, rotation, and inset point into QGS XML."""
     map_w_mm, map_h_mm = main_map_frame_mm(layout_tier)
@@ -946,14 +1362,6 @@ def patch_qgs(
         content, "65640", "pictureRotation", str(rotation)
     )
 
-    # Main map uses empty LayerSet + project layers; inset dot layer was template-unchecked.
-    content = re.sub(
-        r'(<layer-tree-layer\b[^>]*\bname="overview_resort_point"[^>]*\bchecked=")Qt::Unchecked(")',
-        r"\1Qt::Checked\2",
-        content,
-        count=1,
-    )
-
     # Point all combined-parquet datasources at local per-resort data files.
     content = _localize_datasources(content)
     content = _rewrite_icon_paths(content)
@@ -965,6 +1373,16 @@ def patch_qgs(
     content = _replace_maplayer_datasource(
         content, "parking", _PARKING_LAYER_DATASOURCE_LOCAL
     )
+
+    content = _fix_globe_countries_rule_order(content)
+
+    if resort_dir is not None:
+        content = _rewrite_boundary_datasources(content, resort_dir)
+        content = _enable_overview_inset_layers(content)
+        content = _prepare_inset_layers_for_export(content, resort_dir)
+        content = _fix_overview_inset_map_layerset(content, resort_dir)
+        content = _disable_overview_inset_map_background(content)
+        content = _enable_overview_inset_dot_stack(content)
 
     # Main map: atlas scalingMode="2" (predefined scale / auto) can let QGIS resize the
     # map frame on load to match the geographic extent — combined with aspect-ratio lock
@@ -1197,6 +1615,31 @@ def _write_resort_data(
     if elev_points_gdf is not None and not elev_points_gdf.empty:
         elev_points_gdf.to_parquet(data_dir / "ski_area_elevation_points.parquet")
 
+    # QGZ datasources always point at ./data/*.parquet; missing files break QgsProject.read().
+    def _stub(path: Path, template: Optional[gpd.GeoDataFrame]) -> None:
+        if path.exists():
+            return
+        if template is not None and len(template.columns):
+            template.iloc[:0].to_parquet(path)
+        else:
+            gpd.GeoDataFrame(geometry=[], crs="EPSG:4326").to_parquet(path)
+
+    _stub(data_dir / "ski_areas.parquet", ski_area_gdf)
+    _stub(
+        data_dir / "ski_areas_1000ft_buffer.parquet",
+        buffer_gdf if not buffer_gdf.empty else ski_area_gdf,
+    )
+    _stub(data_dir / "ski_area_contours.parquet", contours_gdf)
+    _stub(data_dir / "pistes.parquet", pistes_gdf)
+    _stub(data_dir / "ski_area_elevation_points.parquet", elev_points_gdf)
+    _stub(data_dir / "osm_near_winter_sports.parquet", osm_all)
+    if osm_all is not None and not osm_all.empty:
+        gt = osm_all.geometry.geom_type.astype(str)
+        poly_tpl = osm_all[gt.isin(("Polygon", "MultiPolygon"))]
+    else:
+        poly_tpl = None
+    _stub(data_dir / "osm_parking.parquet", poly_tpl)
+
 
 def process_resort(
     resort_name: str,
@@ -1222,7 +1665,7 @@ def process_resort(
     # For non-ASCII resort names (e.g. Japanese), slugify() can become empty.
     # Use the resort directory name (already stabilized in run_resorts) as fallback.
     # project_slug: folder basename for *_map.qgz (e.g. camelback-mountain-resort-layout-large).
-    file_slug = project_slug or slugify(resort_name) or resort_dir.name
+    file_slug = project_slug or resort_dir.name
     out_qgz = resort_dir / f"{file_slug}_map.qgz"
     internal_qgs = f"{file_slug}_map.qgs"
 
@@ -1242,6 +1685,7 @@ def process_resort(
                     centroid_lat=centroid_lat,
                     inset_country_raw=inset_country_raw,
                     layout_tier=layout_tier,
+                    resort_dir=resort_dir,
                 )
                 data = text.encode("utf-8")
                 info.filename = internal_qgs
@@ -1342,8 +1786,8 @@ def _default_tier_runs(
 ) -> list[tuple[str, str, Optional[str]]]:
     """Single-resort mode: portrait + landscape when templates exist; else one run.
 
-    Portrait stays in ``work_dir/{slug}/`` (legacy path). Landscape twin uses
-    ``{slug}-layout-{tier}-landscape/`` so both exports are easy to find.
+    Portrait in ``{region}/{slug}/`` (mirrors output/). Landscape twin uses
+    ``{region}/{slug}-layout-{tier}-landscape/``.
     """
     ls = _landscape_pair_for_print_tier(lt)
     if ls is None:
@@ -1496,6 +1940,8 @@ def run_resorts(
 
     icon_src = _find_icon(work_dir)
 
+    from atlas.map_gen.resort_map_paths import atlas_slug_for_resort, resort_work_prefix
+
     count = 0
     seen_slugs: dict[str, int] = {}
     regional_cache: dict[str, dict[str, Optional[gpd.GeoDataFrame]]] = {}
@@ -1506,13 +1952,8 @@ def run_resorts(
             continue
         state_name = str(row.get(state_col) or "").strip() if state_col else ""
         centroid = row.geometry.centroid
-        slug = slugify(resort_name) or _safe_slug_fallback(row)
-
-        if slug in seen_slugs:
-            seen_slugs[slug] += 1
-            slug = f"{slug}-{seen_slugs[slug]}"
-        else:
-            seen_slugs[slug] = 0
+        slug = atlas_slug_for_resort(resort_name, row, seen_slugs)
+        work_prefix = resort_work_prefix(work_dir, str(row.get("region") or ""))
 
         # Look up 1000ft buffer for this resort (bounds + filtered GDF for preview)
         buffer_bounds: Optional[tuple[float, float, float, float]] = None
@@ -1533,7 +1974,8 @@ def run_resorts(
 
             for id_col, v in id_pairs:
                 try:
-                    mask = buffer_gdf[id_col].astype(str) == v
+                    nid = _normalize_osm_id(v)
+                    mask = buffer_gdf[id_col].map(_normalize_osm_id) == nid
                 except Exception:
                     continue
                 resort_buffer_gdf = buffer_gdf[mask].copy()
@@ -1566,6 +2008,11 @@ def run_resorts(
         # Filter ski_area row for preview
         resort_ski_gdf = gdf[gdf[name_col] == resort_name][["geometry"]].copy()
 
+        if resort_buffer_gdf.empty and not resort_ski_gdf.empty:
+            resort_buffer_gdf = resort_ski_gdf.copy()
+            if buffer_bounds is None:
+                buffer_bounds = tuple(resort_ski_gdf.total_bounds)
+
         resort_contours = _layer_gdf_for_resort(
             contours_all,
             regional_cache,
@@ -1575,6 +2022,19 @@ def run_resorts(
             name_col="name",
             buffer_bounds=buffer_bounds,
         )
+        if buffer_bounds is not None and (
+            resort_contours.empty
+            or not _bounds_intersect(buffer_bounds, tuple(resort_contours.total_bounds))
+        ):
+            if not resort_ski_gdf.empty:
+                dem_contours = _generate_contours_from_dem(
+                    row, resort_ski_gdf, _skadi_cache_dir(input_dir)
+                )
+                if not dem_contours.empty:
+                    print(
+                        f"  [contours] generated {len(dem_contours)} segments from Skadi DEM"
+                    )
+                    resort_contours = dem_contours
 
         resort_pistes = _filter_gdf_to_resort(
             pistes_all, row, resort_name, name_col=name_col
@@ -1629,7 +2089,7 @@ def run_resorts(
                     inset_country_raw = cs
 
         for layout_tier, dir_basename, project_slug in tier_runs:
-            resort_dir = work_dir / dir_basename
+            resort_dir = work_prefix / dir_basename
             template_path = _template_qgz_for_tier(config, layout_tier)
             if not template_path.exists():
                 print(
@@ -1680,11 +2140,13 @@ def run_resorts(
                 if export_layout:
                     from atlas.map_gen.export_layouts import export_qgz
 
-                    export_qgz(
-                        resort_dir / f"{resort_dir.name}_map.qgz",
-                        dpi=export_dpi,
-                        overwrite=True,
-                    )
+                    qgz_stem = project_slug or dir_basename
+                    qgz_path = resort_dir / f"{qgz_stem}_map.qgz"
+                    if not qgz_path.is_file():
+                        alt = resort_dir / f"{resort_dir.name}_map.qgz"
+                        qgz_path = alt if alt.is_file() else qgz_path
+                    resort_dir.mkdir(parents=True, exist_ok=True)
+                    export_qgz(qgz_path, dpi=export_dpi, overwrite=True)
             except Exception as e:
                 print(f"  Error [{resort_name}] ({layout_tier}): {e}", file=sys.stderr)
 
