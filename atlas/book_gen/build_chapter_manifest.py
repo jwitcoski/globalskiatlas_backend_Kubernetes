@@ -24,6 +24,7 @@ from atlas.book_gen.wiki_client import (
     load_chapter_resorts,
     parquet_path_for_config,
 )
+from atlas.book_gen.wiki_content_store import WikiContentStore
 
 
 def _repo_root() -> Path:
@@ -85,6 +86,11 @@ def build_manifest(
                 limit=limit,
                 include_only_finished=bool(book_config.get("include_only_finished")),
             )
+
+    wiki_store = WikiContentStore.from_config(repo_root, book_config)
+    with log_phase("Merge Bedrock wiki copy"):
+        merged, missing = wiki_store.apply_to_pages(pages)
+        log(f"  bedrock copy: {merged}/{len(pages)} resorts ({missing} without copy)")
 
     map_index: dict[str, Path] = {}
     if not no_maps and region:

@@ -46,6 +46,8 @@ def export_chapter_pdf(
     map_export_dpi: int = 300,
     page_limit: int | None = None,
     overview_image_path: str | None = None,
+    overview_body: str | None = None,
+    slot_body_char_limits: dict[str, int | None] | None = None,
 ) -> bool:
     """
     Scribus often flattens multi-page SLA into one sheet on PDF export.
@@ -60,7 +62,7 @@ def export_chapter_pdf(
     logical: list[tuple[str, dict[str, Any] | None]] = []
     if overview_image_path:
         logical.append(("overview", {"image": overview_image_path}))
-    if chapter_title:
+    elif chapter_title:
         logical.append(("title", None))
     for page_info in layout_plan.get("pages") or []:
         logical.append(("content", page_info))
@@ -80,12 +82,14 @@ def export_chapter_pdf(
             overview_image_path=(
                 (page_info or {}).get("image") if kind == "overview" else None
             ),
+            overview_body=overview_body if kind == "overview" else None,
             page_info=(page_info if kind == "content" else None),
             manifest_by_id=manifest_by_id,
             trim_in=trim_in,
             margin_in=margin_in,
             sla_output_path=sla_path,
             map_export_dpi=map_export_dpi,
+            slot_body_char_limits=slot_body_char_limits,
         )
         write_sla(tree, sla_path)
         log(f"  pdf_export: page {i + 1}/{len(logical)} -> {pdf_path.name}")

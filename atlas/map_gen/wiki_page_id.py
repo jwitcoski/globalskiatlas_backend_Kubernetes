@@ -59,6 +59,16 @@ def wiki_page_id_from_row(row: dict[str, Any]) -> str:
     return page_id or "unknown"
 
 
+def wiki_country_page_id(country: str) -> str:
+    """DynamoDB pageId for country pages (wiki-ingest buildCountryItem)."""
+    return f"country-{wiki_slug(country)}"
+
+
+def wiki_state_page_id(state: str, country: str) -> str:
+    """DynamoDB pageId for state pages (wiki-ingest buildStateItem)."""
+    return f"state-{wiki_slug(state)}-{wiki_slug(country)}"
+
+
 def wiki_row_from_parquet(row: Any, *, name_col: str, state_col: str | None) -> dict[str, Any]:
     """Build a dict suitable for wiki_page_id_from_row from a GeoPandas/pandas row."""
     out: dict[str, Any] = {

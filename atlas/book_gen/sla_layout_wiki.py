@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from atlas.book_gen.render_resort_fields import split_drop_cap
 from atlas.book_gen.wiki_style import (
     C_STATS_BG,
     TextRun,
@@ -64,6 +65,7 @@ def append_wiki_text_column(
     fields: dict[str, str],
     slot: str,
     include_body: bool,
+    footer_in_column: bool = True,
     body_char_limit: int | None = None,
 ) -> float:
     """Stack wiki header + stats + optional body; return y after last element."""
@@ -147,13 +149,17 @@ def append_wiki_text_column(
         drop = (fields.get("drop_cap") or "").strip()
         body_after = (fields.get("body_after_cap") or fields.get("body") or "").strip()
         body_plain = (fields.get("body") or "").strip()
-        footer_h = scale.footer * 1.4
+        footer_h = scale.footer * 1.4 if footer_in_column else 0.0
         body_h = max(12.0, inner_h - (y_cursor - y) - footer_h)
+        if body_char_limit and body_plain and len(body_plain) > body_char_limit:
+            body_plain = body_plain[: body_char_limit - 1].rstrip() + "…"
         if body_char_limit and body_plain:
-            body_plain = body_plain[:body_char_limit]
-            if len(body_plain) >= body_char_limit:
-                body_plain = body_plain.rstrip() + "…"
-        if drop and body_after:
+            if slot == "quarter":
+                drop = ""
+                body_after = body_plain
+            else:
+                drop, body_after = split_drop_cap(body_plain)
+        if drop and body_after and slot != "quarter":
             cap_w = scale.drop_cap * 0.65
             lines.append(
                 _text(
@@ -224,6 +230,7 @@ def layout_wiki_slot(
         fields=fields,
         slot=slot,
         include_body=include_body,
+        footer_in_column=footer_in_column,
         body_char_limit=body_char_limit,
     )
     if map_path:

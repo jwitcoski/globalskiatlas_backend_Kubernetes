@@ -9,7 +9,7 @@ from xml.dom import minidom
 
 from atlas.book_gen.log_util import log
 from atlas.book_gen.map_sizes import TEXT_MAP_GAP_PT, map_dimensions_pt
-from atlas.book_gen.sla_layout_wiki import layout_wiki_slot
+from atlas.book_gen.sla_layout_wiki import append_wiki_text_column, layout_wiki_slot
 from atlas.book_gen.sla_prototypes import (
     build_document_root,
     make_image_frame,
@@ -17,7 +17,16 @@ from atlas.book_gen.sla_prototypes import (
     make_shape_frame,
     make_text_frame,
 )
-from atlas.book_gen.wiki_style import C_TITLE, runs_title, type_scale_for_slot
+from atlas.book_gen.wiki_style import (
+    C_BODY,
+    C_TITLE,
+    TextRun,
+    runs_drop_cap_body,
+    runs_footer,
+    runs_title,
+    type_scale_for_slot,
+)
+from atlas.book_gen.render_resort_fields import split_drop_cap
 
 PT_PER_IN = 72.0
 # Scribus canvas: first page sits at ScratchLeft/ScratchTop (see saved chapter.sla).
@@ -96,8 +105,9 @@ def _layout_quarter_slot(
     map_tier: str = "small",
     map_export_dpi: int = 300,
     map_on_right: bool = True,
+    body_char_limit: int | None = 400,
 ) -> list[tuple]:
-    """Small tier row: wiki header + stats panel, map at export plate size."""
+    """Small tier row: wiki header + stats panel + body blurb, map at export plate size."""
     map_x, map_y, map_w, map_h, text_x, text_w = _map_and_text_widths(
         inner_x,
         inner_y,
@@ -122,7 +132,8 @@ def _layout_quarter_slot(
         map_h=map_h,
         text_x=text_x,
         text_w=text_w,
-        include_body=False,
+        include_body=True,
+        body_char_limit=body_char_limit,
         footer_in_column=False,
     )
 
@@ -138,6 +149,7 @@ def _layout_half_slot(
     map_tier: str = "medium",
     map_export_dpi: int = 300,
     map_on_right: bool = True,
+    body_char_limit: int | None = 900,
 ) -> list[tuple]:
     map_x, map_y, map_w, map_h, text_x, text_w = _map_and_text_widths(
         inner_x,
@@ -164,7 +176,7 @@ def _layout_half_slot(
         text_x=text_x,
         text_w=text_w,
         include_body=True,
-        body_char_limit=900,
+        body_char_limit=body_char_limit,
         footer_in_column=True,
     )
 
@@ -223,68 +235,58 @@ def _entry_layout(
     map_tier: str = "small",
     map_export_dpi: int = 300,
     map_on_right: bool = True,
+    slot_body_char_limits: dict[str, int | None] | None = None,
 ) -> list[tuple]:
     pad = 2.0 if slot == "quarter" else 4.0
+    limits = slot_body_char_limits or {}
     inner_x = slot_x + pad
     inner_y = slot_y + pad
     inner_w = max(20.0, slot_w - 2 * pad)
     inner_h = max(20.0, slot_h - 2 * pad)
 
     if spread_page == 1:
-        from atlas.book_gen.wiki_style import runs_body_plain, runs_footer
-
         scale = type_scale_for_slot("spread")
         footer_h = scale.footer * 1.6
-        lines: list[tuple] = [
-            (
-                "text",
-                inner_x,
-                inner_y,
-                inner_w,
-                inner_h - footer_h,
-                runs_body_plain(fields.get("body") or "", scale),
-                scale.linesp,
-            ),
-            (
-                "text",
-                inner_x,
-                inner_y + inner_h - footer_h,
-                inner_w,
-                footer_h,
-                runs_footer(fields.get("footer_line") or "", scale),
-                scale.linesp,
-            ),
-        ]
+        lines: list[tuple] = []
+        append_wiki_text_column(
+            lines,
+            text_x=inner_x,
+            y=inner_y,
+            text_w=inner_w,
+            inner_h=inner_h - footer_h,
+            fields=fields,
+            slot="spread",
+            include_body=True,
+        )
+        footer = (fields.get("footer_line") or "").strip()
+        if footer:
+            lines.append(
+                (
+                    "text",
+                    inner_x,
+                    inner_y + inner_h - footer_h,
+                    inner_w,
+                    footer_h,
+                    runs_footer(footer, scale),
+                    scale.linesp,
+                )
+            )
         return lines
 
     if spread_page == 0:
-        map_x, map_y, map_w, map_h, text_x, text_w = _map_and_text_widths(
-            inner_x,
-            inner_y,
-            inner_w,
-            inner_h,
-            map_path,
-            map_tier,
-            map_export_dpi=map_export_dpi,
-            map_on_right=map_on_right,
-        )
-        return layout_wiki_slot(
-            inner_x,
-            inner_y,
-            inner_w,
-            inner_h,
-            fields,
-            map_path,
-            slot="spread",
-            map_x=map_x,
-            map_y=map_y,
-            map_w=map_w,
-            map_h=map_h,
-            text_x=text_x,
-            text_w=text_w,
-            include_body=False,
-            footer_in_column=False,
-        )
+        lines: list[tuple] = []
+        if map_path:
+            map_w, map_h = map_dimensions_pt(
+                map_path, map_tier, default_dpi=map_export_dpi
+            )
+            if map_w > 0 and map_h > 0:
+                fit = min(inner_w / map_w, inner_h / map_h)
+                map_w *= fit
+                map_h *= fit
+            map_x = inner_x + max(0.0, (inner_w - map_w) * 0.5)
+            map_y = inner_y + max(0.0, (inner_h - map_h) * 0.5)
+            lines.append(("image", map_x, map_y, map_w, map_h, map_path, 0))
+        return lines
 
     if slot == "quarter":
         return _layout_quarter_slot(
@@ -297,6 +299,7 @@ def _entry_layout(
             map_tier=map_tier,
             map_export_dpi=map_export_dpi,
             map_on_right=map_on_right,
+            body_char_limit=limits.get("quarter"),
         )
     if slot == "half":
         return _layout_half_slot(
@@ -309,6 +312,7 @@ def _entry_layout(
             map_tier=map_tier,
             map_export_dpi=map_export_dpi,
             map_on_right=map_on_right,
+            body_char_limit=limits.get("half"),
         )
     return _layout_full_slot(
         inner_x,
@@ -337,6 +341,7 @@ def _append_placement_objects(
     content_h: float,
     sla_output_path: Path | None,
     map_export_dpi: int = 300,
+    slot_body_char_limits: dict[str, int | None] | None = None,
 ) -> None:
     for pl in placements:
         pid = pl["pageId"]
@@ -367,6 +372,7 @@ def _append_placement_objects(
             map_tier=map_tier,
             map_export_dpi=map_export_dpi,
             map_on_right=map_on_right,
+            slot_body_char_limits=slot_body_char_limits,
         ):
             kind = item[0]
             if kind == "shape":
@@ -423,9 +429,11 @@ def compose_single_page_sla(
     margin_in: tuple[float, float, float, float] = (0.5, 0.5, 0.5, 0.5),
     chapter_title: str = "",
     overview_image_path: str | None = None,
+    overview_body: str | None = None,
     page_info: dict[str, Any] | None = None,
     sla_output_path: Path | None = None,
     map_export_dpi: int = 300,
+    slot_body_char_limits: dict[str, int | None] | None = None,
 ) -> ET.ElementTree:
     """One physical page (ANZPAGES=1); used for reliable PDF export."""
     global _item_id
@@ -461,15 +469,41 @@ def compose_single_page_sla(
     )
     object_els: list[ET.Element] = []
     if overview_image_path:
+        # Overview page: map on top half, text below (like "large" rule: one page).
+        gap = 12.0
+        img_h = max(120.0, content_h * 0.58)
+        img_h = min(img_h, content_h - 80.0)
+        text_y = py + content_y + img_h + gap
+        text_h = max(40.0, (py + content_y + content_h) - text_y)
         object_els.append(
             make_image_frame(
                 x=px + content_x,
                 y=py + content_y,
                 w=content_w,
-                h=content_h,
+                h=img_h,
                 image_path=overview_image_path,
                 own_page=0,
                 item_id=_next_id(),
+            )
+        )
+        scale = type_scale_for_slot("full")
+        overview_runs = runs_title(f"{chapter_title}\nRegional Overview", scale)
+        body = (overview_body or "").strip()
+        if body:
+            drop, rest = split_drop_cap(body)
+            overview_runs.append(TextRun("\n\n", scale.body, C_BODY))
+            overview_runs.extend(runs_drop_cap_body(drop, rest, scale))
+        object_els.append(
+            make_text_frame(
+                x=px + content_x,
+                y=text_y,
+                w=content_w,
+                h=text_h,
+                text=overview_runs,
+                fontsize=scale.title * 1.1,
+                own_page=0,
+                item_id=_next_id(),
+                fcolor=C_TITLE,
             )
         )
     elif is_title:
@@ -501,6 +535,7 @@ def compose_single_page_sla(
             content_h=content_h,
             sla_output_path=sla_output_path,
             map_export_dpi=map_export_dpi,
+            slot_body_char_limits=slot_body_char_limits,
         )
     for po in object_els:
         doc.append(po)
@@ -517,6 +552,7 @@ def compose_chapter_sla(
     chapter_title: str = "",
     sla_output_path: Path | None = None,
     map_export_dpi: int = 300,
+    slot_body_char_limits: dict[str, int | None] | None = None,
 ) -> ET.ElementTree:
     global _item_id
     _item_id = 1000
@@ -600,6 +636,7 @@ def compose_chapter_sla(
             content_h=content_h,
             sla_output_path=sla_output_path,
             map_export_dpi=map_export_dpi,
+            slot_body_char_limits=slot_body_char_limits,
         )
         own += 1
 

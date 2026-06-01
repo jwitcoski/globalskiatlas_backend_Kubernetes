@@ -22,6 +22,7 @@ from atlas.book_gen.pack_pages import (
     pack_manifest_entries,
     write_layout_plan,
 )
+from atlas.book_gen.constants import slot_body_char_limits
 from atlas.book_gen.sla_compose import compose_chapter_sla, write_sla
 from atlas.book_gen.log_util import log, log_phase
 from atlas.book_gen.wiki_client import load_atlas_config, load_book_config
@@ -29,6 +30,47 @@ from atlas.book_gen.wiki_client import load_atlas_config, load_book_config
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
+
+
+def resolve_overview_image_path(
+    state: str,
+    repo_root: Path,
+    book_config: dict[str, Any],
+) -> str | None:
+    """Return overview PNG path for page 1, exporting from QGZ if needed."""
+    state_slug = state.strip().lower().replace(" ", "-")
+    overview_dir = (
+        repo_root
+        / "atlas_work"
+        / "overview"
+        / "states"
+        / "united-states-of-america"
+        / state_slug
+    )
+    qgz = overview_dir / f"{state_slug}_overview_map.qgz"
+    png = overview_dir / f"{state_slug}_overview_export.png"
+    if not png.is_file() and qgz.is_file():
+        try:
+            from atlas.map_gen.export_layouts import (
+                ensure_headless_qgis_initialized,
+                export_overview_qgz,
+                shutdown_headless_qgis_if_initialized,
+            )
+
+            ensure_headless_qgis_initialized(None)
+            export_overview_qgz(
+                qgz,
+                dpi=int(book_config.get("map_export_dpi") or 300),
+                overwrite=True,
+            )
+        finally:
+            try:
+                shutdown_headless_qgis_if_initialized()
+            except Exception:
+                pass
+    if png.is_file():
+        return str(png.resolve()).replace("\\", "/")
+    return None
 
 
 def _find_scribus() -> str | None:
@@ -80,6 +122,7 @@ def run_chapter(
     merge_pdf_only: bool = False,
     pdf_page_limit: int | None = None,
     overview_image_path: str | None = None,
+    overview_body: str | None = None,
     output_dir: Path | None,
     wiki_api_base: str | None,
     no_maps: bool = False,
@@ -113,6 +156,10 @@ def run_chapter(
     log(f"  state={state!r}  region={region!r}  limit={limit}")
     log(f"  local_only={local_only}  no_maps={no_maps}  skip_pdf={skip_pdf}")
     log(f"  output: {out_dir}")
+    if overview_image_path:
+        log(f"  overview page: {overview_image_path}")
+    if overview_body:
+        log(f"  overview copy: {len(overview_body)} chars")
     log("=" * 60)
 
     manifest_path = out_dir / "manifest.json"
@@ -172,6 +219,7 @@ def run_chapter(
 
     by_id = {e["pageId"]: e for e in manifest}
     chapter_title = f"{state} - Ski Atlas"
+    body_limits = slot_body_char_limits(book_config)
     sla_path = out_dir / "chapter.sla"
     with log_phase("Compose Scribus SLA"):
         tree = compose_chapter_sla(
@@ -182,6 +230,7 @@ def run_chapter(
             chapter_title=chapter_title,
             sla_output_path=sla_path,
             map_export_dpi=map_dpi,
+            slot_body_char_limits=body_limits,
         )
         write_sla(tree, sla_path)
 
@@ -216,6 +265,8 @@ def run_chapter(
             map_export_dpi=map_dpi,
             page_limit=pdf_page_limit,
             overview_image_path=overview_image_path,
+            overview_body=overview_body,
+            slot_body_char_limits=body_limits,
         ):
             log(f"PDF: {pdf_path}")
         else:
@@ -270,7 +321,12 @@ def main() -> int:
     parser.add_argument(
         "--overview-first",
         action="store_true",
-        help="Add a full-page regional overview map as the first page (if available).",
+        help="Force regional overview as page 1 (default when overview_first in book.yaml).",
+    )
+    parser.add_argument(
+        "--no-overview-first",
+        action="store_true",
+        help="Skip the regional overview page even if the PNG exists.",
     )
     parser.add_argument(
         "--merge-pdf-only",
@@ -290,38 +346,31 @@ def main() -> int:
     if args.local_only or args.parquet_only:
         local_only = True
 
-    overview_image_path = None
-    if args.overview_first:
-        # Convention: overview exports live under atlas_work/overview/states/<country_slug>/<state_slug>/...
-        state_slug = args.state.strip().lower().replace(" ", "-")
-        overview_dir = (
-            repo_root
-            / "atlas_work"
-            / "overview"
-            / "states"
-            / "united-states-of-america"
-            / state_slug
-        )
-        qgz = overview_dir / f"{state_slug}_overview_map.qgz"
-        png = overview_dir / f"{state_slug}_overview_export.png"
-        if not png.is_file() and qgz.is_file():
-            # Try exporting it now (headless QGIS).
-            try:
-                from atlas.map_gen.export_layouts import (
-                    ensure_headless_qgis_initialized,
-                    export_overview_qgz,
-                    shutdown_headless_qgis_if_initialized,
-                )
+    use_overview = bool(book_config.get("overview_first", True))
+    if args.no_overview_first:
+        use_overview = False
+    elif args.overview_first:
+        use_overview = True
 
-                ensure_headless_qgis_initialized(None)
-                export_overview_qgz(qgz, dpi=int(book_config.get("map_export_dpi") or 300), overwrite=True)
-            finally:
-                try:
-                    shutdown_headless_qgis_if_initialized()
-                except Exception:
-                    pass
-        if png.is_file():
-            overview_image_path = str(png.resolve())
+    overview_image_path = None
+    overview_body: str | None = None
+    if use_overview:
+        from atlas.book_gen.wiki_content_store import WikiContentStore
+
+        wiki_store = WikiContentStore.from_config(repo_root, book_config)
+        _, overview_body = wiki_store.state_overview_text(args.state)
+        overview_image_path = resolve_overview_image_path(
+            args.state, repo_root, book_config
+        )
+        if overview_image_path:
+            log(f"Overview page 1: {overview_image_path}")
+        else:
+            state_slug = args.state.strip().lower().replace(" ", "-")
+            log(
+                f"No overview PNG for {args.state!r} "
+                f"(expected atlas_work/overview/states/united-states-of-america/"
+                f"{state_slug}/{state_slug}_overview_export.png)"
+            )
 
     return run_chapter(
         state=args.state,
@@ -335,6 +384,7 @@ def main() -> int:
         merge_pdf_only=args.merge_pdf_only,
         pdf_page_limit=args.pdf_page_limit,
         overview_image_path=overview_image_path,
+        overview_body=overview_body,
         output_dir=args.output_dir,
         wiki_api_base=args.wiki_api_base,
         no_maps=args.no_maps,

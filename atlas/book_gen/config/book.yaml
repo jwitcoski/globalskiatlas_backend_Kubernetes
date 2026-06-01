@@ -41,5 +41,18 @@ require_map: true
 # Pack order: all small, then medium, then large, then mega (sorted by title in each tier).
 quarters_per_sheet: 4
 
+# Page 1: regional overview map (top) + chapter title text (bottom), when PNG exists.
+overview_first: true
+
+# Max characters shown per layout slot (tune, then regenerate Bedrock copy to match).
+slot_body_char_limit:
+  quarter: 400   # small_hill — ¼ page row
+  half: 900      # ski_mountain — ½ page
+  # full/spread: use full RESORT_TEXT_LIMIT from resortSizeCategory
+
+# Bedrock-generated wiki copy (merged into resort pages and regional overview text)
+resort_wiki_content_file: output/resort_wiki_content_full.json
+wiki_regions_content_file: output/wiki_regions_full.json
+
 # Optional ScribusGenerator checkout (if set, run_scribus_book can delegate to it)
 scribus_generator_dir: null

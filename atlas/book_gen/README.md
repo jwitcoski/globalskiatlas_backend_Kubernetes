@@ -63,7 +63,7 @@ py -m atlas.book_gen.run_scribus_book --state Virginia --merge-pdf-only
 
 Within each state chapter, resorts are ordered **by size tier**, then **alphabetically by title** within that tier:
 
-1. **Small** (`small_hill`) — horizontal rows sized to the **small QGIS plate** (105×74.25 mm at export DPI); **map alternates right / left** for each resort (1st right, 2nd left, …); counter **resets at medium**. **100% scale** (no shrink in Scribus). Up to four rows per page when they fit; taller maps may yield three per sheet.
+1. **Small** (`small_hill`) — horizontal rows sized to the **small QGIS plate** (105×74.25 mm at export DPI); **map alternates right / left** for each resort (1st right, 2nd left, …); counter **resets at medium**. **100% scale** (no shrink in Scribus). Up to four rows per page when they fit; taller maps may yield three per sheet. **Body blurb** shown below stats (char limit in `slot_body_char_limit.quarter` in `book.yaml`, default 400).
 2. **Medium** (`ski_mountain`) — half page (two per sheet when packed).
 3. **Large** (`multiple_mountains`) — full page, text left / map right.
 4. **Mega** (`mega_resort`) — two-page spread.

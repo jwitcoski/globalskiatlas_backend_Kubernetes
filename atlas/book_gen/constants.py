@@ -45,6 +45,14 @@ CATEGORY_TO_MAP_TIER: dict[str, str] = {
 
 SLOT_NAMES = ("quarter", "half", "full", "spread")
 
+# Max characters rendered per book slot (tune in book.yaml before regenerating Bedrock copy).
+DEFAULT_SLOT_BODY_CHAR_LIMIT: dict[str, int | None] = {
+    "quarter": 400,
+    "half": 900,
+    "full": None,
+    "spread": None,
+}
+
 # Book chapter order: small → medium → large → mega, then A–Z by title within each tier.
 CATEGORY_BOOK_ORDER: dict[str, int] = {
     "small_hill": 0,
@@ -53,3 +61,16 @@ CATEGORY_BOOK_ORDER: dict[str, int] = {
     "mega_resort": 3,
     "unknown": 99,
 }
+
+
+def slot_body_char_limits(book_config: dict | None = None) -> dict[str, int | None]:
+    """Resolve per-slot body char limits from book.yaml over defaults."""
+    limits = dict(DEFAULT_SLOT_BODY_CHAR_LIMIT)
+    raw = (book_config or {}).get("slot_body_char_limit")
+    if isinstance(raw, dict):
+        for key, val in raw.items():
+            if val is None:
+                limits[str(key)] = None
+            else:
+                limits[str(key)] = int(val)
+    return limits
