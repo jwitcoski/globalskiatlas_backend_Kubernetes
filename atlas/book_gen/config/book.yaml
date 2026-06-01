@@ -1,0 +1,45 @@
+# Scribus atlas book — KDP max paperback trim (configurable).
+# Paths relative to repo root unless absolute.
+
+trim_in: [8.5, 11.0]
+bleed_in: [0.125, 0.125, 0.125, 0.125]  # top, right, bottom, left
+margin_in: [0.5, 0.5, 0.5, 0.5]        # top, right, bottom, left
+
+dpi: 300
+
+# Must match QGIS layout export (--dpi on run_export_layouts). Used to convert PNG pixels → Scribus pt.
+map_export_dpi: 300
+
+# Local-only by default: output/combined/*.parquet + atlas_work/**/_export.png
+# No wiki API or S3 unless you pass --no-local-only to run_scribus_book
+local_only: true
+
+# Wiki content (only when local_only: false)
+wiki_api_base: "http://localhost:3000"
+
+# S3 maps (only when local_only: false and no local PNG)
+maps_s3_bucket: globalskiatlas-resort-maps
+maps_s3_region: us-east-1
+maps_s3_base: "https://globalskiatlas-resort-maps.s3.us-east-1.amazonaws.com"
+
+# Remote parquet (only when local file missing and local_only: false)
+parquet_url: "https://globalskiatlas-backend-k8s-output.s3.us-east-1.amazonaws.com/combined/ski_areas_analyzed.parquet"
+input_dir: output/combined
+# Prefer analyzed parquet (trail/lift counts for resortSizeCategory)
+parquet_file: output/combined/ski_areas_analyzed.parquet
+work_dir: atlas_work
+
+# Resort pages in book
+include_only_finished: false
+require_map: true
+
+# Book layout (see UI plan):
+#   small_hill     — 1/4 page, map alternates right/left per resort (resets each tier), A–Z within tier
+#   ski_mountain   — 1/2 page (2 per sheet)
+#   multiple_mountains — full page
+#   mega_resort    — 2-page spread
+# Pack order: all small, then medium, then large, then mega (sorted by title in each tier).
+quarters_per_sheet: 4
+
+# Optional ScribusGenerator checkout (if set, run_scribus_book can delegate to it)
+scribus_generator_dir: null

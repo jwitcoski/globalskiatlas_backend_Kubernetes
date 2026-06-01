@@ -15,7 +15,15 @@ template:
   fallback: atlas/map_gen/templates/ski_atlas_small_medium_template.qgz
   small_medium: atlas/map_gen/templates/ski_atlas_small_medium_template.qgz
   resort: atlas/map_gen/templates/atlas_resort_template.qgz
-  # overview: atlas/map_gen/templates/atlas_overview_template.qgz  # optional
+  overview: atlas/map_gen/templates/atlas_overview_template.qgz
+
+# Country / state overview maps (see docs/REGIONAL_OVERVIEW_MAPS.md)
+overview:
+  work_dir: atlas_work/overview
+  layout_name: Regional Overview
+  page_size:
+    width_mm: 210
+    height_mm: 148.5
 
 # Piste counts → layout tier (override mega per resort with mega_resorts).
 trail_tiers:

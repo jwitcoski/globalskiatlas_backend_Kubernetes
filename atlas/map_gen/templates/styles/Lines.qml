@@ -351,7 +351,7 @@
                 <Option type="QString" name="angle" value="0"/>
                 <Option type="QString" name="fixedAspectRatio" value="0"/>
                 <Option type="QString" name="horizontal_anchor_point" value="1"/>
-                <Option type="QString" name="imageFile" value="C:/Users/jwitc/Documents/book/Ski Atlas/icons/ski-lift.png"/>
+                <Option type="QString" name="imageFile" value="./icons/ski-lift.png"/>
                 <Option type="QString" name="offset" value="0,40"/>
                 <Option type="QString" name="offset_map_unit_scale" value="3x:0,0,0,0,0,0"/>
                 <Option type="QString" name="offset_unit" value="MapUnit"/>
@@ -628,7 +628,7 @@
                 <Option type="QString" name="angle" value="0"/>
                 <Option type="QString" name="fixedAspectRatio" value="0"/>
                 <Option type="QString" name="horizontal_anchor_point" value="1"/>
-                <Option type="QString" name="imageFile" value="C:/Users/jwitc/Documents/book/Ski Atlas/icons/Magic_Carpet.png"/>
+                <Option type="QString" name="imageFile" value="./icons/Magic_Carpet.png"/>
                 <Option type="QString" name="offset" value="0,40"/>
                 <Option type="QString" name="offset_map_unit_scale" value="3x:0,0,0,0,0,0"/>
                 <Option type="QString" name="offset_unit" value="MapUnit"/>
@@ -1107,7 +1107,7 @@
                 <Option type="QString" name="angle" value="0"/>
                 <Option type="QString" name="fixedAspectRatio" value="0"/>
                 <Option type="QString" name="horizontal_anchor_point" value="1"/>
-                <Option type="QString" name="imageFile" value="C:/Users/jwitc/Documents/book/Ski Atlas/icons/tbar.png"/>
+                <Option type="QString" name="imageFile" value="./icons/tbar.png"/>
                 <Option type="QString" name="offset" value="0,40"/>
                 <Option type="QString" name="offset_map_unit_scale" value="3x:0,0,0,0,0,0"/>
                 <Option type="QString" name="offset_unit" value="MapUnit"/>
@@ -1384,7 +1384,7 @@
                 <Option type="QString" name="angle" value="0"/>
                 <Option type="QString" name="fixedAspectRatio" value="0"/>
                 <Option type="QString" name="horizontal_anchor_point" value="1"/>
-                <Option type="QString" name="imageFile" value="C:/Users/jwitc/Documents/book/Ski Atlas/icons/cablecar.png"/>
+                <Option type="QString" name="imageFile" value="./icons/cablecar.png"/>
                 <Option type="QString" name="offset" value="0,40"/>
                 <Option type="QString" name="offset_map_unit_scale" value="3x:0,0,0,0,0,0"/>
                 <Option type="QString" name="offset_unit" value="MapUnit"/>

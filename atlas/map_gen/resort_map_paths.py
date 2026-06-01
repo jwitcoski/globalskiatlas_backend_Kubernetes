@@ -77,6 +77,74 @@ def landscape_dir(
     return resort_work_prefix(work_dir, region) / f"{slug}-layout-{portrait_tier}-landscape"
 
 
+def filter_gdf_by_region(
+    gdf: gpd.GeoDataFrame,
+    region_filter: Optional[str],
+    *,
+    input_dir: Optional[Path] = None,
+) -> gpd.GeoDataFrame:
+    """Match ``--region`` the same way in generate, export, and upload.
+
+    Exact match when rows use that path (e.g. ``north-america/us/colorado``).
+    Otherwise prefix match (e.g. ``europe`` → all ``europe/...``).
+    Scoped input dirs (``output/north-america/us/colorado``) assign region to every row.
+    """
+    if not region_filter:
+        return gdf
+
+    region_norm = normalize_region(region_filter) or str(region_filter).strip()
+    if "region" not in gdf.columns:
+        out = gdf.copy()
+        out["region"] = region_filter
+        return out
+
+    if input_dir is not None:
+        input_norm = str(input_dir).replace("\\", "/").rstrip("/")
+        if input_norm.endswith(region_norm):
+            out = gdf.copy()
+            out["region"] = region_filter
+            return out
+
+    region_vals = gdf["region"].astype(str).str.strip()
+    exact = region_vals == region_norm
+    if exact.any():
+        return gdf.loc[exact].copy()
+
+    prefix = region_norm + "/"
+    mask = region_vals.str.startswith(prefix)
+    return gdf.loc[mask].copy()
+
+
+def region_for_row(row: Any, region_filter: Optional[str] = None) -> Optional[str]:
+    """Row region, else CLI ``--region`` (regional parquets often omit the column)."""
+    row_region = None
+    if hasattr(row, "get"):
+        row_region = normalize_region(str(row.get("region") or ""))
+    return row_region or normalize_region(region_filter)
+
+
+def discover_export_paths(
+    work_dir: Path,
+    slug: str,
+    region: Optional[str] = None,
+) -> dict[str, Optional[Path]]:
+    """Find portrait/landscape PNGs already under atlas_work (tier-agnostic)."""
+    prefix = resort_work_prefix(work_dir, region)
+    portrait: Optional[Path] = None
+    landscape: Optional[Path] = None
+    pdir = prefix / slug
+    if pdir.is_dir():
+        candidate = export_png_path(pdir)
+        if candidate.is_file():
+            portrait = candidate
+    for ldir in sorted(prefix.glob(f"{slug}-layout-*-landscape")):
+        candidate = export_png_path(ldir)
+        if candidate.is_file():
+            landscape = candidate
+            break
+    return {"portrait": portrait, "landscape": landscape}
+
+
 def resolve_export_paths(
     work_dir: Path,
     slug: str,
@@ -96,7 +164,15 @@ def resolve_export_paths(
             landscape = export_png_path(
                 landscape_dir(work_dir, slug, portrait_tier, region)
             )
-    return {"portrait": portrait, "landscape": landscape}
+    paths: dict[str, Optional[Path]] = {"portrait": portrait, "landscape": landscape}
+    discovered = discover_export_paths(work_dir, slug, region)
+    for key in ("portrait", "landscape"):
+        p = paths.get(key)
+        if p is None or not p.is_file():
+            alt = discovered.get(key)
+            if alt is not None and alt.is_file():
+                paths[key] = alt
+    return paths
 
 
 def qgz_path_for_dir(resort_dir: Path, *, project_slug: Optional[str] = None) -> Path:
@@ -123,8 +199,8 @@ def iter_expected_qgz_paths(
         return
 
     gdf = gpd.read_parquet(ski_areas_path)
-    if region_filter and "region" in gdf.columns:
-        gdf = gdf[gdf["region"] == region_filter].copy()
+    if region_filter:
+        gdf = filter_gdf_by_region(gdf, region_filter, input_dir=input_dir)
     if resort_id:
         for id_col in ("winter_sports_id", "osm_way_id", "osm_id"):
             if id_col in gdf.columns:

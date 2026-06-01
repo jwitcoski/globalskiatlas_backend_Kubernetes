@@ -32,7 +32,11 @@ exit /b 1
 echo Using QGIS at: %QGIS_ROOT%
 cd /d "%~dp0..\.."
 set "QT_QPA_PLATFORM=offscreen"
+set "PYTHONUNBUFFERED=1"
 if exist "C:\Windows\Fonts" set "QT_QPA_FONTDIR=C:\Windows\Fonts"
+
+echo Launching pipeline (QGIS init can take 1-3 minutes before the first resort)...
+echo Region must use hyphens, e.g. north-america  not "north america"
 
 if exist "%QGIS_ROOT%\bin\python-qgis.bat" (
     call "%QGIS_ROOT%\bin\python-qgis.bat" atlas\map_gen\run_resort_maps_pipeline.py %*

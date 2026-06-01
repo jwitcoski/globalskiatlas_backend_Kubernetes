@@ -27,6 +27,7 @@ if os.name == "nt":
 
 
 LAYOUT_NAME = "Ski Atlas Export"
+OVERVIEW_LAYOUT_NAME = "Regional Overview"
 
 _INSET_LAYER_NAMES = frozenset(
     {
@@ -148,9 +149,11 @@ def ensure_headless_qgis_initialized(qgis_root: Optional[Path] = None) -> None:
         _headless_qgis_app_owned = False
         return
 
+    print("  Initializing QGIS (first start can take 1-3 minutes)...", flush=True)
     _headless_qgis_app = QgsApplication([], False)
     _headless_qgis_app.initQgis()
     _headless_qgis_app_owned = True
+    print("  QGIS ready.", flush=True)
 
 
 def shutdown_headless_qgis_if_initialized() -> None:
@@ -582,6 +585,71 @@ def export_qgz(qgz_path: Path, dpi: int, overwrite: bool) -> bool:
     return False
 
 
+def export_overview_qgz(qgz_path: Path, dpi: int, overwrite: bool) -> bool:
+    """Export the 'Regional Overview' layout from a *_overview_map.qgz project as a PNG."""
+    from qgis.core import QgsProject, QgsLayoutExporter
+
+    out_png = out_png_for_qgz(qgz_path)
+    if out_png.exists() and not overwrite:
+        print(f"  skip (exists): {out_png.name}")
+        return True
+
+    project = QgsProject.instance()
+    project.clear()
+    if not project.read(str(qgz_path)):
+        print(f"  ERROR: could not open {qgz_path.name}")
+        return False
+
+    manager = project.layoutManager()
+    layout = manager.layoutByName(OVERVIEW_LAYOUT_NAME)
+    if layout is None:
+        layouts = [l.name() for l in manager.layouts()]
+        print(
+            f"  ERROR: layout '{OVERVIEW_LAYOUT_NAME}' not found. Available: {layouts}"
+        )
+        project.clear()
+        return False
+
+    exporter = QgsLayoutExporter(layout)
+    settings = QgsLayoutExporter.ImageExportSettings()
+    settings.dpi = dpi
+
+    tmp_fd, tmp_name = tempfile.mkstemp(suffix=".png", prefix="atlas_overview_export_")
+    os.close(tmp_fd)
+    tmp_png = Path(tmp_name)
+    try:
+        result = exporter.exportToImage(str(tmp_png), settings)
+    finally:
+        project.clear()
+
+    if result == QgsLayoutExporter.Success:
+        try:
+            out_png.parent.mkdir(parents=True, exist_ok=True)
+            if out_png.exists():
+                out_png.unlink()
+            shutil.move(str(tmp_png), str(out_png))
+            tmp_png = Path()  # moved; do not delete below
+        except OSError as e:
+            print(f"  ERROR moving export to {out_png.name}: {e}", file=sys.stderr)
+            return False
+        size = out_png.stat().st_size // 1024
+        print(f"  exported → {out_png.name}  ({size} KB)")
+        return True
+
+    if tmp_png.exists():
+        tmp_png.unlink(missing_ok=True)
+    codes = {
+        QgsLayoutExporter.PrintError: "PrintError",
+        QgsLayoutExporter.SvgLayerClipped: "SvgLayerClipped",
+        QgsLayoutExporter.MemoryError: "MemoryError",
+        QgsLayoutExporter.FileNotWritable: "FileNotWritable",
+        QgsLayoutExporter.IteratorError: "IteratorError",
+        QgsLayoutExporter.Canceled: "Canceled",
+    }
+    print(f"  ERROR exporting {qgz_path.name}: {codes.get(result, result)}")
+    return False
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Export atlas_work QGZ files to PNG via QGIS layout engine"
@@ -608,6 +676,11 @@ def main():
         default=None,
         metavar="DIR",
         help="Only export atlas_work/<slug>/*_map.qgz (repeat for multiple resorts)",
+    )
+    parser.add_argument(
+        "--overviews",
+        action="store_true",
+        help="Export *_overview_map.qgz using the 'Regional Overview' layout",
     )
     args = parser.parse_args()
 
@@ -636,16 +709,21 @@ def main():
         print(f"Work directory not found: {work_dir}")
         sys.exit(1)
 
-    qgz_files = sorted(work_dir.rglob("*_map.qgz"))
+    if args.overviews:
+        qgz_files = sorted(work_dir.rglob("*_overview_map.qgz"))
+    else:
+        qgz_files = sorted(work_dir.rglob("*_map.qgz"))
     if args.slug:
         want = set(args.slug)
         qgz_files = [p for p in qgz_files if p.parent.name in want]
         if not qgz_files:
-            print(f"No *_map.qgz matched --slug {sorted(want)!r} under {work_dir}")
+            pat = "*_overview_map.qgz" if args.overviews else "*_map.qgz"
+            print(f"No {pat} matched --slug {sorted(want)!r} under {work_dir}")
             sys.exit(0)
 
     if not qgz_files:
-        print(f"No *_map.qgz files found under {work_dir}")
+        pat = "*_overview_map.qgz" if args.overviews else "*_map.qgz"
+        print(f"No {pat} files found under {work_dir}")
         sys.exit(0)
 
     print(f"Found {len(qgz_files)} QGZ file(s) to export under {work_dir}")
@@ -664,7 +742,11 @@ def main():
         for qgz in qgz_files:
             slug = qgz.parent.name
             print(f"{slug}")
-            if export_qgz(qgz, dpi=args.dpi, overwrite=args.overwrite):
+            if args.overviews:
+                ok_this = export_overview_qgz(qgz, dpi=args.dpi, overwrite=args.overwrite)
+            else:
+                ok_this = export_qgz(qgz, dpi=args.dpi, overwrite=args.overwrite)
+            if ok_this:
                 ok += 1
             else:
                 fail += 1

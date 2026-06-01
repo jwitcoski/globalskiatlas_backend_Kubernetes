@@ -27,6 +27,7 @@ from atlas.map_gen.resort_map_paths import (
     atlas_slug_for_resort,
     layout_tier_for_resort,
     normalize_region,
+    region_for_row,
     resolve_export_paths,
 )
 from atlas.map_gen.wiki_page_id import wiki_page_id_from_row, wiki_row_from_parquet
@@ -51,7 +52,7 @@ def upload_file(
     if not local_path.is_file():
         return False
     if dry_run:
-        print(f"  would upload {local_path.name} → s3://{bucket}/{key}")
+        print(f"  would upload {local_path.name} -> s3://{bucket}/{key}")
         return True
     s3.upload_file(
         str(local_path),
@@ -59,7 +60,7 @@ def upload_file(
         key,
         ExtraArgs={"ContentType": "image/png", "CacheControl": "public, max-age=86400"},
     )
-    print(f"  uploaded s3://{bucket}/{key}")
+    print(f"  uploaded s3://{bucket}/{key}", flush=True)
     return True
 
 
@@ -84,8 +85,10 @@ def run_upload(
         return 0, 0, 0
 
     gdf = gpd.read_parquet(ski_areas_path)
-    if region_filter and "region" in gdf.columns:
-        gdf = gdf[gdf["region"] == region_filter].copy()
+    if region_filter:
+        from atlas.map_gen.resort_map_paths import filter_gdf_by_region
+
+        gdf = filter_gdf_by_region(gdf, region_filter, input_dir=input_dir)
     if resort_id:
         for id_col in ("winter_sports_id", "osm_way_id", "osm_id"):
             if id_col in gdf.columns:
@@ -136,7 +139,7 @@ def run_upload(
             n_trails = len(pistes_all[pistes_all[name_col] == resort_name])
 
         tier = layout_tier_for_resort(resort_name, n_trails, tiers_cfg)
-        region = normalize_region(str(row.get("region") or ""))
+        region = region_for_row(row, region_filter)
         paths = resolve_export_paths(
             work_dir, slug, tier, config=config, region=region
         )

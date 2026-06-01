@@ -1,0 +1,66 @@
+<?xml version="1.0" ?>
+<SCRIBUSUTF8NEW Version="1.6.2">
+  <DOCUMENT ANZPAGES="1" PAGEWIDTH="612.0" PAGEHEIGHT="792.0" BORDERLEFT="36.0" BORDERRIGHT="36.0" BORDERTOP="36.0" BORDERBOTTOM="36.0" ORIENTATION="0" PAGESIZE="Custom" FIRSTNUM="1" BOOK="0" UNITS="0" DFONT="Arial Regular" DSIZE="11">
+    <COLOR NAME="AtlasTitle" SPACE="RGB" R="26" G="54" B="93"/>
+    <COLOR NAME="AtlasLocation" SPACE="RGB" R="91" G="143" B="180"/>
+    <COLOR NAME="AtlasStatsBg" SPACE="RGB" R="232" G="240" B="247"/>
+    <PAGE NUM="0">
+      <PAGEOBJECT XPOS="40.0" YPOS="40.0" WIDTH="255.35999999999999" HEIGHT="12" OwnPage="0" ItemID="1001" PTYPE="4" FRTYPE="0" ANNAME="TextFrame">
+        <StoryText>
+          <DefaultStyle FONT="Arial Regular"/>
+          <ITEXT CH="STATE, COUNTRY" FONTSIZE="6" FONT="Arial Regular"/>
+          <para/>
+        </StoryText>
+      </PAGEOBJECT>
+      <PAGEOBJECT XPOS="40.0" YPOS="52.0" WIDTH="255.35999999999999" HEIGHT="18" OwnPage="0" ItemID="1002" PTYPE="4" FRTYPE="0" ANNAME="TextFrame">
+        <StoryText>
+          <DefaultStyle FONT="Arial Regular"/>
+          <ITEXT CH="%title%" FONTSIZE="9" FONT="Arial Regular"/>
+          <para/>
+        </StoryText>
+      </PAGEOBJECT>
+      <PAGEOBJECT XPOS="40.0" YPOS="72.0" WIDTH="255.35999999999999" HEIGHT="10" OwnPage="0" ItemID="1003" PTYPE="4" FRTYPE="0" ANNAME="TextFrame">
+        <StoryText>
+          <DefaultStyle FONT="Arial Regular"/>
+          <ITEXT CH="%subtitle%" FONTSIZE="7" FONT="Arial Regular"/>
+          <para/>
+        </StoryText>
+      </PAGEOBJECT>
+      <PAGEOBJECT XPOS="40.0" YPOS="84.0" WIDTH="255.35999999999999" HEIGHT="60" OwnPage="0" ItemID="1004" PTYPE="4" FRTYPE="0" ANNAME="TextFrame">
+        <StoryText>
+          <DefaultStyle FONT="Arial Regular"/>
+          <ITEXT CH="%stats_block%" FONTSIZE="6" FONT="Arial Regular"/>
+          <para/>
+        </StoryText>
+      </PAGEOBJECT>
+      <PAGEOBJECT XPOS="40.0" YPOS="148.0" WIDTH="255.35999999999999" HEIGHT="10" OwnPage="0" ItemID="1005" PTYPE="4" FRTYPE="0" ANNAME="TextFrame">
+        <StoryText>
+          <DefaultStyle FONT="Arial Regular"/>
+          <ITEXT CH="%trail_breakdown%" FONTSIZE="6" FONT="Arial Regular"/>
+          <para/>
+        </StoryText>
+      </PAGEOBJECT>
+      <PAGEOBJECT XPOS="40.0" YPOS="160.0" WIDTH="14" HEIGHT="16" OwnPage="0" ItemID="1006" PTYPE="4" FRTYPE="0" ANNAME="TextFrame">
+        <StoryText>
+          <DefaultStyle FONT="Arial Regular"/>
+          <ITEXT CH="%drop_cap%" FONTSIZE="9" FONT="Arial Regular"/>
+          <para/>
+        </StoryText>
+      </PAGEOBJECT>
+      <PAGEOBJECT XPOS="52.0" YPOS="160.0" WIDTH="241.35999999999999" HEIGHT="578.0" OwnPage="0" ItemID="1007" PTYPE="4" FRTYPE="0" ANNAME="TextFrame">
+        <StoryText>
+          <DefaultStyle FONT="Arial Regular"/>
+          <ITEXT CH="%body%" FONTSIZE="7" FONT="Arial Regular"/>
+          <para/>
+        </StoryText>
+      </PAGEOBJECT>
+      <PAGEOBJECT XPOS="40.0" YPOS="740.0" WIDTH="532.0" HEIGHT="10" OwnPage="0" ItemID="1008" PTYPE="4" FRTYPE="0" ANNAME="TextFrame">
+        <StoryText>
+          <DefaultStyle FONT="Arial Regular"/>
+          <ITEXT CH="%footer_line%" FONTSIZE="7" FONT="Arial Regular"/>
+          <para/>
+        </StoryText>
+      </PAGEOBJECT>
+    </PAGE>
+  </DOCUMENT>
+</SCRIBUSUTF8NEW>

@@ -78,6 +78,16 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    if args.region:
+        region_raw = str(args.region).strip()
+        if " " in region_raw or region_raw.casefold() in {"north", "south", "america"}:
+            print(
+                f"Invalid --region {region_raw!r}. Use hyphens, e.g. north-america "
+                "(not 'north america').",
+                file=sys.stderr,
+            )
+            return 1
+
     if not args.all_resorts and not args.resort and not args.region:
         parser.print_help()
         return 1
@@ -96,6 +106,7 @@ def main() -> int:
     do_upload = not args.generate_only
 
     if do_generate:
+        print("Starting resort map pipeline...", flush=True)
         try:
             ensure_headless_qgis_initialized(args.qgis_root)
         except RuntimeError as e:

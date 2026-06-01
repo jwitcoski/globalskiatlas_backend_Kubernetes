@@ -84,6 +84,8 @@ In the model, Outline.qml was applied to the 1000 ft buffer polygon (map extent/
 
 For each layer: right-click → **Properties** → **Symbology** → **Style** (dropdown) → **Load Style…** → select the corresponding `.qml` from `atlas/map_gen/templates/styles/`.
 
+Lift line markers use raster/SVG icons from `atlas/map_gen/icons/` (copied next to each resort QGZ as `./icons/` during `data_to_qgis`).
+
 ### 4. Add layouts
 
 1. **Project → New Print Layout** for each page size (small, medium, large, mega).
@@ -100,7 +102,7 @@ For each layer: right-click → **Properties** → **Symbology** → **Style** (
 
 ## Optional
 
-- **atlas_overview_template.qgz** — For country/state overview maps (admin bounds + ski area points).
+- **atlas_overview_template.qgz** — For country/state overview maps (admin bounds + DEM + ski points). See [docs/REGIONAL_OVERVIEW_MAPS.md](../../../docs/REGIONAL_OVERVIEW_MAPS.md) and `python -m atlas.map_gen.regional_overview`.
 
 ### `ski_atlas_small_medium_template.qgz` (Ski Atlas Export — small / medium book maps)
 

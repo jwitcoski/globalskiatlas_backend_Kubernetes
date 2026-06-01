@@ -117,6 +117,19 @@ _PARKING_SUBSET_OR_OLD = (
     '\'%"parking": "surface"%\')'
 )
 _PARKING_SUBSET_ONLY_AMENITY = ' AND "tags" ILIKE \'%"amenity": "parking"%\''
+# Match natural_features_polygons / Trees / Forest RandomMarkerFill triangles.
+_TREE_MARKER_COLOR = (
+    "190,222,185,100,rgb:0.745098,0.8705882,0.7254902,0.3921569"
+)
+_TREE_MARKER_OUTLINE = (
+    "61,128,53,179,rgb:0.2392157,0.5019608,0.2078431,0.7000076"
+)
+_TREE_MARKER_SIZE_MM = "1.3"
+_TREE_MARKER_OUTLINE_WIDTH_MM = "0.1"
+# Legacy opaque tree-point marker (osm_near_winter_sports "Tree points" rule).
+_TREE_POINT_COLOR_LEGACY = re.compile(
+    r"111,176,104,255(?:,rgb:[^\"]+|,hsv:[^\"]+)?"
+)
 
 
 def _repo_root() -> Path:
@@ -196,30 +209,57 @@ def _ski_north_angle_for_row(
     row: Any,
     resort_name: str,
 ) -> Optional[float]:
-    """Per-resort ski_north_angle; prefers regional analyzed parquet, then combined."""
+    """Per-resort ski_north_angle from elevation/analyzed parquets (elevation first)."""
     import pandas as pd
 
     wid = _winter_sports_id_from_row(row)
-    region = row.get("region") if hasattr(row, "get") else None
+    region = str(row.get("region") or "").strip() if hasattr(row, "get") else ""
     paths: list[Path] = []
-    if region is not None and str(region).strip():
-        reg_path = _repo_root() / "output" / str(region).strip() / "ski_areas_analyzed.parquet"
-        if reg_path.exists():
-            paths.append(reg_path)
-    for name in ("ski_areas_analyzed.parquet", "ski_areas_elevation.parquet"):
-        p = input_dir / name
-        if p.exists():
+    seen: set[str] = set()
+
+    def _add(p: Path) -> None:
+        key = str(p.resolve())
+        if p.is_file() and key not in seen:
+            seen.add(key)
             paths.append(p)
+
+    if region:
+        reg_base = _repo_root() / "output" / region
+        _add(reg_base / "ski_areas_elevation.parquet")
+        _add(reg_base / "ski_areas_analyzed.parquet")
+    for name in ("ski_areas_elevation.parquet", "ski_areas_analyzed.parquet"):
+        _add(input_dir / name)
+    _add(_repo_root() / "output" / "combined" / "ski_areas_elevation.parquet")
+
+    name_candidates: list[str] = []
+    if resort_name and str(resort_name).strip():
+        name_candidates.append(str(resort_name).strip())
+    if hasattr(row, "get"):
+        for col in ("Ski Area", "name", "english_name"):
+            val = row.get(col)
+            if val is not None and str(val).strip():
+                nm = str(val).strip()
+                if nm not in name_candidates:
+                    name_candidates.append(nm)
 
     for path in paths:
         df = pd.read_parquet(path)
         if "ski_north_angle" not in df.columns:
             continue
-        sub = df
+        sub = pd.DataFrame()
         if wid and "winter_sports_id" in df.columns:
             sub = df[df["winter_sports_id"].astype(str) == wid]
-        elif resort_name and "name" in df.columns:
-            sub = df[df["name"].astype(str).str.strip() == resort_name.strip()]
+        if sub.empty and name_candidates:
+            for col in ("name", "Ski Area", "english_name"):
+                if col not in df.columns:
+                    continue
+                for nm in name_candidates:
+                    hit = df[df[col].astype(str).str.strip() == nm]
+                    if not hit.empty:
+                        sub = hit
+                        break
+                if not sub.empty:
+                    break
         if sub.empty:
             continue
         val = sub.iloc[0]["ski_north_angle"]
@@ -386,9 +426,32 @@ def _filter_gdf_to_resort(
     return gpd.GeoDataFrame()
 
 
+_MAP_GEN_ICONS_DIR = Path(__file__).resolve().parent / "icons"
+_ICON_SUFFIXES = {".svg", ".png", ".jpg", ".jpeg"}
+
+
+def _is_icon_asset_path(path: str) -> bool:
+    norm = path.replace("\\", "/")
+    low = norm.lower()
+    if low.startswith("./icons/"):
+        return True
+    return "/icons/" in low or "ski atlas/icons" in low
+
+
+def _resort_relative_icon_path(path: str) -> str:
+    """Map any historical absolute/relative icon path to ./icons/<basename>."""
+    norm = path.replace("\\", "/")
+    if norm.lower().startswith("./icons/"):
+        return norm
+    return "./icons/" + norm.split("/")[-1]
+
+
 def _copy_template_icons(resort_dir: Path, template_path: Path, work_dir: Path) -> None:
     """Copy lift/badge icons next to the QGZ so relative ./icons/ paths resolve."""
+    dst = resort_dir / "icons"
+    dst.mkdir(parents=True, exist_ok=True)
     candidates = [
+        _MAP_GEN_ICONS_DIR,
         template_path.parent / "icons",
         work_dir / "wintergreen-ski-resort" / "icons",
         work_dir / "wintergreen" / "icons",
@@ -397,21 +460,31 @@ def _copy_template_icons(resort_dir: Path, template_path: Path, work_dir: Path) 
     ]
     for pattern in ("**/wintergreen-ski-resort/icons", "**/wintergreen/icons"):
         candidates.extend(p for p in work_dir.glob(pattern) if p.is_dir())
-    src_dir = next((c for c in candidates if c.is_dir() and any(c.iterdir())), None)
-    if src_dir is None:
-        return
-    dst = resort_dir / "icons"
-    dst.mkdir(parents=True, exist_ok=True)
-    for f in src_dir.iterdir():
-        if f.is_file() and f.suffix.lower() in {".svg", ".png", ".jpg", ".jpeg"}:
-            shutil.copy2(f, dst / f.name)
+    for src_dir in candidates:
+        if not src_dir.is_dir():
+            continue
+        for f in src_dir.iterdir():
+            if f.is_file() and f.suffix.lower() in _ICON_SUFFIXES:
+                shutil.copy2(f, dst / f.name)
 
 
 def _rewrite_icon_paths(content: str) -> str:
-    """Point symbology image paths at this resort's ./icons/ folder."""
+    """Point symbology icon paths at this resort's ./icons/ folder."""
+
+    def _repl(m: re.Match[str]) -> str:
+        path = m.group(2)
+        if not _is_icon_asset_path(path):
+            return m.group(0)
+        return m.group(1) + _resort_relative_icon_path(path) + m.group(3)
+
+    content = re.sub(
+        r'(<Option type="QString" value=")([^"]+)(" name="(?:name|imageFile)")',
+        _repl,
+        content,
+    )
     return re.sub(
-        r'(?:[A-Za-z]:|\.{1,2})[^"]*[/\\]atlas_work[/\\][^"\\]+[/\\]icons[/\\]',
-        "./icons/",
+        r'(<Option type="QString" name="(?:name|imageFile)" value=")([^"]+)(")',
+        _repl,
         content,
     )
 
@@ -776,34 +849,22 @@ def _fmt_proj_angle(v: float) -> str:
     return "0" if s in {"", "-0"} else s
 
 
+# WGS84 semi-major axis (m). Ortho inset CRS is centered on the resort; symmetric
+# extent keeps the full hemisphere disc (avoids clipping Africa south of Europe).
+_WGS84_SEMI_MAJOR_M = 6_378_137.0
+_GLOBE_ORTHO_HALF_SPAN_M = _WGS84_SEMI_MAJOR_M * 0.94
+
+
 def _ortho_extent_for_globe_window(lon0: float, lat0: float) -> tuple[float, float, float, float]:
-    """Transform a WGS84 window around the resort into ortho-map units (visible hemisphere)."""
-    import math
+    """Symmetric ortho-map extent around projection origin (resort at globe center).
 
-    pad_lon, pad_lat = 55.0, 42.0
-    x1, y1 = float(lon0) - pad_lon, float(lat0) - pad_lat
-    x2, y2 = float(lon0) + pad_lon, float(lat0) + pad_lat
-    proj4 = (
-        f"+proj=ortho +lat_0={float(lat0)} +lon_0={float(lon0)} "
-        "+x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs"
-    )
-    try:
-        from pyproj import Transformer
-
-        trans = Transformer.from_crs("EPSG:4326", proj4, always_xy=True)
-        xs: list[float] = []
-        ys: list[float] = []
-        for x, y in ((x1, y1), (x2, y1), (x2, y2), (x1, y2)):
-            xo, yo = trans.transform(x, y)
-            if math.isfinite(xo) and math.isfinite(yo):
-                xs.append(float(xo))
-                ys.append(float(yo))
-        if len(xs) >= 2:
-            return min(xs), min(ys), max(xs), max(ys)
-    except Exception:
-        pass
-    m = 4_500_000.0
-    return -m, -m, m, m
+    A lon/lat bounding box transformed to ortho coordinates is shifted and
+    asymmetric (e.g. ymax ~ +4.3 Mm, ymin ~ -2.3 Mm for mid-latitude resorts),
+    which clips the southern hemisphere — Africa disappears on European insets.
+    """
+    _ = lon0, lat0  # CRS center is set in _recenter_overview_inset_ortho
+    r = _GLOBE_ORTHO_HALF_SPAN_M
+    return -r, -r, r, r
 
 
 def _recenter_overview_inset_ortho(
@@ -1014,6 +1075,47 @@ def _prepare_inset_layers_for_export(content: str, resort_dir: Path) -> str:
             count=1,
         )
     return _set_main_map_layerset_exclude_inset(content)
+
+
+def _patch_simplemarker_triangle_block(block: str) -> str:
+    """Retheme opaque legacy tree triangles to match forest RandomMarkerFill markers."""
+    if "triangle" not in block or not _TREE_POINT_COLOR_LEGACY.search(block):
+        return block
+    block = _TREE_POINT_COLOR_LEGACY.sub(_TREE_MARKER_COLOR, block)
+    block = re.sub(
+        r"61,128,53,255(?:,rgb:[^\"]+)?",
+        _TREE_MARKER_OUTLINE,
+        block,
+        count=1,
+    )
+    for attr in ("outline_width", "size"):
+        new_val = (
+            _TREE_MARKER_OUTLINE_WIDTH_MM
+            if attr == "outline_width"
+            else _TREE_MARKER_SIZE_MM
+        )
+        block = re.sub(
+            rf'(<Option type="QString" value=")[^"]+(" name="{attr}"/>)',
+            rf"\g<1>{new_val}\2",
+            block,
+            count=1,
+        )
+        block = re.sub(
+            rf'(<Option name="{attr}" type="QString" value=")[^"]+(")',
+            rf"\g<1>{new_val}\2",
+            block,
+            count=1,
+        )
+    return block
+
+
+def _fix_tree_point_marker_symbology(content: str) -> str:
+    """Individual tree markers (Tree points) must match Trees / Forest hatch triangles."""
+    return re.sub(
+        r'<layer[^>]*\bclass="SimpleMarker"[^>]*>[\s\S]*?</layer>',
+        lambda m: _patch_simplemarker_triangle_block(m.group(0)),
+        content,
+    )
 
 
 def _fix_globe_countries_rule_order(content: str) -> str:
@@ -1329,9 +1431,9 @@ def patch_qgs(
     # Legacy contour styles in some templates reference ELEV; parquet uses elevation_m.
     content = content.replace("&quot;ELEV&quot;", "&quot;elevation_m&quot;")
 
-    # Update map canvas rotation (do not touch label/shape rotation attributes).
+    # Update map canvas rotation (QGIS uses <mapcanvas name="..." …>, not bare <mapcanvas>).
     content = re.sub(
-        r"(<mapcanvas>[\s\S]*?<rotation>)[^<]+(</rotation>)",
+        r"(<mapcanvas\b[^>]*>[\s\S]*?<rotation>)[^<]+(</rotation>)",
         rf"\g<1>{rotation}\g<2>",
         content,
         count=1,
@@ -1348,6 +1450,7 @@ def patch_qgs(
     # Point all combined-parquet datasources at local per-resort data files.
     content = _localize_datasources(content)
     content = _rewrite_icon_paths(content)
+    content = _fix_tree_point_marker_symbology(content)
     content = _ensure_map_layers_checked(content)
 
     # Parking layer uses single-symbol symbology; after localization it would share the same
@@ -1859,18 +1962,9 @@ def run_resorts(
         gdf["region"] = region_filter or ""
 
     if region_filter:
-        region_norm = str(region_filter).strip().replace("\\", "/")
-        input_norm = str(input_dir).replace("\\", "/").rstrip("/")
-        scoped_input = input_norm.endswith(region_norm)
-        region_vals = gdf["region"].astype(str).str.strip()
-        has_region_values = region_vals.ne("").any() and not region_vals.eq("nan").all()
-        if has_region_values and not scoped_input:
-            gdf = gdf[gdf["region"] == region_filter].copy()
-        elif not scoped_input:
-            gdf = gdf[region_vals == region_norm].copy()
-        else:
-            gdf = gdf.copy()
-            gdf["region"] = region_filter
+        from atlas.map_gen.resort_map_paths import filter_gdf_by_region
+
+        gdf = filter_gdf_by_region(gdf, region_filter, input_dir=input_dir)
 
     if resort_id:
         for id_col in ("winter_sports_id", "osm_way_id", "osm_id"):
@@ -1921,8 +2015,9 @@ def run_resorts(
     osm_all: Optional[gpd.GeoDataFrame] = None
     osm_path = input_dir / "osm_near_winter_sports.parquet"
     if osm_path.exists():
-        print("  Loading OSM data (large file — one-time load)...")
+        print("  Loading OSM data (large file — one-time load, often 2-5 min)...", flush=True)
         osm_all = gpd.read_parquet(osm_path)
+        print(f"  OSM loaded ({len(osm_all):,} features).", flush=True)
         if osm_all.crs is None:
             osm_all = osm_all.set_crs("EPSG:4326")
     elev_points_all: Optional[gpd.GeoDataFrame] = None

@@ -1,0 +1,17 @@
+<?xml version="1.0" ?>
+<SCRIBUSUTF8NEW Version="1.6.2">
+  <DOCUMENT ANZPAGES="1" PAGEWIDTH="612.0" PAGEHEIGHT="792.0" BORDERLEFT="36.0" BORDERRIGHT="36.0" BORDERTOP="36.0" BORDERBOTTOM="36.0" ORIENTATION="0" PAGESIZE="Custom" FIRSTNUM="1" BOOK="0" UNITS="0" DFONT="Arial Regular" DSIZE="11">
+    <COLOR NAME="AtlasTitle" SPACE="RGB" R="26" G="54" B="93"/>
+    <COLOR NAME="AtlasLocation" SPACE="RGB" R="91" G="143" B="180"/>
+    <COLOR NAME="AtlasStatsBg" SPACE="RGB" R="232" G="240" B="247"/>
+    <PAGE NUM="0">
+      <PAGEOBJECT XPOS="76.0" YPOS="324.0" WIDTH="460.0" HEIGHT="80" OwnPage="0" ItemID="1001" PTYPE="4" FRTYPE="0" ANNAME="TextFrame">
+        <StoryText>
+          <DefaultStyle FONT="Arial Regular"/>
+          <ITEXT CH="Chapter Title — Ski Atlas" FONTSIZE="28" FONT="Arial Regular"/>
+          <para/>
+        </StoryText>
+      </PAGEOBJECT>
+    </PAGE>
+  </DOCUMENT>
+</SCRIBUSUTF8NEW>
