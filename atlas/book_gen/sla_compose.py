@@ -27,6 +27,8 @@ from atlas.book_gen.wiki_style import (
     type_scale_for_slot,
 )
 from atlas.book_gen.render_resort_fields import split_drop_cap
+from atlas.book_gen.regional_facts import RegionalFacts
+from atlas.book_gen.sla_layout_facts import layout_region_facts_page
 
 PT_PER_IN = 72.0
 # Scribus canvas: first page sits at ScratchLeft/ScratchTop (see saved chapter.sla).
@@ -498,6 +500,7 @@ def compose_single_page_sla(
     chapter_title: str = "",
     overview_image_path: str | None = None,
     overview_body: str | None = None,
+    region_facts: RegionalFacts | None = None,
     page_info: dict[str, Any] | None = None,
     sla_output_path: Path | None = None,
     map_export_dpi: int = 300,
@@ -574,6 +577,57 @@ def compose_single_page_sla(
                 fcolor=C_TITLE,
             )
         )
+    elif region_facts is not None:
+        scale = type_scale_for_slot("full")
+        for item in layout_region_facts_page(
+            region_facts,
+            page_x=px,
+            page_y=py,
+            content_x=content_x,
+            content_y=content_y,
+            content_w=content_w,
+            content_h=content_h,
+        ):
+            kind = item[0]
+            if kind == "shape":
+                object_els.append(
+                    make_shape_frame(
+                        x=item[1],
+                        y=item[2],
+                        w=item[3],
+                        h=item[4],
+                        fill_color=item[5],
+                        own_page=0,
+                        item_id=_next_id(),
+                    )
+                )
+            elif kind == "image":
+                object_els.append(
+                    make_image_frame(
+                        x=item[1],
+                        y=item[2],
+                        w=item[3],
+                        h=item[4],
+                        image_path=item[5],
+                        own_page=0,
+                        item_id=_next_id(),
+                    )
+                )
+            elif kind == "text":
+                object_els.append(
+                    make_text_frame(
+                        x=item[1],
+                        y=item[2],
+                        w=item[3],
+                        h=item[4],
+                        text=item[5],
+                        fontsize=scale.body,
+                        own_page=0,
+                        item_id=_next_id(),
+                        fcolor=C_BODY,
+                        linesp=item[6],
+                    )
+                )
     elif is_title:
         scale = type_scale_for_slot("full")
         object_els.append(

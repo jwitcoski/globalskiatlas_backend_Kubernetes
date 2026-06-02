@@ -73,6 +73,41 @@ def resolve_overview_image_path(
     return None
 
 
+def resolve_region_facts(
+    state: str,
+    region: str | None,
+    repo_root: Path,
+    book_config: dict[str, Any],
+    *,
+    book_resort_count: int | None = None,
+    charts_dir: Path | None = None,
+):
+    """Compute regional facts from analyzed parquet when region_facts_page is enabled."""
+    from atlas.book_gen.regional_facts import compute_regional_facts_from_parquet
+    from atlas.book_gen.wiki_client import parquet_path_for_config
+
+    parquet_path = parquet_path_for_config(book_config, repo_root)
+    if not parquet_path.is_file():
+        log(f"Regional facts page skipped: parquet not found ({parquet_path})")
+        return None
+    facts = compute_regional_facts_from_parquet(
+        parquet_path,
+        state=state,
+        region_filter=region,
+        book_resort_count=book_resort_count,
+        charts_dir=charts_dir,
+    )
+    log(
+        f"Regional facts page: {facts.resort_count} resorts, "
+        f"{facts.total_trails:,} trails, {facts.total_lifts:,} lifts"
+    )
+    if facts.chart_paths:
+        log(f"  charts: {', '.join(sorted(facts.chart_paths))}")
+    elif charts_dir is not None:
+        log("  charts: none (text-only facts page)")
+    return facts
+
+
 def _find_scribus() -> str | None:
     import shutil
 
@@ -123,6 +158,8 @@ def run_chapter(
     pdf_page_limit: int | None = None,
     overview_image_path: str | None = None,
     overview_body: str | None = None,
+    region_facts=None,
+    use_region_facts: bool = True,
     output_dir: Path | None,
     wiki_api_base: str | None,
     no_maps: bool = False,
@@ -197,6 +234,19 @@ def run_chapter(
         log("ERROR: No manifest entries; nothing to layout.", file=sys.stderr)
         return 1
 
+    if use_region_facts and region_facts is None:
+        charts_dir = None
+        if book_config.get("region_facts_charts", True):
+            charts_dir = out_dir / "_facts_charts"
+        region_facts = resolve_region_facts(
+            state,
+            region,
+            repo_root,
+            book_config,
+            book_resort_count=len(manifest),
+            charts_dir=charts_dir,
+        )
+
     trim = book_config.get("trim_in", [8.5, 11.0])
     margin = book_config.get("margin_in", [0.5, 0.5, 0.5, 0.5])
     map_dpi = int(book_config.get("map_export_dpi") or book_config.get("dpi") or 300)
@@ -216,6 +266,14 @@ def run_chapter(
         plan_path = out_dir / "layout_plan.json"
         write_layout_plan(plan_path, plan)
         log(f"Saved layout_plan.json -> {plan_path}")
+
+    if region_facts is not None:
+        facts_path = out_dir / "region_facts.json"
+        facts_path.write_text(
+            json.dumps(region_facts.to_dict(), indent=2),
+            encoding="utf-8",
+        )
+        log(f"Saved region_facts.json")
 
     by_id = {e["pageId"]: e for e in manifest}
     chapter_title = f"{state} - Ski Atlas"
@@ -266,6 +324,7 @@ def run_chapter(
             page_limit=pdf_page_limit,
             overview_image_path=overview_image_path,
             overview_body=overview_body,
+            region_facts=region_facts,
             slot_body_char_limits=body_limits,
         ):
             log(f"PDF: {pdf_path}")
@@ -329,6 +388,16 @@ def main() -> int:
         help="Skip the regional overview page even if the PNG exists.",
     )
     parser.add_argument(
+        "--no-region-facts",
+        action="store_true",
+        help="Skip the regional facts page (page_01) even if enabled in book.yaml.",
+    )
+    parser.add_argument(
+        "--region-facts",
+        action="store_true",
+        help="Force regional facts page after overview (default when region_facts_page in book.yaml).",
+    )
+    parser.add_argument(
         "--merge-pdf-only",
         action="store_true",
         help="Merge existing _pdf_pages/page_*.pdf into chapter.pdf (needs pypdf; no Scribus)",
@@ -372,6 +441,12 @@ def main() -> int:
                 f"{state_slug}/{state_slug}_overview_export.png)"
             )
 
+    use_region_facts = bool(book_config.get("region_facts_page", True))
+    if args.no_region_facts:
+        use_region_facts = False
+    elif args.region_facts:
+        use_region_facts = True
+
     return run_chapter(
         state=args.state,
         region=args.region,
@@ -385,6 +460,7 @@ def main() -> int:
         pdf_page_limit=args.pdf_page_limit,
         overview_image_path=overview_image_path,
         overview_body=overview_body,
+        use_region_facts=use_region_facts,
         output_dir=args.output_dir,
         wiki_api_base=args.wiki_api_base,
         no_maps=args.no_maps,

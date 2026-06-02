@@ -44,6 +44,10 @@ quarters_per_sheet: 4
 # Page 1: regional overview map (top) + chapter title text (bottom), when PNG exists.
 overview_first: true
 
+# Page 2 (page_01): regional facts — charts + resort/trail/lift records for the state/region.
+region_facts_page: true
+region_facts_charts: true
+
 # Max characters shown per layout slot (tune, then regenerate Bedrock copy to match).
 slot_body_char_limit:
   quarter: 400   # small_hill — ¼ page row
