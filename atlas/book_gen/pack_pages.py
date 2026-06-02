@@ -98,6 +98,7 @@ def pack_manifest_entries(
         nonlocal half_top_used
         if not composite_placements:
             return
+        _expand_quarter_placements_to_fill_page(composite_placements)
         pages.append(
             PhysicalPage(
                 page_index=page_index,
@@ -321,3 +322,36 @@ def write_layout_plan(path: Path, plan: dict[str, Any]) -> None:
 
 def load_layout_plan(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _expand_quarter_placements_to_fill_page(
+    placements: list[Placement],
+    *,
+    gap_frac: float = QUARTER_ROW_GAP_FRAC,
+) -> None:
+    """
+    When fewer than four small hills fit on a composite page, grow each row's
+    normalized height so the stack uses the full content area (no bottom gap).
+    """
+    if not placements:
+        return
+    if any(p.slot != "quarter" for p in placements):
+        return
+    n = len(placements)
+    total_gaps = gap_frac * (n - 1) if n > 1 else 0.0
+    avail = 1.0 - total_gaps
+    sum_h = sum(p.h for p in placements)
+    if sum_h <= 0 or sum_h >= avail - 1e-6:
+        return
+    scale = avail / sum_h
+    y = 0.0
+    for i, p in enumerate(placements):
+        p.y = y
+        p.h = p.h * scale
+        y += p.h
+        if i < n - 1:
+            y += gap_frac
+    log(
+        f"  pack_pages: expanded {n} small-hill row(s) to fill page "
+        f"(height scale {scale:.2f})"
+    )

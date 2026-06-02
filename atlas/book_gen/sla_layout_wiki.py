@@ -200,6 +200,180 @@ def append_wiki_text_column(
     return y_cursor
 
 
+def _estimate_body_chars(text_w: float, body_h: float, scale) -> int:
+    """Rough capacity for a Scribus text frame (chars before overflow)."""
+    if body_h <= 0 or text_w <= 0:
+        return 0
+    line_h = max(scale.body * 1.15, 8.0)
+    chars_per_line = max(8, int(text_w / max(scale.body * 0.52, 4.0)))
+    lines = max(1, int(body_h / line_h))
+    return lines * chars_per_line
+
+
+def _append_body_runs(
+    lines: list[tuple],
+    *,
+    text_x: float,
+    y: float,
+    text_w: float,
+    body_h: float,
+    body_plain: str,
+    scale,
+    slot: str,
+    use_drop_cap: bool,
+) -> None:
+    if not body_plain or body_h <= 0:
+        return
+    drop = ""
+    body_after = body_plain
+    if use_drop_cap and slot != "quarter":
+        drop, body_after = split_drop_cap(body_plain)
+    if drop and body_after:
+        cap_w = scale.drop_cap * 0.65
+        lines.append(
+            _text(
+                text_x,
+                y,
+                cap_w,
+                min(scale.drop_cap * 1.1, body_h),
+                [TextRun(drop, scale.drop_cap, "AtlasTitle")],
+                scale.linesp,
+            )
+        )
+        lines.append(
+            _text(
+                text_x + cap_w,
+                y,
+                text_w - cap_w,
+                body_h,
+                runs_body_plain(body_after, scale),
+                scale.linesp,
+            )
+        )
+    else:
+        lines.append(
+            _text(text_x, y, text_w, body_h, runs_body_plain(body_plain, scale), scale.linesp)
+        )
+
+
+def layout_wiki_around_native_map(
+    inner_x: float,
+    inner_y: float,
+    inner_w: float,
+    inner_h: float,
+    fields: dict[str, str],
+    map_path: str | None,
+    *,
+    slot: str,
+    regions: dict[str, float],
+    include_body: bool,
+    body_char_limit: int | None = None,
+    footer_in_column: bool = True,
+) -> list[tuple]:
+    """
+    Full/half layout matching hand-tuned page geometry:
+
+    - Map top-right at native scale (height capped)
+    - Header stack in left column, snapped to top
+    - Side body ends at split_y (does not enter bottom band)
+    - Bottom body full-width band above footer
+    """
+    lines: list[tuple] = []
+    scale = type_scale_for_slot(slot)
+    footer_h = regions.get("footer_h") or (scale.footer * 1.5 if footer_in_column else 0.0)
+
+    side_x = regions["side_x"]
+    side_w = regions["side_w"]
+    split_y = regions["split_y"]
+    top_zone_h = regions.get("top_zone_h") or max(40.0, split_y - inner_y)
+
+    y_after_header = append_wiki_text_column(
+        lines,
+        text_x=side_x,
+        y=inner_y,
+        text_w=side_w,
+        inner_h=top_zone_h,
+        fields=fields,
+        slot=slot,
+        include_body=False,
+        footer_in_column=False,
+    )
+
+    if map_path:
+        lines.append(
+            _image(
+                regions["map_x"],
+                regions["map_y"],
+                regions["map_w"],
+                regions["map_h"],
+                map_path,
+            )
+        )
+
+    if include_body:
+        body_plain = (fields.get("body") or "").strip()
+        if body_char_limit and len(body_plain) > body_char_limit:
+            body_plain = body_plain[: body_char_limit - 1].rstrip() + "…"
+
+        side_body_h = max(12.0, split_y - y_after_header)
+        bottom_h = max(12.0, regions.get("bottom_h") or 0.0)
+
+        side_cap = _estimate_body_chars(side_w, side_body_h, scale)
+        if bottom_h >= scale.body * 2.0 and len(body_plain) > side_cap:
+            side_text = body_plain[:side_cap].rstrip()
+            bottom_text = body_plain[side_cap:].lstrip()
+            _append_body_runs(
+                lines,
+                text_x=side_x,
+                y=y_after_header,
+                text_w=side_w,
+                body_h=side_body_h,
+                body_plain=side_text,
+                scale=scale,
+                slot=slot,
+                use_drop_cap=True,
+            )
+            if bottom_text:
+                _append_body_runs(
+                    lines,
+                    text_x=regions["bottom_x"],
+                    y=regions["bottom_y"],
+                    text_w=regions["bottom_w"],
+                    body_h=bottom_h,
+                    body_plain=bottom_text,
+                    scale=scale,
+                    slot=slot,
+                    use_drop_cap=False,
+                )
+        else:
+            _append_body_runs(
+                lines,
+                text_x=side_x,
+                y=y_after_header,
+                text_w=side_w,
+                body_h=side_body_h,
+                body_plain=body_plain,
+                scale=scale,
+                slot=slot,
+                use_drop_cap=True,
+            )
+
+    if footer_in_column:
+        footer = (fields.get("footer_line") or "").strip()
+        if footer:
+            lines.append(
+                _text(
+                    inner_x,
+                    inner_y + inner_h - footer_h,
+                    inner_w,
+                    footer_h,
+                    runs_footer(footer, scale),
+                    scale.linesp,
+                )
+            )
+    return lines
+
+
 def layout_wiki_slot(
     inner_x: float,
     inner_y: float,
@@ -218,19 +392,23 @@ def layout_wiki_slot(
     include_body: bool,
     body_char_limit: int | None = None,
     footer_in_column: bool = True,
+    text_y: float | None = None,
+    text_col_h: float | None = None,
 ) -> list[tuple]:
     lines: list[tuple] = []
     scale = type_scale_for_slot(slot)
+    col_y = inner_y if text_y is None else text_y
+    col_h = inner_h if text_col_h is None else text_col_h
     append_wiki_text_column(
         lines,
         text_x=text_x,
-        y=inner_y,
+        y=col_y,
         text_w=text_w,
-        inner_h=inner_h,
+        inner_h=col_h,
         fields=fields,
         slot=slot,
         include_body=include_body,
-        footer_in_column=footer_in_column,
+        footer_in_column=False,
         body_char_limit=body_char_limit,
     )
     if map_path:

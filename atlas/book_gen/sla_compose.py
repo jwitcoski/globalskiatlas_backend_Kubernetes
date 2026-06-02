@@ -9,7 +9,7 @@ from xml.dom import minidom
 
 from atlas.book_gen.log_util import log
 from atlas.book_gen.map_sizes import TEXT_MAP_GAP_PT, map_dimensions_pt
-from atlas.book_gen.sla_layout_wiki import append_wiki_text_column, layout_wiki_slot
+from atlas.book_gen.sla_layout_wiki import append_wiki_text_column, layout_wiki_around_native_map, layout_wiki_slot
 from atlas.book_gen.sla_prototypes import (
     build_document_root,
     make_image_frame,
@@ -33,6 +33,12 @@ PT_PER_IN = 72.0
 SCRIBUS_CANVAS_X = 100.0
 SCRIBUS_CANVAS_Y = 20.0
 PAGE_GAP_PT = 40.0
+
+# Full/half pages: landscape map top-right at 100% export scale; bottom body band + footer.
+MIN_SIDE_TEXT_PT = 40.0
+# Full-page bottom body band (from hand-tuned Arapahoe Basin page 10 SLA).
+FULL_BOTTOM_BODY_FRAC = 107.33 / 720.0
+HALF_BOTTOM_BODY_FRAC = FULL_BOTTOM_BODY_FRAC * 0.55
 
 
 def scribus_page_origin(page_num: int, page_height_pt: float) -> tuple[float, float]:
@@ -78,7 +84,7 @@ def _map_and_text_widths(
     map_export_dpi: int,
     map_on_right: bool = True,
 ) -> tuple[float, float, float, float, float, float]:
-    """Map frame (x, y, w, h) and text column (text_x, text_w)."""
+    """Map frame (x, y, w, h) and text column (text_x, text_w) for compact quarter rows."""
     map_w, map_h = map_dimensions_pt(map_path, map_tier, default_dpi=map_export_dpi)
     map_w = min(map_w, max(40.0, inner_w - TEXT_MAP_GAP_PT - 60.0))
     map_h = min(map_h, inner_h)
@@ -92,6 +98,76 @@ def _map_and_text_widths(
         text_x = inner_x + map_w + TEXT_MAP_GAP_PT
         text_w = max(40.0, inner_x + inner_w - text_x)
     return map_x, map_y, map_w, map_h, text_x, text_w
+
+
+def _native_map_layout(
+    inner_x: float,
+    inner_y: float,
+    inner_w: float,
+    inner_h: float,
+    map_path: str | None,
+    map_tier: str,
+    *,
+    map_export_dpi: int,
+    map_on_right: bool,
+    slot: str = "full",
+) -> dict[str, float]:
+    """
+    Map pinned top-right at 100% native export scale (shrink only if taller/wider than slot).
+
+    Reserves a bottom body band and footer snapped to the slot edges. The side
+    column (header + body) ends at split_y — it does not extend into the bottom band.
+    """
+    from atlas.book_gen.wiki_style import type_scale_for_slot
+
+    gap = TEXT_MAP_GAP_PT
+    scale = type_scale_for_slot(slot)
+    footer_h = scale.footer * 1.5
+    bottom_frac = FULL_BOTTOM_BODY_FRAC if slot == "full" else HALF_BOTTOM_BODY_FRAC
+    bottom_body_h = inner_h * bottom_frac
+    split_y = inner_y + inner_h - footer_h - bottom_body_h
+    top_zone_h = max(40.0, split_y - inner_y)
+
+    nat_w, nat_h = map_dimensions_pt(map_path, map_tier, default_dpi=map_export_dpi)
+    if nat_w <= 0 or nat_h <= 0:
+        nat_w = inner_w * 0.55
+        nat_h = inner_h * 0.45
+
+    plate_w = min(nat_w, inner_w - MIN_SIDE_TEXT_PT - gap)
+    display_scale = 1.0
+    if nat_h > top_zone_h:
+        display_scale = min(display_scale, top_zone_h / nat_h)
+    if nat_w > plate_w:
+        display_scale = min(display_scale, plate_w / nat_w)
+    map_w = nat_w * display_scale
+    map_h = nat_h * display_scale
+
+    if map_on_right:
+        side_w = max(MIN_SIDE_TEXT_PT, inner_w - plate_w - gap)
+        map_x = inner_x + inner_w - map_w
+        side_x = inner_x
+    else:
+        side_w = max(MIN_SIDE_TEXT_PT, inner_w - plate_w - gap)
+        map_x = inner_x
+        side_x = inner_x + plate_w + gap
+
+    map_y = inner_y
+    return {
+        "map_x": map_x,
+        "map_y": map_y,
+        "map_w": map_w,
+        "map_h": map_h,
+        "side_x": side_x,
+        "side_y": inner_y,
+        "side_w": side_w,
+        "split_y": split_y,
+        "top_zone_h": top_zone_h,
+        "bottom_x": inner_x,
+        "bottom_y": split_y,
+        "bottom_w": inner_w,
+        "bottom_h": bottom_body_h,
+        "footer_h": footer_h,
+    }
 
 
 def _layout_quarter_slot(
@@ -151,7 +227,7 @@ def _layout_half_slot(
     map_on_right: bool = True,
     body_char_limit: int | None = 900,
 ) -> list[tuple]:
-    map_x, map_y, map_w, map_h, text_x, text_w = _map_and_text_widths(
+    regions = _native_map_layout(
         inner_x,
         inner_y,
         inner_w,
@@ -160,8 +236,9 @@ def _layout_half_slot(
         map_tier,
         map_export_dpi=map_export_dpi,
         map_on_right=map_on_right,
+        slot="half",
     )
-    return layout_wiki_slot(
+    return layout_wiki_around_native_map(
         inner_x,
         inner_y,
         inner_w,
@@ -169,12 +246,7 @@ def _layout_half_slot(
         fields,
         map_path,
         slot="half",
-        map_x=map_x,
-        map_y=map_y,
-        map_w=map_w,
-        map_h=map_h,
-        text_x=text_x,
-        text_w=text_w,
+        regions=regions,
         include_body=True,
         body_char_limit=body_char_limit,
         footer_in_column=True,
@@ -193,7 +265,7 @@ def _layout_full_slot(
     map_export_dpi: int = 300,
     map_on_right: bool = True,
 ) -> list[tuple]:
-    map_x, map_y, map_w, map_h, text_x, text_w = _map_and_text_widths(
+    regions = _native_map_layout(
         inner_x,
         inner_y,
         inner_w,
@@ -202,8 +274,9 @@ def _layout_full_slot(
         map_tier,
         map_export_dpi=map_export_dpi,
         map_on_right=map_on_right,
+        slot="full",
     )
-    return layout_wiki_slot(
+    return layout_wiki_around_native_map(
         inner_x,
         inner_y,
         inner_w,
@@ -211,12 +284,7 @@ def _layout_full_slot(
         fields,
         map_path,
         slot="full",
-        map_x=map_x,
-        map_y=map_y,
-        map_w=map_w,
-        map_h=map_h,
-        text_x=text_x,
-        text_w=text_w,
+        regions=regions,
         include_body=True,
         footer_in_column=True,
     )
