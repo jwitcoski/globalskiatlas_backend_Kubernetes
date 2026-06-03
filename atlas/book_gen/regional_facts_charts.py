@@ -8,7 +8,7 @@ from typing import Any
 
 import pandas as pd
 
-from atlas.book_gen.constants import RESORT_CATEGORY_LABEL
+from atlas.book_gen.constants import RESORT_CATEGORY_CRITERIA, RESORT_CATEGORY_LABEL
 from atlas.book_gen.regional_facts import _aggregate_lift_types, _name_col, _num_series
 from atlas.book_gen.resort_category import resort_size_category
 
@@ -41,6 +41,21 @@ TIER_COLORS = {
     "mega_resort": "#1a365d",
 }
 
+# Pastel fills for trails-vs-acres scatter tier backgrounds (RGBA).
+_TIER_SCATTER_BG: dict[str, tuple[float, float, float, float]] = {
+    "small_hill": (0.90, 0.92, 0.96, 0.70),
+    "ski_mountain": (0.55, 0.72, 0.86, 0.45),
+    "multiple_mountains": (0.45, 0.62, 0.94, 0.40),
+    "mega_resort": (0.28, 0.42, 0.72, 0.42),
+}
+
+_SCATTER_TIER_ORDER = (
+    "small_hill",
+    "ski_mountain",
+    "multiple_mountains",
+    "mega_resort",
+)
+
 TRAIL_DIFF_COLORS = {
     "Novice": "#22c55e",
     "Easy": "#4ade80",
@@ -49,6 +64,7 @@ TRAIL_DIFF_COLORS = {
     "Expert": "#991b1b",
     "Freeride": "#7f1d1d",
     "Extreme": "#450a0a",
+    "Terrain parks": "#ea580c",
 }
 
 LIFT_TYPE_COLORS = {
@@ -61,6 +77,22 @@ LIFT_TYPE_COLORS = {
     "cable car": "#1d4ed8",
     "detachable": "#6366f1",
 }
+
+# Same artwork as QGIS Lines.qml markers (atlas/map_gen/icons).
+_MAP_ICONS_DIR = Path(__file__).resolve().parents[1] / "map_gen" / "icons"
+_LIFT_TYPE_ICON: dict[str, tuple[str, ...]] = {
+    # PNG first (QGIS map markers); SVG fallback when cairosvg is installed.
+    "chair lift": ("ski-lift.png", "noun-ski-lift-8803.svg"),
+    "detachable": ("ski-lift.png", "noun-ski-lift-8803.svg"),
+    "mixed lift": ("ski-lift.png", "noun-ski-lift-8803.svg"),
+    "magic carpet": ("Magic_Carpet.png", "Magic_Carpet.svg"),
+    "gondola": ("cablecar.png", "cable-car-svgrepo-com.svg"),
+    "cable car": ("cablecar.png", "cable-car-svgrepo-com.svg"),
+    # tbar.png is a duplicate of ski-lift.png; tow/surface lifts use drawn icons below.
+}
+_DRAWN_LIFT_KINDS = frozenset(
+    {"t-bar", "j-bar", "rope tow", "platter", "drag lift"}
+)
 
 
 def _mpl_setup() -> None:
@@ -297,9 +329,32 @@ def _elevation_label_fonts(tier: str) -> tuple[float, float, str]:
     return _ELEV_LABEL_FONT.get(tier, _ELEV_LABEL_FONT["small_hill"])
 
 
-_ELEV_Y_FLOOR_FT = 4500.0  # axis base — leaves room below lowest resort for name key
-_ELEV_Y_FLOOR_M = 1370.0
 _ELEV_MARKER_FS = 7.0
+
+
+def _elevation_axis_round(val: float, *, use_feet: bool, up: bool) -> float:
+    """Snap axis limits to a fixed grid (100 ft or 50 m)."""
+    import math
+
+    unit = 100.0 if use_feet else 50.0
+    if up:
+        return math.ceil(val / unit) * unit
+    return math.floor(val / unit) * unit
+
+
+def _elevation_tick_step(span: float, *, use_feet: bool) -> float:
+    """Readable Y tick interval from the plotted elevation span."""
+    if span <= 0:
+        return 500.0 if use_feet else 100.0
+    if use_feet:
+        for step in (100.0, 250.0, 500.0, 1000.0):
+            if span / step <= 8:
+                return step
+        return 1000.0
+    for step in (25.0, 50.0, 100.0, 200.0, 500.0):
+        if span / step <= 8:
+            return step
+    return 500.0
 
 _ELEV_SUMMIT_LABEL_CANDIDATES: list[tuple[float, float, str, str, bool]] = [
     (0, 0, "center", "bottom", False),
@@ -367,6 +422,26 @@ def _elevation_letter_code(index: int) -> str:
 
 def _legend_display_name(raw: str) -> str:
     return _clean_resort_display_name(raw).title()
+
+
+def _legend_short_name(raw: str) -> str:
+    """Compact label for the elevation chart key (fits narrow table columns)."""
+    s = _legend_display_name(raw)
+    for suffix in (
+        " Ski Resort",
+        " Ski Area",
+        " Recreation Area",
+        " Resort",
+        " Mountain",
+        " Nordic Center",
+        " Outdoor Center",
+        " Ski Club",
+        " Center",
+        " Hill",
+    ):
+        if s.endswith(suffix):
+            s = s[: -len(suffix)].strip()
+    return s
 
 
 def _mountain_obstacle_rects_px(
@@ -487,45 +562,96 @@ def _place_elevation_label(
     return False
 
 
-def _draw_elevation_legend(
+def _elevation_legend_grid(n: int) -> tuple[int, int, float]:
+    """Columns, rows, and figure height fraction for the name key panel."""
+    # Tall columns (many rows per column) — matches A→Z peak order down each column.
+    if n <= 12:
+        max_rows = 6
+    elif n <= 24:
+        max_rows = 6
+    else:
+        max_rows = 6
+    ncol = min(n, max(6, -(-n // max_rows)))
+    nrow = (n + ncol - 1) // ncol
+    # Panel height tracks row count; table is top-aligned so rows are not stretched.
+    leg_frac = min(0.30, 0.028 + nrow * 0.019)
+    return ncol, nrow, leg_frac
+
+
+def _elevation_legend_label(code: str, name: str, *, max_chars: int) -> str:
+    text = f"{code}. {name}"
+    if len(text) <= max_chars:
+        return text
+    return text[: max(4, max_chars - 1)].rstrip() + "…"
+
+
+def _elevation_legend_max_chars(
+    ncol: int, *, fig_width_in: float, fontsize: float
+) -> int:
+    """Characters that fit in one table column (conservative for proportional font)."""
+    col_in = (fig_width_in * 0.94) / max(ncol, 1)
+    char_in = (fontsize / 72.0) * 0.55
+    return max(9, int(col_in / char_in * 0.92))
+
+
+def _draw_elevation_legend_panel(
     ax,
     entries: list[tuple[str, str]],
     *,
-    y_bottom: float,
-    y_top: float,
-    xlim: tuple[float, float],
+    fig_width_in: float,
+    fig_height_in: float,
+    leg_frac: float,
+    ncol: int,
+    nrow: int,
 ) -> None:
-    """Name key in the empty band below mountains (between y floor and lowest base)."""
+    """Name key in a fixed-width table (column-major: a↓b↓c, then next column)."""
     n = len(entries)
-    if not n or y_top <= y_bottom:
+    if not n:
         return
-    ncol = 6 if n > 32 else 5 if n > 24 else 4 if n > 16 else 3
-    nrow = (n + ncol - 1) // ncol
-    fs = 5.6 if n > 32 else 6.0 if n > 22 else 6.4
-    x0, x1 = xlim
-    span = x1 - x0
-    col_w = span / ncol
-    y_step = (y_top - y_bottom) / max(nrow, 1)
+    ax.set_axis_off()
+    fs = 4.8 if n > 36 else 5.2 if n > 24 else 5.6 if n > 14 else 6.0
+    max_chars = _elevation_legend_max_chars(
+        ncol, fig_width_in=fig_width_in, fontsize=fs
+    )
 
-    for c in range(ncol):
-        x_left = x0 + c * col_w + col_w * 0.04
-        for r in range(nrow):
+    rows: list[list[str]] = []
+    for r in range(nrow):
+        row: list[str] = []
+        for c in range(ncol):
             i = c * nrow + r
-            if i >= n:
-                continue
-            code, name = entries[i]
-            y = y_top - (r + 0.55) * y_step
-            ax.text(
-                x_left,
-                y,
-                f"{code}. {name}",
-                fontsize=fs,
-                color=C_ELEV_REF_TEXT,
-                ha="left",
-                va="top",
-                zorder=5,
-                clip_on=False,
-            )
+            if i < n:
+                code, name = entries[i]
+                row.append(
+                    _elevation_legend_label(code, name, max_chars=max_chars)
+                )
+            else:
+                row.append("")
+        rows.append(row)
+
+    line_in = (fs / 72.0) * 1.1
+    content_in = nrow * line_in
+    panel_in = max(fig_height_in * leg_frac, line_in)
+    bbox_h = min(0.98, content_in / panel_in)
+    table_bbox = [0.01, 1.0 - bbox_h, 0.98, bbox_h]
+
+    table = ax.table(
+        cellText=rows,
+        colWidths=[1.0 / ncol] * ncol,
+        loc="upper left",
+        cellLoc="left",
+        bbox=table_bbox,
+    )
+    table.auto_set_font_size(False)
+    table.set_fontsize(fs)
+    bg = ax.get_facecolor()
+    for cell in table.get_celld().values():
+        cell.set_linewidth(0)
+        cell.set_edgecolor("none")
+        cell.set_facecolor(bg)
+        cell.get_text().set_color(C_ELEV_REF_TEXT)
+        cell.PAD = 0.03
+        cell.get_text().set_ha("left")
+        cell.get_text().set_va("center")
 
 
 def _label_elevation_lettered(
@@ -604,6 +730,211 @@ def _label_elevation_lettered(
         )
 
 
+def _lift_icon_path(kind: str) -> Path | None:
+    """Resolve map icon file for a lift type label (OSM aerialway → display name)."""
+    key = kind.strip().lower()
+    for name, files in _LIFT_TYPE_ICON.items():
+        if key == name or key.replace("_", " ") == name:
+            for fname in files:
+                path = _MAP_ICONS_DIR / fname
+                if path.is_file():
+                    return path
+    fallback = _MAP_ICONS_DIR / "ski-lift.png"
+    return fallback if fallback.is_file() else None
+
+
+def _load_icon_rgba(path: Path, *, size_px: int = 96) -> Any:
+    """Load PNG or rasterize SVG for matplotlib OffsetImage."""
+    import numpy as np
+
+    if path.suffix.lower() == ".svg":
+        try:
+            import cairosvg
+            from io import BytesIO
+
+            from PIL import Image
+
+            buf = BytesIO()
+            cairosvg.svg2png(
+                url=str(path),
+                write_to=buf,
+                output_width=size_px,
+                output_height=size_px,
+            )
+            return np.asarray(Image.open(buf).convert("RGBA")) / 255.0
+        except ImportError:
+            pass
+    import matplotlib.image as mpimg
+
+    if path.suffix.lower() == ".svg":
+        raise ValueError(f"SVG rasterize unavailable: {path.name}")
+    img = mpimg.imread(path)
+    if img.ndim == 2:
+        return img
+    if img.shape[2] == 4:
+        return img
+    # RGB → RGBA
+    import numpy as np
+
+    rgba = np.ones((*img.shape[:2], 4), dtype=img.dtype)
+    rgba[..., :3] = img[..., :3]
+    return rgba
+
+
+def _lift_display_name(kind: str) -> str:
+    return kind.replace("_", " ").strip().title()
+
+
+def _draw_tbar_icon(ax, *, edge: str, cable: str, j_bar: bool = False) -> None:
+    """T-bar / J-bar: cable, hanger, crossbar with end pads, two skiers."""
+    from matplotlib.patches import Circle, FancyBboxPatch
+
+    bar_color = "#b45309"
+    bar_edge = "#78350f"
+    snow = "#e2e8f0"
+
+    # Ground / snow line
+    ax.plot([0.08, 0.92], [0.24, 0.24], color=snow, lw=3, solid_capstyle="round", zorder=1)
+
+    # Overhead cable
+    ax.plot([0.06, 0.94], [0.9, 0.9], color=cable, lw=2.8, solid_capstyle="round", zorder=2)
+    ax.add_patch(Circle((0.06, 0.9), 0.018, facecolor=cable, edgecolor="none", zorder=2))
+    ax.add_patch(Circle((0.94, 0.9), 0.018, facecolor=cable, edgecolor="none", zorder=2))
+
+    cx, cable_y = 0.5, 0.9
+    hang_bottom = 0.68
+    ax.plot([cx, cx], [hang_bottom, cable_y], color=cable, lw=2.4, solid_capstyle="round", zorder=3)
+
+    # Vertical stem
+    stem_top = hang_bottom - 0.02
+    stem_bot = 0.36
+    ax.plot([cx, cx], [stem_bot, stem_top], color=bar_edge, lw=5.5, solid_capstyle="round", zorder=4)
+
+    # Horizontal crossbar (J-bar: longer on one side)
+    bar_y = 0.54
+    if j_bar:
+        ax.plot([0.2, 0.5], [bar_y, bar_y], color=bar_color, lw=6, solid_capstyle="round", zorder=5)
+        ax.plot([0.5, 0.82], [bar_y, bar_y], color=bar_color, lw=4.5, solid_capstyle="round", zorder=5)
+        end_x = (0.2, 0.82)
+    else:
+        ax.plot([0.18, 0.82], [bar_y, bar_y], color=bar_color, lw=6.5, solid_capstyle="round", zorder=5)
+        end_x = (0.18, 0.82)
+
+    for x in end_x:
+        ax.add_patch(
+            FancyBboxPatch(
+                (x - 0.055, bar_y - 0.055),
+                0.11,
+                0.11,
+                boxstyle="round,pad=0.01",
+                facecolor=bar_color,
+                edgecolor=bar_edge,
+                linewidth=1.4,
+                zorder=6,
+            )
+        )
+
+    def _skier(sx: float, facing: float) -> None:
+        """Small skier straddling the bar (facing: +1 right, -1 left)."""
+        head_y = 0.48
+        ax.add_patch(Circle((sx, head_y), 0.038, facecolor=edge, edgecolor="none", zorder=7))
+        # shoulders on bar
+        ax.plot([sx - 0.05 * facing, sx + 0.08 * facing], [bar_y, bar_y], color=edge, lw=3, zorder=7)
+        # legs
+        ax.plot(
+            [sx, sx - 0.05 * facing],
+            [head_y - 0.04, 0.28],
+            color=edge,
+            lw=2.8,
+            solid_capstyle="round",
+            zorder=7,
+        )
+        ax.plot(
+            [sx, sx + 0.04 * facing],
+            [head_y - 0.04, 0.28],
+            color=edge,
+            lw=2.8,
+            solid_capstyle="round",
+            zorder=7,
+        )
+
+    _skier(0.36, 1.0)
+    _skier(0.64, -1.0)
+
+
+def _draw_lift_icon_rgba(kind: str, *, size_px: int = 128) -> Any:
+    """Simple line-art icons for surface lifts (tbar.png duplicates chair-lift art)."""
+    import numpy as np
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from matplotlib.figure import Figure
+    from matplotlib.patches import Circle, Ellipse
+
+    key = kind.strip().lower()
+    fig = Figure(figsize=(1, 1), dpi=size_px)
+    canvas = FigureCanvasAgg(fig)
+    ax = fig.add_axes([0.06, 0.06, 0.88, 0.88])
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.axis("off")
+    fig.patch.set_alpha(0)
+    edge = "#0f172a"
+    cable = "#64748b"
+
+    if key in ("t-bar", "j-bar"):
+        _draw_tbar_icon(ax, edge=edge, cable=cable, j_bar=(key == "j-bar"))
+    elif key == "rope tow":
+        ax.plot([0.12, 0.88], [0.9, 0.9], color=cable, lw=2.2, solid_capstyle="round")
+        ax.plot([0.2, 0.78], [0.22, 0.82], color="#92400e", lw=3.2, solid_capstyle="round")
+        ax.add_patch(
+            Circle(
+                (0.78, 0.8),
+                0.075,
+                facecolor="none",
+                edgecolor="#92400e",
+                linewidth=2.8,
+            )
+        )
+    elif key in ("platter", "drag lift"):
+        # Poma / platter: disk towed between the legs.
+        ax.plot([0.12, 0.88], [0.9, 0.9], color=cable, lw=2.2, solid_capstyle="round")
+        ax.plot([0.5, 0.5], [0.52, 0.88], color=cable, lw=2.2, solid_capstyle="round")
+        ax.add_patch(
+            Ellipse(
+                (0.5, 0.4),
+                0.34,
+                0.12,
+                facecolor="#475569",
+                edgecolor=edge,
+                linewidth=2,
+            )
+        )
+        ax.add_patch(Circle((0.5, 0.5), 0.05, facecolor=edge, edgecolor="none"))
+    else:
+        import matplotlib.pyplot as plt
+
+        plt.close(fig)
+        return None
+
+    canvas.draw()
+    w, h = canvas.get_width_height()
+    buf = np.asarray(canvas.buffer_rgba(), dtype=float).reshape((h, w, 4)) / 255.0
+    import matplotlib.pyplot as plt
+
+    plt.close(fig)
+    return buf
+
+
+def _lift_icon_rgba(kind: str) -> Any | None:
+    """Raster icon for chart row: drawn surface lifts or map PNG."""
+    key = kind.strip().lower()
+    if key in _DRAWN_LIFT_KINDS:
+        return _draw_lift_icon_rgba(kind)
+    path = _lift_icon_path(kind)
+    if path is None:
+        return None
+    return _load_icon_rgba(path, size_px=96)
+
+
 def lift_type_counts(df: pd.DataFrame) -> dict[str, int]:
     if "lift_types" not in df.columns:
         return {}
@@ -625,10 +956,15 @@ def trail_difficulty_totals(df: pd.DataFrame) -> dict[str, int]:
         ("trails_expert", "Expert"),
         ("trails_freeride", "Freeride"),
         ("trails_extreme", "Extreme"),
+        ("trails_snow_park", "Terrain parks"),
+        ("trails_snowpark", "Terrain parks"),
+        ("terrain_park_trails", "Terrain parks"),
     )
     totals: dict[str, int] = {}
     for col, label in mapping:
         if col not in df.columns:
+            continue
+        if label in totals:
             continue
         s = pd.to_numeric(df[col], errors="coerce").fillna(0)
         v = int(s.sum())
@@ -637,11 +973,124 @@ def trail_difficulty_totals(df: pd.DataFrame) -> dict[str, int]:
     return totals
 
 
+def _scatter_tier_index(trails: float, acres: float) -> int:
+    """Tier index 0–3 from the same rules as resort_size_category (trails + acres)."""
+    cat = resort_size_category(
+        {
+            "downhill_trails": trails,
+            "total_lifts": 1,
+            "skiable_terrain_acres": acres,
+        }
+    )
+    return {
+        "small_hill": 0,
+        "ski_mountain": 1,
+        "multiple_mountains": 2,
+        "mega_resort": 3,
+    }.get(cat, 0)
+
+
+def _draw_scatter_tier_legend_fig(
+    fig,
+    handles: list[Any],
+) -> None:
+    """Tier labels below plot; column width follows label length (no overlap)."""
+    from matplotlib.patches import Rectangle
+
+    leg_ax = fig.add_axes([0.06, 0.02, 0.88, 0.10])
+    leg_ax.set_axis_off()
+    n = len(handles)
+    if not n:
+        return
+    labels = [str(h.get_label()) for h in handles]
+    weights = [max(len(lab), 10) for lab in labels]
+    gap = 0.010 if n > 1 else 0.0
+    usable = 1.0 - gap * (n - 1)
+    swatch_w = 0.028
+    x = 0.0
+    for handle, lab, wt in zip(handles, labels, weights):
+        col_w = (wt / sum(weights)) * usable
+        leg_ax.add_patch(
+            Rectangle(
+                (x, 0.62),
+                swatch_w,
+                0.22,
+                transform=leg_ax.transAxes,
+                facecolor=handle.get_facecolor(),
+                edgecolor=handle.get_edgecolor(),
+                linewidth=handle.get_linewidth() or 0.4,
+                clip_on=False,
+            )
+        )
+        leg_ax.text(
+            x + swatch_w + 0.006,
+            0.72,
+            lab,
+            transform=leg_ax.transAxes,
+            ha="left",
+            va="center",
+            fontsize=6.2,
+            color=C_SLATE_DARK,
+            clip_on=True,
+        )
+        x += col_w + gap
+
+
+def _draw_trails_acres_tier_background(
+    ax,
+    *,
+    xmax: float,
+    ymax: float,
+    grid: int = 220,
+) -> None:
+    """Color the plot by size tier (small / ski mountain / multiple / mega)."""
+    import numpy as np
+    from matplotlib.colors import BoundaryNorm, ListedColormap
+
+    ts = np.linspace(0, xmax, grid)
+    ys = np.linspace(0, ymax, grid)
+    t_grid, a_grid = np.meshgrid(ts, ys)
+    z = np.zeros(t_grid.shape, dtype=int)
+    for iy in range(t_grid.shape[0]):
+        for ix in range(t_grid.shape[1]):
+            z[iy, ix] = _scatter_tier_index(float(t_grid[iy, ix]), float(a_grid[iy, ix]))
+
+    cmap = ListedColormap(
+        [_TIER_SCATTER_BG[cat] for cat in _SCATTER_TIER_ORDER]
+    )
+    norm = BoundaryNorm([-0.5, 0.5, 1.5, 2.5, 3.5], cmap.N)
+    ax.pcolormesh(
+        t_grid,
+        a_grid,
+        z,
+        cmap=cmap,
+        norm=norm,
+        shading="auto",
+        zorder=0,
+    )
+
+
+def _scatter_tier_legend_label(cat: str, count: int) -> str:
+    name = RESORT_CATEGORY_LABEL.get(cat, cat)
+    return f"({count}) {name}"
+
+
+def _tier_counts_from_df(df: pd.DataFrame) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for _, row in df.iterrows():
+        cat = resort_size_category(row.to_dict())
+        if cat == "unknown":
+            continue
+        counts[cat] = counts.get(cat, 0) + 1
+    return counts
+
+
 def render_trails_vs_acres_scatter(
     df: pd.DataFrame,
     path: Path,
     *,
     region_title: str = "",
+    tier_counts: dict[str, int] | None = None,
 ) -> Path | None:
     _mpl_setup()
     import matplotlib.pyplot as plt
@@ -665,12 +1114,17 @@ def render_trails_vs_acres_scatter(
     fig, ax = plt.subplots(figsize=(4.8, 3.2), facecolor="white")
     _style_axes(ax)
 
+    max_t = float(t.max()) or 1.0
+    max_a = float(a.max()) or 1.0
+    x_hi = max_t * 1.06
+    y_hi = max_a * 1.06
+    ax.set_xlim(0, x_hi)
+    ax.set_ylim(0, y_hi)
+    _draw_trails_acres_tier_background(ax, xmax=x_hi, ymax=y_hi)
+
     top_trail_names = set(names.loc[t.sort_values(ascending=False).head(10).index])
     top_area_names = set(names.loc[a.sort_values(ascending=False).head(10).index])
     outlier_names = top_trail_names | top_area_names
-
-    max_t = float(t.max()) or 1.0
-    max_a = float(a.max()) or 1.0
 
     for idx in t.index:
         nm = names.loc[idx]
@@ -686,14 +1140,25 @@ def render_trails_vs_acres_scatter(
             zorder=3 if is_out else 2,
         )
 
-    ax.set_xlabel("Number of trails", fontsize=9, color=C_LABEL)
-    ax.set_ylabel("Skiable acres", fontsize=9, color=C_LABEL)
+    ax.set_xlabel("Number of trails", fontsize=7, color=C_LABEL, labelpad=3)
+    ax.set_ylabel("Skiable acres", fontsize=7, color=C_LABEL, labelpad=2)
     title = "Trails vs acreage"
     if region_title:
         title = f"{region_title}: trails vs acreage"
     ax.set_title(title, fontsize=10, fontweight="600", color=C_SLATE_DARK, pad=8)
-    ax.set_xlim(left=0)
-    ax.set_ylim(bottom=0)
+
+    from matplotlib.patches import Patch
+
+    counts = tier_counts if tier_counts is not None else _tier_counts_from_df(df)
+    tier_handles = [
+        Patch(
+            facecolor=_TIER_SCATTER_BG[cat],
+            edgecolor="#cbd5e1",
+            linewidth=0.4,
+            label=_scatter_tier_legend_label(cat, counts.get(cat, 0)),
+        )
+        for cat in _SCATTER_TIER_ORDER
+    ]
 
     outliers = [
         (names.loc[i], t.loc[i], a.loc[i])
@@ -816,8 +1281,169 @@ def render_trails_vs_acres_scatter(
             # If nothing fits cleanly, skip the label rather than clutter.
             continue
 
-    fig.tight_layout()
+    # X-axis label on the axes; tier legend drawn below.
+    fig.subplots_adjust(left=0.11, right=0.98, bottom=0.24, top=0.90)
+    _draw_scatter_tier_legend_fig(fig, tier_handles)
     return _save_fig(fig, path)
+
+
+def _draw_tier_silhouette(
+    ax,
+    tier: str,
+    cx: float,
+    base: float,
+    *,
+    width: float,
+    height: float,
+    color: str,
+) -> float:
+    """
+    Draw a tier-sized mountain silhouette at cx. Returns y of the highest peak (for count label).
+    """
+    from matplotlib.patches import Polygon
+
+    w, h = width, height
+    snow = "#f8fafc"
+    edge = "#0f172a"
+    lw = 1.1
+
+    def _add(verts: list[tuple[float, float]], *, z: int = 2) -> None:
+        ax.add_patch(
+            Polygon(
+                verts,
+                closed=True,
+                facecolor=color,
+                edgecolor=edge,
+                linewidth=lw,
+                joinstyle="round",
+                zorder=z,
+            )
+        )
+
+    def _snow_cap(peak_x: float, peak_y: float, half_w: float) -> None:
+        cap_h = max(h * 0.22, 0.04)
+        cap_w = half_w * 0.55
+        ax.add_patch(
+            Polygon(
+                [
+                    (peak_x - cap_w, peak_y - cap_h * 0.35),
+                    (peak_x, peak_y + cap_h * 0.15),
+                    (peak_x + cap_w, peak_y - cap_h * 0.35),
+                ],
+                closed=True,
+                facecolor=snow,
+                edgecolor=edge,
+                linewidth=0.6,
+                zorder=4,
+            )
+        )
+
+    peak_y = base + h
+
+    if tier == "small_hill":
+        # Single rounded bump (half-ellipse).
+        import numpy as np
+
+        t = np.linspace(0, np.pi, 36)
+        rx, ry = w, h * 0.9
+        xs = cx + rx * np.cos(t)
+        ys = base + ry * np.sin(t)
+        verts = [(float(xs[0]), base)] + [
+            (float(x), float(y)) for x, y in zip(xs, ys)
+        ] + [(float(xs[-1]), base)]
+        _add(verts)
+        peak_y = base + ry
+        _snow_cap(cx, peak_y, w * 0.24)
+
+    elif tier == "ski_mountain":
+        verts = [
+            (cx - w, base),
+            (cx - w * 0.12, base + h * 0.42),
+            (cx, base + h),
+            (cx + w * 0.15, base + h * 0.38),
+            (cx + w, base),
+        ]
+        _add(verts)
+        _snow_cap(cx, peak_y, w * 0.22)
+
+    elif tier == "multiple_mountains":
+        peaks = [
+            (cx - w * 0.52, base + h * 0.52, w * 0.18),
+            (cx - w * 0.08, base + h * 0.88, w * 0.2),
+            (cx + w * 0.48, base + h * 0.62, w * 0.17),
+        ]
+        ridge = [
+            (cx - w, base),
+            (cx - w * 0.68, base + h * 0.18),
+            (cx - w * 0.52, base + h * 0.52),
+            (cx - w * 0.28, base + h * 0.38),
+            (cx - w * 0.08, base + h * 0.88),
+            (cx + w * 0.18, base + h * 0.48),
+            (cx + w * 0.48, base + h * 0.62),
+            (cx + w * 0.72, base + h * 0.28),
+            (cx + w, base),
+        ]
+        _add(ridge)
+        peak_y = base + h * 0.88
+        for px, py, hw in peaks:
+            _snow_cap(px, py, hw)
+
+    else:  # mega_resort
+        ridge = [
+            (cx - w, base),
+            (cx - w * 0.78, base + h * 0.22),
+            (cx - w * 0.58, base + h * 0.58),
+            (cx - w * 0.38, base + h * 0.42),
+            (cx - w * 0.18, base + h * 0.78),
+            (cx, base + h),
+            (cx + w * 0.12, base + h * 0.72),
+            (cx + w * 0.32, base + h * 0.85),
+            (cx + w * 0.52, base + h * 0.55),
+            (cx + w * 0.72, base + h * 0.68),
+            (cx + w * 0.88, base + h * 0.35),
+            (cx + w, base),
+        ]
+        _add(ridge)
+        peak_y = base + h
+        for px, py, hw in [
+            (cx - w * 0.58, base + h * 0.58, w * 0.14),
+            (cx - w * 0.18, base + h * 0.78, w * 0.13),
+            (cx, base + h, w * 0.16),
+            (cx + w * 0.32, base + h * 0.85, w * 0.14),
+            (cx + w * 0.72, base + h * 0.68, w * 0.12),
+        ]:
+            _snow_cap(px, py, hw)
+
+    # Tiny base trees for scale (small_hill gets more trees).
+    tree_n = 3 if tier == "small_hill" else 2 if tier == "ski_mountain" else 1
+    tree_color = "#166534"
+    for j in range(tree_n):
+        tx = cx - w * 0.65 + j * (w * 1.3 / max(tree_n - 1, 1))
+        tri_h = h * (0.14 if tier != "mega_resort" else 0.1)
+        tri_w = w * 0.07
+        ax.add_patch(
+            Polygon(
+                [
+                    (tx, base),
+                    (tx - tri_w, base + tri_h),
+                    (tx + tri_w, base + tri_h),
+                ],
+                closed=True,
+                facecolor=tree_color,
+                edgecolor="none",
+                zorder=5,
+            )
+        )
+
+    return peak_y
+
+
+_TIER_VISUAL = {
+    "small_hill": {"width": 0.26, "height": 0.14},
+    "ski_mountain": {"width": 0.30, "height": 0.36},
+    "multiple_mountains": {"width": 0.44, "height": 0.44},
+    "mega_resort": {"width": 0.48, "height": 0.50},
+}
 
 
 def render_tier_bar_chart(
@@ -826,41 +1452,279 @@ def render_tier_bar_chart(
     *,
     region_title: str = "",
 ) -> Path | None:
+    """Illustrated resort-size graphic (mountain silhouettes + counts)."""
     if not tier_counts:
         return None
     _mpl_setup()
     import matplotlib.pyplot as plt
+    from matplotlib.patches import FancyBboxPatch
 
     order = ("small_hill", "ski_mountain", "multiple_mountains", "mega_resort")
-    labels: list[str] = []
-    values: list[int] = []
-    colors: list[str] = []
+    items: list[tuple[str, int, str, str]] = []
     for cat in order:
         n = tier_counts.get(cat, 0)
         if n:
-            labels.append(RESORT_CATEGORY_LABEL.get(cat, cat))
-            values.append(n)
-            colors.append(TIER_COLORS.get(cat, C_TEAL))
+            items.append(
+                (cat, n, RESORT_CATEGORY_LABEL.get(cat, cat), TIER_COLORS.get(cat, C_TEAL))
+            )
 
-    if not values:
+    if not items:
         return None
 
-    fig, ax = plt.subplots(figsize=(3.4, 3.2), facecolor="white")
-    _style_axes(ax)
-    y_pos = range(len(labels))
-    ax.barh(list(y_pos), values, color=colors, height=0.55, edgecolor="white", linewidth=0.8)
-    ax.set_yticks(list(y_pos), labels, fontsize=8)
-    ax.invert_yaxis()
-    for i, v in enumerate(values):
-        ax.text(v + max(values) * 0.02, i, str(v), va="center", fontsize=8, color=C_LABEL)
-    ax.set_xlabel("Resorts", fontsize=9, color=C_LABEL)
+    fig, ax = plt.subplots(figsize=(3.4, 3.2), facecolor=C_BG)
+    ax.set_facecolor(C_BG)
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.axis("off")
+
     title = "Resorts by size"
     if region_title:
         title = f"{region_title}: by size"
-    ax.set_title(title, fontsize=10, fontweight="600", color=C_SLATE_DARK, pad=8)
-    ax.set_xlim(0, max(values) * 1.18)
-    fig.tight_layout()
+    ax.text(
+        0.5,
+        0.96,
+        title,
+        ha="center",
+        va="top",
+        fontsize=10,
+        fontweight="600",
+        color=C_SLATE_DARK,
+    )
+
+    n_cols = len(items)
+    col_w = 1.0 / n_cols
+    ground_y = 0.24
+
+    # Ground strip across the graphic.
+    ax.add_patch(
+        FancyBboxPatch(
+            (0.04, ground_y - 0.018),
+            0.92,
+            0.028,
+            boxstyle="round,pad=0.002",
+            facecolor="#cbd5e1",
+            edgecolor="none",
+            zorder=0,
+        )
+    )
+    ax.plot([0.04, 0.96], [ground_y, ground_y], color="#64748b", lw=1.0, zorder=1)
+
+    for i, (cat, count, label, color) in enumerate(items):
+        cx = (i + 0.5) * col_w
+        spec = _TIER_VISUAL.get(cat, _TIER_VISUAL["small_hill"])
+        peak_y = _draw_tier_silhouette(
+            ax,
+            cat,
+            cx,
+            ground_y,
+            width=spec["width"] * col_w * 0.92,
+            height=spec["height"],
+            color=color,
+        )
+
+        # Bold count badge floating above the peak.
+        badge_y = min(peak_y + 0.06, 0.88)
+        ax.text(
+            cx,
+            badge_y,
+            str(count),
+            ha="center",
+            va="center",
+            fontsize=16 if count < 10 else 14,
+            fontweight="800",
+            color=C_SLATE_DARK,
+            zorder=6,
+            bbox={
+                "boxstyle": "round,pad=0.35",
+                "facecolor": "white",
+                "edgecolor": color,
+                "linewidth": 2.0,
+                "alpha": 0.96,
+            },
+        )
+
+        # Wrap long labels on two lines if needed.
+        label_lines = label.replace(" mountains", "\nmountains") if " " in label else label
+        label_bottom = 0.13
+        n_label_lines = label_lines.count("\n") + 1
+        label_line_h = 0.030 if n_cols >= 4 else 0.034
+        ax.text(
+            cx,
+            label_bottom,
+            label_lines,
+            ha="center",
+            va="bottom",
+            fontsize=7,
+            fontweight="600",
+            color=C_LABEL,
+            linespacing=1.1,
+            zorder=6,
+        )
+        criteria = RESORT_CATEGORY_CRITERIA.get(cat, "")
+        if criteria:
+            crit_top = label_bottom - n_label_lines * label_line_h - 0.014
+            ax.text(
+                cx,
+                crit_top,
+                criteria,
+                ha="center",
+                va="top",
+                fontsize=4.5 if n_cols >= 4 else 4.9,
+                color=C_SLATE,
+                linespacing=1.08,
+                zorder=6,
+            )
+
+    fig.tight_layout(pad=0.4)
     return _save_fig(fig, path)
+
+
+# North American on-trail symbols (green circle, blue square, black diamond).
+C_TRAIL_GREEN = "#22c55e"
+C_TRAIL_GREEN_EDGE = "#15803d"
+C_TRAIL_BLUE = "#2563eb"
+C_TRAIL_BLUE_EDGE = "#1e40af"
+C_TRAIL_BLACK = "#1a1a1a"
+C_TRAIL_BLACK_EDGE = "#0f172a"
+C_TRAIL_PARK = "#ea580c"
+C_TRAIL_PARK_EDGE = "#c2410c"
+
+
+def _na_trail_groups(totals: dict[str, int]) -> list[tuple[str, str, int, str]]:
+    """NA symbols: green circle, blue square, black diamond, double black diamond."""
+    groups: list[tuple[str, str, int, str]] = []
+
+    green = sum(totals.get(k, 0) for k in ("Novice", "Easy"))
+    if green:
+        groups.append(("circle", "Green circle", green, C_TRAIL_GREEN))
+
+    inter = totals.get("Intermediate", 0)
+    if inter:
+        groups.append(("square", "Blue square", inter, C_TRAIL_BLUE))
+
+    advanced = totals.get("Advanced", 0)
+    if advanced:
+        groups.append(("diamond", "Black diamond", advanced, C_TRAIL_BLACK))
+
+    double = sum(
+        totals.get(k, 0) for k in ("Expert", "Freeride", "Extreme")
+    )
+    if double:
+        groups.append(
+            ("double_diamond", "Double black\ndiamond", double, C_TRAIL_BLACK)
+        )
+
+    return groups
+
+
+def _na_trail_subtitle(symbol: str, totals: dict[str, int]) -> str:
+    if symbol == "circle":
+        parts = [k for k in ("Novice", "Easy") if totals.get(k, 0)]
+        return " · ".join(parts) if parts else ""
+    if symbol == "square":
+        return "Intermediate"
+    if symbol == "diamond":
+        return "Advanced"
+    if symbol == "double_diamond":
+        parts = [k for k in ("Expert", "Freeride", "Extreme") if totals.get(k, 0)]
+        if len(parts) >= 3:
+            return f"{parts[0]} · {parts[1]}\n{parts[2]}"
+        return " · ".join(parts) if parts else ""
+    return ""
+
+
+def _draw_single_diamond(
+    ax, cx: float, cy: float, size: float, *, edge: str, lw: float, z: int
+) -> None:
+    from matplotlib.patches import Polygon
+
+    s = size * 1.1
+    ax.add_patch(
+        Polygon(
+            [(cx, cy + s), (cx + s, cy), (cx, cy - s), (cx - s, cy)],
+            closed=True,
+            facecolor=C_TRAIL_BLACK,
+            edgecolor=edge,
+            linewidth=lw,
+            joinstyle="round",
+            zorder=z,
+        )
+    )
+
+
+def _draw_trail_symbol(ax, kind: str, cx: float, cy: float, size: float, color: str) -> None:
+    """Draw NA trail rating shape centered at (cx, cy)."""
+    from matplotlib.patches import Circle, Rectangle
+
+    edge = {
+        "circle": C_TRAIL_GREEN_EDGE,
+        "square": C_TRAIL_BLUE_EDGE,
+        "diamond": C_TRAIL_BLACK_EDGE,
+        "double_diamond": C_TRAIL_BLACK_EDGE,
+    }.get(kind, C_SLATE_DARK)
+    lw = 1.8
+
+    if kind == "circle":
+        ax.add_patch(
+            Circle(
+                (cx, cy),
+                size,
+                facecolor=color,
+                edgecolor=edge,
+                linewidth=lw,
+                zorder=3,
+            )
+        )
+    elif kind == "square":
+        ax.add_patch(
+            Rectangle(
+                (cx - size, cy - size),
+                size * 2,
+                size * 2,
+                facecolor=color,
+                edgecolor=edge,
+                linewidth=lw,
+                zorder=3,
+            )
+        )
+    elif kind == "double_diamond":
+        # Stacked pair (standard NA double-black on trail maps).
+        gap = size * 0.08
+        half = size * 0.52
+        _draw_single_diamond(
+            ax, cx, cy + half + gap, half, edge=edge, lw=lw, z=3
+        )
+        _draw_single_diamond(
+            ax, cx, cy - half - gap, half, edge=edge, lw=lw, z=4
+        )
+    else:  # single diamond
+        _draw_single_diamond(ax, cx, cy, size * 1.15, edge=edge, lw=lw, z=3)
+
+
+def _draw_terrain_park_symbol(ax, cx: float, cy: float, size: float) -> None:
+    """Orange park marker (rounded box + rail line)."""
+    from matplotlib.patches import FancyBboxPatch
+
+    ax.add_patch(
+        FancyBboxPatch(
+            (cx - size * 1.1, cy - size * 0.65),
+            size * 2.2,
+            size * 1.3,
+            boxstyle="round,pad=0.02",
+            facecolor=C_TRAIL_PARK,
+            edgecolor=C_TRAIL_PARK_EDGE,
+            linewidth=1.6,
+            zorder=3,
+        )
+    )
+    ax.plot(
+        [cx - size * 0.7, cx + size * 0.7],
+        [cy, cy],
+        color="white",
+        lw=2.2,
+        solid_capstyle="round",
+        zorder=4,
+    )
 
 
 def render_trail_difficulty_chart(
@@ -869,55 +1733,123 @@ def render_trail_difficulty_chart(
     *,
     region_title: str = "",
 ) -> Path | None:
+    """North American trail-rating infographic (circle, square, diamond, double diamond)."""
     if not totals:
         return None
+    groups = _na_trail_groups(totals)
+    park_count = totals.get("Terrain parks", 0)
+    if not groups and not park_count:
+        return None
+
     _mpl_setup()
     import matplotlib.pyplot as plt
 
-    order = ("Novice", "Easy", "Intermediate", "Advanced", "Expert", "Freeride", "Extreme")
-    labels = [k for k in order if k in totals]
-    values = [totals[k] for k in labels]
-    colors = [TRAIL_DIFF_COLORS.get(k, C_SLATE) for k in labels]
+    fig, ax = plt.subplots(figsize=(3.4, 3.2), facecolor=C_BG)
+    ax.set_facecolor(C_BG)
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.axis("off")
 
-    fig, ax = plt.subplots(figsize=(3.4, 3.2), facecolor="white")
-    _style_axes(ax)
-    left = 0.0
-    for label, val, color in zip(labels, values, colors):
-        ax.barh(0, val, left=left, height=0.45, color=color, edgecolor="white", linewidth=0.8)
-        if val >= max(values) * 0.08:
-            ax.text(
-                left + val / 2,
-                0,
-                f"{val:,}",
-                ha="center",
-                va="center",
-                fontsize=7,
-                color="white",
-                fontweight="600",
-            )
-        left += val
-
-    ax.set_yticks([])
-    ax.set_xlabel("Trail count by difficulty", fontsize=9, color=C_LABEL)
-    title = "Trail difficulty"
+    title = "Trail difficulty & terrain parks"
     if region_title:
-        title = f"{region_title}: trail difficulty"
-    ax.set_title(title, fontsize=10, fontweight="600", color=C_SLATE_DARK, pad=8)
-
-    from matplotlib.patches import Patch
-
-    legend = [
-        Patch(facecolor=TRAIL_DIFF_COLORS.get(l, C_SLATE), label=l) for l in labels
-    ]
-    ax.legend(
-        handles=legend,
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.22),
-        ncol=min(4, len(labels)),
-        fontsize=6.5,
-        frameon=False,
+        title = f"{region_title}: trail difficulty & terrain parks"
+    ax.text(
+        0.5,
+        0.96,
+        title,
+        ha="center",
+        va="top",
+        fontsize=9.5,
+        fontweight="600",
+        color=C_SLATE_DARK,
     )
-    fig.tight_layout()
+
+    n_slots = len(groups) + (1 if park_count else 0)
+    sym_y = 0.52
+    if n_slots >= 5:
+        sym_size = 0.038
+        label_fs = 5.4
+        count_fs = 9
+    elif n_slots >= 4:
+        sym_size = 0.048
+        label_fs = 5.8
+        count_fs = 10
+    else:
+        sym_size = 0.062
+        label_fs = 6.2
+        count_fs = 11
+
+    for i, (kind, rating_label, count, color) in enumerate(groups):
+        cx = (i + 0.5) / n_slots
+        _draw_trail_symbol(ax, kind, cx, sym_y, sym_size, color)
+
+        sym_pad = sym_size * (2.4 if kind == "double_diamond" else 1.35)
+        ax.text(
+            cx,
+            sym_y + sym_pad + 0.06,
+            f"{count:,}",
+            ha="center",
+            va="bottom",
+            fontsize=count_fs,
+            fontweight="800",
+            color=C_SLATE_DARK,
+            zorder=5,
+        )
+        label_y = sym_y - sym_pad - 0.05
+        n_label_lines = rating_label.count("\n") + 1
+        line_h = 0.034 if n_slots >= 5 else 0.038
+        ax.text(
+            cx,
+            label_y,
+            rating_label,
+            ha="center",
+            va="top",
+            fontsize=label_fs,
+            fontweight="700",
+            color=C_SLATE_DARK,
+            linespacing=0.95,
+            zorder=5,
+        )
+        sub = _na_trail_subtitle(kind, totals)
+        if sub:
+            sub_y = label_y - n_label_lines * line_h - 0.020
+            ax.text(
+                cx,
+                sub_y,
+                sub,
+                ha="center",
+                va="top",
+                fontsize=4.6 if n_slots >= 5 else 5.0,
+                color=C_SLATE,
+                linespacing=1.05,
+                zorder=5,
+            )
+
+    if park_count:
+        cx = (len(groups) + 0.5) / n_slots
+        _draw_terrain_park_symbol(ax, cx, sym_y, sym_size * 0.95)
+        ax.text(
+            cx,
+            sym_y + sym_size * 1.35 + 0.06,
+            f"{park_count:,}",
+            ha="center",
+            va="bottom",
+            fontsize=count_fs,
+            fontweight="800",
+            color=C_SLATE_DARK,
+        )
+        ax.text(
+            cx,
+            sym_y - sym_size * 1.2 - 0.04,
+            "Terrain parks",
+            ha="center",
+            va="top",
+            fontsize=label_fs,
+            fontweight="700",
+            color=C_TRAIL_PARK,
+        )
+
+    fig.tight_layout(pad=0.35)
     return _save_fig(fig, path)
 
 
@@ -928,31 +1860,112 @@ def render_lift_types_chart(
     region_title: str = "",
     top_n: int = 6,
 ) -> Path | None:
+    """Lift counts with map icons (atlas/map_gen/icons, same as QGIS resort maps)."""
     if not counts:
         return None
     _mpl_setup()
     import matplotlib.pyplot as plt
 
     items = sorted(counts.items(), key=lambda x: (-x[1], x[0]))[:top_n]
-    labels = [k.title() for k, _ in items]
-    values = [v for _, v in items]
-    colors = [LIFT_TYPE_COLORS.get(k, C_TEAL) for k, _ in items]
+    if not items:
+        return None
 
-    fig, ax = plt.subplots(figsize=(3.4, 3.2), facecolor="white")
-    _style_axes(ax)
-    y_pos = range(len(labels))
-    ax.barh(list(y_pos), values, color=colors, height=0.55, edgecolor="white", linewidth=0.8)
-    ax.set_yticks(list(y_pos), labels, fontsize=8)
-    ax.invert_yaxis()
-    for i, v in enumerate(values):
-        ax.text(v + max(values) * 0.02, i, f"{v:,}", va="center", fontsize=8, color=C_LABEL)
-    ax.set_xlabel("Lifts", fontsize=9, color=C_LABEL)
+    n = len(items)
+    max_v = max(v for _, v in items) or 1
+
+    fig, ax = plt.subplots(figsize=(3.4, 3.2), facecolor=C_BG)
+    ax.set_facecolor(C_BG)
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.axis("off")
+
     title = "Lift types"
     if region_title:
         title = f"{region_title}: lift types"
-    ax.set_title(title, fontsize=10, fontweight="600", color=C_SLATE_DARK, pad=8)
-    ax.set_xlim(0, max(values) * 1.22)
-    fig.tight_layout()
+    ax.text(
+        0.5,
+        0.97,
+        title,
+        ha="center",
+        va="top",
+        fontsize=9.5,
+        fontweight="600",
+        color=C_SLATE_DARK,
+        transform=ax.transAxes,
+    )
+
+    icon_x = 0.10
+    bar_left = 0.22
+    bar_right = 0.76
+    bar_span = bar_right - bar_left
+    row_h = 0.10
+    y_top, y_bot = 0.84, 0.14
+    y_step = (y_top - y_bot) / max(n - 1, 1)
+
+    from matplotlib.patches import FancyBboxPatch
+
+    for i, (kind, val) in enumerate(items):
+        y = y_top - i * y_step if n > 1 else (y_top + y_bot) / 2
+        color = LIFT_TYPE_COLORS.get(kind, C_TEAL)
+        frac = val / max_v
+
+        def _bar(w: float, *, face: str, alpha: float, z: int) -> None:
+            ax.add_patch(
+                FancyBboxPatch(
+                    (bar_left, y - row_h / 2),
+                    w,
+                    row_h,
+                    boxstyle="round,pad=0.004",
+                    facecolor=face,
+                    edgecolor="white" if alpha > 0.5 else "none",
+                    linewidth=0.6,
+                    alpha=alpha,
+                    transform=ax.transAxes,
+                    zorder=z,
+                )
+            )
+
+        _bar(bar_span, face=C_GRID, alpha=0.4, z=1)
+        _bar(bar_span * frac, face=color, alpha=0.9, z=2)
+
+        rgba = _lift_icon_rgba(kind)
+        if rgba is not None:
+            half = 0.042 if n <= 5 else 0.036
+            ax.imshow(
+                rgba,
+                extent=(icon_x - half, icon_x + half, y - half, y + half),
+                transform=ax.transAxes,
+                aspect="equal",
+                interpolation="bilinear",
+                zorder=4,
+            )
+
+        ax.text(
+            bar_left + 0.015,
+            y,
+            _lift_display_name(kind),
+            transform=ax.transAxes,
+            ha="left",
+            va="center",
+            fontsize=6.0 if n > 5 else 6.6,
+            fontweight="600",
+            color="white" if frac > 0.42 else C_LABEL,
+            zorder=5,
+        )
+        ax.text(
+            bar_right + 0.02,
+            y,
+            f"{val:,}",
+            transform=ax.transAxes,
+            ha="left",
+            va="center",
+            fontsize=9 if n > 5 else 10,
+            fontweight="800",
+            color=C_SLATE_DARK,
+            zorder=5,
+        )
+
+    fig.tight_layout(pad=0.35)
     return _save_fig(fig, path)
 
 
@@ -1017,32 +2030,44 @@ def render_elevation_range_chart(
         vert = float(tops[i]) - float(bases[i])
         half_widths.append(_steep_half_width(hw, vert))
     fig_w, fig_h = _elevation_figure_inches()
-    fig, ax = plt.subplots(figsize=(fig_w, fig_h), facecolor=C_ELEV_REF_BG)
+    leg_ncol, leg_nrow, leg_frac = _elevation_legend_grid(n)
+    fig = plt.figure(figsize=(fig_w, fig_h), facecolor=C_ELEV_REF_BG)
+    gs = fig.add_gridspec(
+        2,
+        1,
+        height_ratios=[1.0 - leg_frac, leg_frac],
+        hspace=0.05,
+    )
+    ax = fig.add_subplot(gs[0])
+    leg_ax = fig.add_subplot(gs[1])
     ax.set_facecolor(C_ELEV_REF_BG)
+    leg_ax.set_facecolor(C_ELEV_REF_BG)
 
     sorted_bases = np.sort(bases.astype(float))
     min_base = float(sorted_bases[0])
-    y_max = float(np.ceil(tops.max() / 1000.0) * 1000.0)
-    if y_unit == "ft":
-        y_plot_floor = _ELEV_Y_FLOOR_FT
-        y_max = y_max + 500.0
-        gap_pad = 180.0
-        step = 1000.0
-    else:
-        y_plot_floor = _ELEV_Y_FLOOR_M
-        y_max = y_max + 200.0
-        gap_pad = 55.0
-        step = 500.0
-    # Reserve the empty band below the main cluster of bases (e.g. CO: Hoedown ~4.9k, rest ~6.4k+).
+    max_top = float(tops.max())
+    gap_pad = 120.0 if y_unit == "ft" else 40.0
+    top_pad = max(80.0 if y_unit == "ft" else 25.0, (max_top - min_base) * 0.05)
+
+    # Y limits on a 100 ft (or 50 m) grid; tick step is chosen separately for readability.
     if len(sorted_bases) >= 2 and sorted_bases[1] - sorted_bases[0] > gap_pad * 3:
-        legend_top = float(sorted_bases[1]) - gap_pad
+        y_plot_floor = _elevation_axis_round(
+            float(sorted_bases[0]) - gap_pad,
+            use_feet=use_feet,
+            up=False,
+        )
     else:
-        legend_top = min_base - gap_pad
-    legend_bottom = y_plot_floor + gap_pad * 0.55
-    legend_top = max(legend_top, legend_bottom + (y_max - y_plot_floor) * 0.1)
+        y_plot_floor = _elevation_axis_round(
+            min_base - gap_pad,
+            use_feet=use_feet,
+            up=False,
+        )
+    y_plot_floor = max(0.0, y_plot_floor)
+    y_max = _elevation_axis_round(max_top + top_pad, use_feet=use_feet, up=True)
+    step = _elevation_tick_step(y_max - y_plot_floor, use_feet=use_feet)
 
     ax.set_ylim(y_plot_floor, y_max)
-    ax.set_yticks(np.arange(y_plot_floor, y_max + 1, step))
+    ax.set_yticks(np.arange(y_plot_floor, y_max + step * 0.5, step))
     ax.set_ylabel(f"Elevation ({y_unit})", fontsize=9, color=C_LABEL)
     ax.set_xticks([])
     ax.yaxis.grid(True, color="#b8d4e6", linewidth=0.8, alpha=0.9, zorder=0)
@@ -1086,65 +2111,23 @@ def render_elevation_range_chart(
         )
 
     legend_entries = [
-        (str(m["code"]), _legend_display_name(str(m["name"]))) for m in mountains
+        (str(m["code"]), _legend_short_name(str(m["name"]))) for m in mountains
     ]
     _label_elevation_lettered(ax, mountains, y_unit=y_unit)
-    _draw_elevation_legend(
-        ax,
+    _draw_elevation_legend_panel(
+        leg_ax,
         legend_entries,
-        y_bottom=legend_bottom,
-        y_top=legend_top,
-        xlim=ax.get_xlim(),
+        fig_width_in=fig_w,
+        fig_height_in=fig_h,
+        leg_frac=leg_frac,
+        ncol=leg_ncol,
+        nrow=leg_nrow,
     )
 
-    fig.tight_layout()
+    fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.02)
     return _save_fig(fig, path, dpi=300)
 
 
-def render_base_elevation_dotplot(
-    df: pd.DataFrame,
-    path: Path,
-    *,
-    region_title: str = "",
-    top_n: int = 28,
-) -> Path | None:
-    """Dot plot of base elevations (low point) by resort."""
-    _mpl_setup()
-    import matplotlib.pyplot as plt
-
-    if "elevation_low_m" not in df.columns:
-        return None
-    lo = pd.to_numeric(df["elevation_low_m"], errors="coerce")
-    if not lo.notna().any():
-        return None
-
-    name_col = _name_col(df)
-    d = df.loc[lo.notna()].copy()
-    d["_lo"] = lo.loc[d.index]
-    d = d.sort_values("_lo", ascending=True).head(int(top_n))
-    if d.empty:
-        return None
-
-    labels = [_short_name(str(v), 18) for v in d[name_col].astype(str).tolist()]
-    x = list(range(len(d)))
-
-    fig, ax = plt.subplots(figsize=(6.2, 3.2), facecolor="white")
-    _style_axes(ax)
-    ax.grid(True, axis="y", color=C_GRID, linewidth=0.6, alpha=0.8)
-    ax.grid(False, axis="x")
-
-    ax.scatter(x, d["_lo"].astype(float), c=C_TEAL, s=28, zorder=3, edgecolors="white", linewidths=0.6)
-
-    ax.set_xticks(x, labels, fontsize=7, rotation=45, ha="right")
-    ax.set_ylabel("Base elevation (m)", fontsize=9, color=C_LABEL)
-    title = "Lowest elevations (base)"
-    if region_title:
-        title = f"{region_title}: lowest base elevations"
-    ax.set_title(title, fontsize=10, fontweight="600", color=C_SLATE_DARK, pad=8)
-    ax.margins(x=0.02)
-
-    fig.tight_layout()
-    return _save_fig(fig, path)
 def generate_regional_facts_charts(
     df: pd.DataFrame,
     out_dir: Path,
@@ -1157,7 +2140,10 @@ def generate_regional_facts_charts(
     paths: dict[str, str] = {}
 
     scatter = render_trails_vs_acres_scatter(
-        df, out_dir / "chart_trails_vs_acres.png", region_title=region_title
+        df,
+        out_dir / "chart_trails_vs_acres.png",
+        region_title=region_title,
+        tier_counts=tier_counts,
     )
     if scatter:
         paths["scatter"] = str(scatter.resolve()).replace("\\", "/")
@@ -1191,11 +2177,5 @@ def generate_regional_facts_charts(
     )
     if elev:
         paths["elevation_range"] = str(elev.resolve()).replace("\\", "/")
-
-    base = render_base_elevation_dotplot(
-        df, out_dir / "chart_base_elevations.png", region_title=region_title
-    )
-    if base:
-        paths["base_elevations"] = str(base.resolve()).replace("\\", "/")
 
     return paths

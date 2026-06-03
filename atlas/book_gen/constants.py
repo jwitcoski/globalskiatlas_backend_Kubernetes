@@ -26,6 +26,15 @@ RESORT_CATEGORY_LABEL: dict[str, str] = {
     "unknown": "Not a downhill ski hill",
 }
 
+# Thresholds for resort_size_category() — shown on facts-page tier graphic (use \n for wrap).
+RESORT_CATEGORY_CRITERIA: dict[str, str] = {
+    "small_hill": "< 50 trails\n< 1,000 acres",
+    "ski_mountain": "50+ trails\nor 1,000+ acres",
+    "multiple_mountains": "100+ trails\nor 5,000+ acres",
+    "mega_resort": "200+ trails\nor 10,000+ acres",
+    "unknown": "",
+}
+
 # Page units per resort (wiki-analyze-parquet-categories.js)
 PAGE_FRACTION_BY_CATEGORY: dict[str, float] = {
     "small_hill": 0.25,

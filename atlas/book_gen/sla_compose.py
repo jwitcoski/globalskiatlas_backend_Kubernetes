@@ -491,6 +491,72 @@ def _append_placement_objects(
                 )
 
 
+def _append_region_facts_layout_objects(
+    object_els: list[ET.Element],
+    *,
+    region_facts: RegionalFacts,
+    own_page: int,
+    page_x: float,
+    page_y: float,
+    content_x: float,
+    content_y: float,
+    content_w: float,
+    content_h: float,
+    elevation_only: bool = False,
+) -> None:
+    scale = type_scale_for_slot("full")
+    for item in layout_region_facts_page(
+        region_facts,
+        page_x=page_x,
+        page_y=page_y,
+        content_x=content_x,
+        content_y=content_y,
+        content_w=content_w,
+        content_h=content_h,
+        elevation_only=elevation_only,
+    ):
+        kind = item[0]
+        if kind == "shape":
+            object_els.append(
+                make_shape_frame(
+                    x=item[1],
+                    y=item[2],
+                    w=item[3],
+                    h=item[4],
+                    fill_color=item[5],
+                    own_page=own_page,
+                    item_id=_next_id(),
+                )
+            )
+        elif kind == "image":
+            object_els.append(
+                make_image_frame(
+                    x=item[1],
+                    y=item[2],
+                    w=item[3],
+                    h=item[4],
+                    image_path=item[5],
+                    own_page=own_page,
+                    item_id=_next_id(),
+                )
+            )
+        elif kind == "text":
+            object_els.append(
+                make_text_frame(
+                    x=item[1],
+                    y=item[2],
+                    w=item[3],
+                    h=item[4],
+                    text=item[5],
+                    fontsize=scale.body,
+                    own_page=own_page,
+                    item_id=_next_id(),
+                    fcolor=C_BODY,
+                    linesp=item[6],
+                )
+            )
+
+
 def compose_single_page_sla(
     *,
     is_title: bool,
@@ -505,6 +571,7 @@ def compose_single_page_sla(
     sla_output_path: Path | None = None,
     map_export_dpi: int = 300,
     slot_body_char_limits: dict[str, int | None] | None = None,
+    region_facts_elevation_only: bool = False,
 ) -> ET.ElementTree:
     """One physical page (ANZPAGES=1); used for reliable PDF export."""
     global _item_id
@@ -578,56 +645,18 @@ def compose_single_page_sla(
             )
         )
     elif region_facts is not None:
-        scale = type_scale_for_slot("full")
-        for item in layout_region_facts_page(
-            region_facts,
+        _append_region_facts_layout_objects(
+            object_els,
+            region_facts=region_facts,
+            own_page=0,
             page_x=px,
             page_y=py,
             content_x=content_x,
             content_y=content_y,
             content_w=content_w,
             content_h=content_h,
-        ):
-            kind = item[0]
-            if kind == "shape":
-                object_els.append(
-                    make_shape_frame(
-                        x=item[1],
-                        y=item[2],
-                        w=item[3],
-                        h=item[4],
-                        fill_color=item[5],
-                        own_page=0,
-                        item_id=_next_id(),
-                    )
-                )
-            elif kind == "image":
-                object_els.append(
-                    make_image_frame(
-                        x=item[1],
-                        y=item[2],
-                        w=item[3],
-                        h=item[4],
-                        image_path=item[5],
-                        own_page=0,
-                        item_id=_next_id(),
-                    )
-                )
-            elif kind == "text":
-                object_els.append(
-                    make_text_frame(
-                        x=item[1],
-                        y=item[2],
-                        w=item[3],
-                        h=item[4],
-                        text=item[5],
-                        fontsize=scale.body,
-                        own_page=0,
-                        item_id=_next_id(),
-                        fcolor=C_BODY,
-                        linesp=item[6],
-                    )
-                )
+            elevation_only=region_facts_elevation_only,
+        )
     elif is_title:
         scale = type_scale_for_slot("full")
         object_els.append(
@@ -675,6 +704,10 @@ def compose_chapter_sla(
     sla_output_path: Path | None = None,
     map_export_dpi: int = 300,
     slot_body_char_limits: dict[str, int | None] | None = None,
+    overview_image_path: str | None = None,
+    overview_body: str | None = None,
+    region_facts: RegionalFacts | None = None,
+    region_facts_elevation_only: bool = False,
 ) -> ET.ElementTree:
     global _item_id
     _item_id = 1000
@@ -689,8 +722,18 @@ def compose_chapter_sla(
     content_h = ph - mt - mb
 
     pages = layout_plan.get("pages") or []
-    page_count = len(pages) + (1 if chapter_title else 0)
-    log(f"sla_compose: writing {len(pages)} content page(s) (+ title={bool(chapter_title)}) ...")
+    prefix = 0
+    if overview_image_path:
+        prefix += 1
+    elif chapter_title:
+        prefix += 1
+    if region_facts is not None:
+        prefix += 1
+    page_count = len(pages) + prefix
+    log(
+        f"sla_compose: writing {len(pages)} content page(s) "
+        f"(+ prefix={prefix}: overview/facts/title) ..."
+    )
 
     root = build_document_root(
         width_pt=pw,
@@ -705,7 +748,56 @@ def compose_chapter_sla(
     object_els: list[ET.Element] = []
 
     own = 0
-    if chapter_title:
+    if overview_image_path:
+        px, py = scribus_page_origin(own, ph)
+        page_els.append(
+            make_page(
+                num=own,
+                width_pt=pw,
+                height_pt=ph,
+                margin_pt=margin_avg,
+                page_xpos=px,
+                page_ypos=py,
+            )
+        )
+        gap = 12.0
+        img_h = max(120.0, content_h * 0.58)
+        img_h = min(img_h, content_h - 80.0)
+        text_y = py + content_y + img_h + gap
+        text_h = max(40.0, (py + content_y + content_h) - text_y)
+        object_els.append(
+            make_image_frame(
+                x=px + content_x,
+                y=py + content_y,
+                w=content_w,
+                h=img_h,
+                image_path=overview_image_path,
+                own_page=own,
+                item_id=_next_id(),
+            )
+        )
+        scale = type_scale_for_slot("full")
+        overview_runs = runs_title(f"{chapter_title}\nRegional Overview", scale)
+        body = (overview_body or "").strip()
+        if body:
+            drop, rest = split_drop_cap(body)
+            overview_runs.append(TextRun("\n\n", scale.body, C_BODY))
+            overview_runs.extend(runs_drop_cap_body(drop, rest, scale))
+        object_els.append(
+            make_text_frame(
+                x=px + content_x,
+                y=text_y,
+                w=content_w,
+                h=text_h,
+                text=overview_runs,
+                fontsize=scale.title * 1.1,
+                own_page=own,
+                item_id=_next_id(),
+                fcolor=C_TITLE,
+            )
+        )
+        own += 1
+    elif chapter_title:
         px, py = scribus_page_origin(own, ph)
         page_els.append(
             make_page(
@@ -728,6 +820,32 @@ def compose_chapter_sla(
                 own_page=own,
                 item_id=_next_id(),
             )
+        )
+        own += 1
+
+    if region_facts is not None:
+        px, py = scribus_page_origin(own, ph)
+        page_els.append(
+            make_page(
+                num=own,
+                width_pt=pw,
+                height_pt=ph,
+                margin_pt=margin_avg,
+                page_xpos=px,
+                page_ypos=py,
+            )
+        )
+        _append_region_facts_layout_objects(
+            object_els,
+            region_facts=region_facts,
+            own_page=own,
+            page_x=px,
+            page_y=py,
+            content_x=content_x,
+            content_y=content_y,
+            content_w=content_w,
+            content_h=content_h,
+            elevation_only=region_facts_elevation_only,
         )
         own += 1
 

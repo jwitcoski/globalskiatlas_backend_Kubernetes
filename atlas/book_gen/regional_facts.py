@@ -402,4 +402,16 @@ def compute_regional_facts_from_parquet(
             )
         except Exception as exc:
             log(f"Regional facts charts failed: {exc}", file=sys.stderr)
+    _attach_elevation_chart_path(facts, charts_dir)
     return facts
+
+
+def _attach_elevation_chart_path(
+    facts: RegionalFacts, charts_dir: Path | None
+) -> None:
+    """Use existing chart_elevation_range.png when present (e.g. atlas_work/book/.../_facts_charts/)."""
+    if charts_dir is None:
+        return
+    path = charts_dir / "chart_elevation_range.png"
+    if path.is_file():
+        facts.chart_paths["elevation_range"] = str(path.resolve()).replace("\\", "/")

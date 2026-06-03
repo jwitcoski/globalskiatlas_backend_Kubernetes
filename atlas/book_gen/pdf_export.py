@@ -50,6 +50,7 @@ def export_chapter_pdf(
     overview_body: str | None = None,
     region_facts: RegionalFacts | None = None,
     slot_body_char_limits: dict[str, int | None] | None = None,
+    region_facts_elevation_only: bool = False,
 ) -> bool:
     """
     Scribus often flattens multi-page SLA into one sheet on PDF export.
@@ -105,6 +106,7 @@ def export_chapter_pdf(
             sla_output_path=sla_path,
             map_export_dpi=map_export_dpi,
             slot_body_char_limits=slot_body_char_limits,
+            region_facts_elevation_only=region_facts_elevation_only,
         )
         write_sla(tree, sla_path)
         if not export_pdf_scribus(scribus_bin, sla_path, pdf_path):

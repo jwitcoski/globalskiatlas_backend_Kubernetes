@@ -103,13 +103,46 @@ def _geom_from_shapely(geom) -> Optional[List[Dict[str, float]]]:
     """Convert Shapely geometry to OSM-style lat/lon list."""
     if geom is None:
         return None
-    from shapely.geometry import Point, LineString, Polygon
+    from shapely.geometry import LineString, MultiPolygon, Point, Polygon
     if isinstance(geom, Point):
         return [{"lat": geom.y, "lon": geom.x}]
-    if isinstance(geom, (LineString, Polygon)):
-        coords = geom.exterior.coords if isinstance(geom, Polygon) else geom.coords
-        return [{"lat": c[1], "lon": c[0]} for c in coords]
+    if isinstance(geom, LineString):
+        return [{"lat": c[1], "lon": c[0]} for c in geom.coords]
+    if isinstance(geom, Polygon):
+        return [{"lat": c[1], "lon": c[0]} for c in geom.exterior.coords]
+    if isinstance(geom, MultiPolygon):
+        poly = max(geom.geoms, key=lambda p: p.area)
+        return [{"lat": c[1], "lon": c[0]} for c in poly.exterior.coords]
     return None
+
+
+def _parse_other_tags(raw) -> dict:
+    """Parse ogr2ogr HSTORE / JSON other_tags into a dict."""
+    tags: Dict[str, str] = {}
+    if raw is None or str(raw).strip() in ("", "nan", "None"):
+        return tags
+    s = str(raw).strip()
+    if s.startswith("{"):
+        try:
+            tags.update(json.loads(s))
+        except json.JSONDecodeError:
+            pass
+    else:
+        for part in s.split('","'):
+            if "=>" in part:
+                kv = part.replace('"', "").split("=>", 1)
+                if len(kv) == 2:
+                    tags[kv[0].strip()] = kv[1].strip()
+    return tags
+
+
+def _scalar_or_none(value):
+    if value is None:
+        return None
+    s = str(value).strip()
+    if s in ("", "nan", "None"):
+        return None
+    return value
 
 
 def _geojson_ring_to_osm_geom(coords: list) -> List[Dict[str, float]]:
@@ -192,9 +225,62 @@ def _lookup_country_state_from_boundaries(
 
 
 def _load_winter_sports(path: Path) -> Dict[Tuple[str, int], dict]:
-    """Load winter_sports from OSM JSON or GeoJSON. Returns ws_by_id."""
+    """Load winter_sports from Parquet, GeoJSON, or OSM JSON. Returns ws_by_id."""
+    if path.suffix.lower() == ".parquet":
+        import geopandas as gpd
+
+        gdf = gpd.read_parquet(path)
+        ws_by_id: Dict[Tuple[str, int], dict] = {}
+        for _, row in gdf.iterrows():
+            way_id = _scalar_or_none(row.get("osm_way_id"))
+            rel_id = _scalar_or_none(row.get("osm_id"))
+            if way_id is not None:
+                ws_type = "way"
+                oid = int(float(way_id))
+            elif rel_id is not None:
+                ws_type = (
+                    "relation"
+                    if str(row.get("type") or "").lower() == "multipolygon"
+                    else "way"
+                )
+                oid = int(float(rel_id))
+            else:
+                continue
+            coords = _geom_from_shapely(row.get("geometry"))
+            if not coords:
+                continue
+            lats = [p["lat"] for p in coords]
+            lons = [p["lon"] for p in coords]
+            tags = {
+                "name": row.get("name") or row.get("Ski Area") or str(oid),
+            }
+            tags.update(_parse_other_tags(row.get("other_tags")))
+            for col in (
+                "landuse", "leisure", "sport", "amenity", "shop",
+                "boundary", "building", "website", "operator", "opening_hours", "phone",
+            ):
+                val = _scalar_or_none(row.get(col))
+                if val is not None:
+                    tags[col] = str(val)
+            ws = {
+                "type": ws_type,
+                "id": oid,
+                "tags": tags,
+                "geometry": coords,
+                "bounds": {
+                    "minlat": min(lats),
+                    "maxlat": max(lats),
+                    "minlon": min(lons),
+                    "maxlon": max(lons),
+                },
+                "country": row.get("Country") or row.get("country"),
+                "state": row.get("State") or row.get("state"),
+            }
+            ws_by_id[(ws_type, oid)] = ws
+        return ws_by_id
+
     data = json.loads(path.read_text(encoding="utf-8"))
-    ws_by_id: Dict[Tuple[str, int], dict] = {}
+    ws_by_id = {}
 
     # GeoJSON FeatureCollection
     if data.get("type") == "FeatureCollection" and "features" in data:
@@ -221,21 +307,7 @@ def _load_winter_sports(path: Path) -> Dict[Tuple[str, int], dict]:
             lats = [p["lat"] for p in coords]
             lons = [p["lon"] for p in coords]
             tags = {"name": props.get("name") or props.get("Name") or str(oid)}
-            # Parse other_tags (ogr2ogr HSTORE) for name:en, int_name
-            other_tags = props.get("other_tags")
-            if other_tags:
-                s = str(other_tags).strip()
-                if s.startswith("{"):
-                    try:
-                        tags.update(json.loads(s))
-                    except json.JSONDecodeError:
-                        pass
-                else:
-                    for part in s.split('","'):
-                        if "=>" in part:
-                            kv = part.replace('"', "").split("=>", 1)
-                            if len(kv) == 2:
-                                tags[kv[0].strip()] = kv[1].strip()
+            tags.update(_parse_other_tags(props.get("other_tags")))
             ws = {
                 "type": ws_type,
                 "id": oid,
@@ -273,7 +345,7 @@ def _load_osm_nearby(path: Path) -> List[dict]:
                 "type": row.get("osm_type"),
                 "id": row.get("osm_id"),
                 "winter_sports_id": row.get("winter_sports_id"),
-                "winter_sports_type": row.get("winter_sports_type"),
+                "winter_sports_type": row.get("winter_sports_type") or "way",
                 "winter_sports_name": row.get("winter_sports_name"),
                 "country": row.get("country"),
                 "state": row.get("state"),
@@ -315,8 +387,8 @@ def analyze(
     by_ws: Dict[Tuple[str, int], List[dict]] = {}
     for elem in osm_elements:
         ws_id = elem.get("winter_sports_id")
-        ws_type = elem.get("winter_sports_type")
-        if ws_id is not None and ws_type:
+        ws_type = elem.get("winter_sports_type") or "way"
+        if ws_id is not None:
             try:
                 key = (str(ws_type), int(float(ws_id)))
                 by_ws.setdefault(key, []).append(elem)
@@ -368,10 +440,12 @@ def analyze(
         has_night_skiing = False
         lit_pistes = 0
         difficulty_counts: Dict[str, int] = {d: 0 for d in PISTE_DIFFICULTIES}
+        snow_park_trail_count = 0
         for elem in nearby:
             etags = elem.get("tags", {})
             piste_type = etags.get("piste:type")
-            if piste_type == "freestyle":
+            if piste_type in ("snow_park", "freestyle"):
+                snow_park_trail_count += 1
                 has_snow_park = True
             if piste_type in ("sled", "tubing"):
                 has_sledding_tubing = True
@@ -470,6 +544,7 @@ def analyze(
             "avg_trail_mi": avg_trail_mi,
             "total_trail_mi": total_trail_mi,
             **{f"trails_{d}": difficulty_counts[d] for d in PISTE_DIFFICULTIES},
+            "trails_snow_park": snow_park_trail_count,
             "gladed_terrain": "Yes" if has_gladed else "No",
             "snow_park": "Yes" if has_snow_park else "No",
             "sledding_tubing": "Yes" if has_sledding_tubing else "No",
@@ -495,6 +570,7 @@ def analyze(
         "total_area_ha", "total_area_acres", "skiable_terrain_ha", "skiable_terrain_acres",
         "total_lifts", "longest_lift_mi", "downhill_trails", "longest_trail_mi", "avg_trail_mi", "total_trail_mi",
         *[f"trails_{d}" for d in PISTE_DIFFICULTIES],
+        "trails_snow_park",
         "gladed_terrain", "snow_park", "sledding_tubing",
         "night_skiing", "lit_pistes", "lit_lifts", "snowmaking",
         "lift_types",
@@ -525,7 +601,7 @@ if __name__ == "__main__":
         "winter_sports",
         nargs="?",
         default="winter_sports_test.json",
-        help="Winter sports GeoJSON or OSM JSON",
+        help="Winter sports Parquet, GeoJSON, or OSM JSON",
     )
     parser.add_argument(
         "osm_nearby",

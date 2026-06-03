@@ -289,6 +289,12 @@ def run_chapter(
             sla_output_path=sla_path,
             map_export_dpi=map_dpi,
             slot_body_char_limits=body_limits,
+            overview_image_path=overview_image_path,
+            overview_body=overview_body,
+            region_facts=region_facts,
+            region_facts_elevation_only=bool(
+                book_config.get("region_facts_elevation_only", True)
+            ),
         )
         write_sla(tree, sla_path)
 
@@ -326,6 +332,9 @@ def run_chapter(
             overview_body=overview_body,
             region_facts=region_facts,
             slot_body_char_limits=body_limits,
+            region_facts_elevation_only=bool(
+                book_config.get("region_facts_elevation_only", True)
+            ),
         ):
             log(f"PDF: {pdf_path}")
         else:

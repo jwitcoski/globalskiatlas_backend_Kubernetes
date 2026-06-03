@@ -114,6 +114,48 @@ def runs_region_facts(facts: RegionalFacts) -> list[TextRun]:
     return runs
 
 
+def _append_bottom_chart_grid(
+    items: list[tuple[Any, ...]],
+    *,
+    x0: float,
+    bottom_y: float,
+    content_w: float,
+    bottom_h: float,
+    gap: float,
+    charts: dict[str, str],
+) -> None:
+    """Place up to four charts in the bottom half (2×2): scatter, difficulty, tiers, lifts."""
+    slots: list[tuple[str | None, int, int]] = [
+        (charts.get("scatter"), 0, 0),
+        (charts.get("trail_difficulty"), 1, 0),
+        (charts.get("tiers"), 0, 1),
+        (charts.get("lift_types"), 1, 1),
+    ]
+    present = [(path, col, row) for path, col, row in slots if path]
+    n = len(present)
+    if not n:
+        return
+
+    col_w = (content_w - gap) / 2.0
+
+    if n == 1:
+        path, _, _ = present[0]
+        items.append(("image", x0, bottom_y, content_w, bottom_h, path))
+        return
+
+    if n == 2:
+        for i, (path, _, _) in enumerate(present):
+            x = x0 + i * (col_w + gap)
+            items.append(("image", x, bottom_y, col_w, bottom_h, path))
+        return
+
+    row_h = (bottom_h - gap) / 2.0
+    for path, col, row in present:
+        x = x0 + col * (col_w + gap)
+        y = bottom_y + row * (row_h + gap)
+        items.append(("image", x, y, col_w, row_h, path))
+
+
 def layout_region_facts_page(
     facts: RegionalFacts,
     *,
@@ -123,6 +165,7 @@ def layout_region_facts_page(
     content_y: float,
     content_w: float,
     content_h: float,
+    elevation_only: bool = False,
 ) -> list[tuple[Any, ...]]:
     """
     Return layout items: ("text", x, y, w, h, runs, linesp) | ("image", x, y, w, h, path).
@@ -138,9 +181,12 @@ def layout_region_facts_page(
     items: list[tuple[Any, ...]] = []
 
     if has_charts:
-        header_h = 52.0
-        records_h = 44.0
-        chart_area_h = content_h - header_h - records_h - 2 * gap
+        header_h = 40.0
+        use_split = bool(charts.get("elevation_range")) and not elevation_only
+        records_h = 0.0 if use_split else 44.0
+        chart_area_h = content_h - header_h - records_h - gap
+        if records_h:
+            chart_area_h -= gap
 
         items.append(
             (
@@ -155,56 +201,43 @@ def layout_region_facts_page(
         )
 
         if charts.get("elevation_range"):
-            # Upper half of page content: elevation mountains; smaller charts below.
-            elev_h = chart_area_h * 0.54
-            small_block_h = chart_area_h - elev_h - gap
-            small_row_h = (small_block_h - gap) / 2.0
-            col_w = (content_w - gap) / 2.0
-
             chart_y_elev = y0 + header_h + gap
-            items.append(
-                (
-                    "image",
-                    x0,
-                    chart_y_elev,
-                    content_w,
-                    elev_h,
-                    charts["elevation_range"],
+            if elevation_only:
+                elev_h = chart_area_h
+                items.append(
+                    (
+                        "image",
+                        x0,
+                        chart_y_elev,
+                        content_w,
+                        elev_h,
+                        charts["elevation_range"],
+                    )
                 )
-            )
+            else:
+                # Top half: elevation; bottom half: 2×2 chart grid.
+                elev_h = (chart_area_h - gap) * 0.5
+                items.append(
+                    (
+                        "image",
+                        x0,
+                        chart_y_elev,
+                        content_w,
+                        elev_h,
+                        charts["elevation_range"],
+                    )
+                )
 
-            y1 = chart_y_elev + elev_h + gap
-            if charts.get("scatter"):
-                items.append(
-                    ("image", x0, y1, col_w, small_row_h, charts["scatter"])
-                )
-            if charts.get("tiers"):
-                items.append(
-                    (
-                        "image",
-                        x0 + col_w + gap,
-                        y1,
-                        col_w,
-                        small_row_h,
-                        charts["tiers"],
-                    )
-                )
-            y2 = y1 + small_row_h + gap
-            if charts.get("trail_difficulty"):
-                items.append(
-                    ("image", x0, y2, col_w, small_row_h, charts["trail_difficulty"])
-                )
-            right_bottom = charts.get("base_elevations") or charts.get("lift_types")
-            if right_bottom:
-                items.append(
-                    (
-                        "image",
-                        x0 + col_w + gap,
-                        y2,
-                        col_w,
-                        small_row_h,
-                        right_bottom,
-                    )
+                bottom_y = chart_y_elev + elev_h + gap
+                bottom_h = chart_area_h - elev_h - gap
+                _append_bottom_chart_grid(
+                    items,
+                    x0=x0,
+                    bottom_y=bottom_y,
+                    content_w=content_w,
+                    bottom_h=bottom_h,
+                    gap=gap,
+                    charts=charts,
                 )
         else:
             row_h = (chart_area_h - gap) / 2.0
@@ -234,24 +267,25 @@ def layout_region_facts_page(
                 items.append(
                     ("image", x0, chart_y2, half_w, row_h, charts["trail_difficulty"])
                 )
-            right_bottom = charts.get("base_elevations") or charts.get("lift_types")
+            right_bottom = charts.get("lift_types")
             if right_bottom:
                 items.append(
                     ("image", x0 + half_w + gap, chart_y2, half_w, row_h, right_bottom)
                 )
 
-        records_y = y0 + content_h - records_h
-        items.append(
-            (
-                "text",
-                x0,
-                records_y,
-                content_w,
-                records_h,
-                runs_region_facts_records(facts),
-                scale.linesp * 0.95,
+        if records_h > 0:
+            records_y = y0 + content_h - records_h
+            items.append(
+                (
+                    "text",
+                    x0,
+                    records_y,
+                    content_w,
+                    records_h,
+                    runs_region_facts_records(facts),
+                    scale.linesp * 0.95,
+                )
             )
-        )
     else:
         pad = 14.0
         items.append(
