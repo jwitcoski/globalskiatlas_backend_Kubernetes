@@ -247,21 +247,35 @@ def build_overview_hillshade(
         boundary = boundary.to_crs("EPSG:4326")
 
     geom = boundary.geometry.union_all()
-    minx, miny, maxx, maxy = boundary.total_bounds
-    minx -= pad_deg
-    miny -= pad_deg
-    maxx += pad_deg
-    maxy += pad_deg
-
-    tile_coords = tiles_for_bbox(miny, minx, maxy, maxx)
+    tile_coords: set[tuple[int, int]] = set()
+    geoms = list(boundary.geometry)
+    if not geoms:
+        geoms = [geom]
+    for part in geoms:
+        if part is None or part.is_empty:
+            continue
+        minx, miny, maxx, maxy = part.bounds
+        minx -= pad_deg
+        miny -= pad_deg
+        maxx += pad_deg
+        maxy += pad_deg
+        tile_coords.update(tiles_for_bbox(miny, minx, maxy, maxx))
+    if not tile_coords:
+        raise RuntimeError(f"No Skadi tile coords for {boundary_path}")
     tiles = []
     for lat_sw, lon_sw in tile_coords:
         arr = fetch_skadi_tile(lat_sw, lon_sw, cache_dir)
         if arr is not None:
             tiles.append((lat_sw, lon_sw, arr))
     if not tiles:
+        minx, miny, maxx, maxy = boundary.total_bounds
         raise RuntimeError(f"No Skadi tiles fetched for bbox {miny},{minx},{maxy},{maxx}")
 
+    minx, miny, maxx, maxy = boundary.total_bounds
+    minx -= pad_deg
+    miny -= pad_deg
+    maxx += pad_deg
+    maxy += pad_deg
     dem, west, south, east, north = _mosaic_tiles(tiles)
     dem, west, south, east, north = _crop_dem_to_bbox(
         dem, west, south, east, north, minx, miny, maxx, maxy

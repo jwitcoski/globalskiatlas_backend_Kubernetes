@@ -21,18 +21,31 @@ from atlas.book_gen.wiki_style import (
     C_BODY,
     C_TITLE,
     TextRun,
-    runs_drop_cap_body,
+    runs_body_plain,
     runs_footer,
     runs_title,
     type_scale_for_slot,
 )
-from atlas.book_gen.render_resort_fields import split_drop_cap
 from atlas.book_gen.regional_facts import RegionalFacts
 from atlas.book_gen.sla_layout_facts import layout_region_facts_page
 
 PT_PER_IN = 72.0
 # Scribus canvas: first page sits at ScratchLeft/ScratchTop (see saved chapter.sla).
 SCRIBUS_CANVAS_X = 100.0
+
+
+def _overview_text_runs(
+    chapter_title: str,
+    overview_body: str | None,
+    scale,
+) -> list[TextRun]:
+    """Title + body using the same body size/font as resort pages (no drop cap)."""
+    runs = runs_title(f"{chapter_title}\nRegional Overview", scale)
+    body = (overview_body or "").strip()
+    if body:
+        runs.append(TextRun("\n\n", scale.body, C_BODY))
+        runs.extend(runs_body_plain(body, scale))
+    return runs
 SCRIBUS_CANVAS_Y = 20.0
 PAGE_GAP_PT = 40.0
 
@@ -625,23 +638,18 @@ def compose_single_page_sla(
             )
         )
         scale = type_scale_for_slot("full")
-        overview_runs = runs_title(f"{chapter_title}\nRegional Overview", scale)
-        body = (overview_body or "").strip()
-        if body:
-            drop, rest = split_drop_cap(body)
-            overview_runs.append(TextRun("\n\n", scale.body, C_BODY))
-            overview_runs.extend(runs_drop_cap_body(drop, rest, scale))
         object_els.append(
             make_text_frame(
                 x=px + content_x,
                 y=text_y,
                 w=content_w,
                 h=text_h,
-                text=overview_runs,
-                fontsize=scale.title * 1.1,
+                text=_overview_text_runs(chapter_title, overview_body, scale),
+                fontsize=scale.body,
                 own_page=0,
                 item_id=_next_id(),
-                fcolor=C_TITLE,
+                fcolor=C_BODY,
+                linesp=scale.linesp,
             )
         )
     elif region_facts is not None:
@@ -777,23 +785,18 @@ def compose_chapter_sla(
             )
         )
         scale = type_scale_for_slot("full")
-        overview_runs = runs_title(f"{chapter_title}\nRegional Overview", scale)
-        body = (overview_body or "").strip()
-        if body:
-            drop, rest = split_drop_cap(body)
-            overview_runs.append(TextRun("\n\n", scale.body, C_BODY))
-            overview_runs.extend(runs_drop_cap_body(drop, rest, scale))
         object_els.append(
             make_text_frame(
                 x=px + content_x,
                 y=text_y,
                 w=content_w,
                 h=text_h,
-                text=overview_runs,
-                fontsize=scale.title * 1.1,
+                text=_overview_text_runs(chapter_title, overview_body, scale),
+                fontsize=scale.body,
                 own_page=own,
                 item_id=_next_id(),
-                fcolor=C_TITLE,
+                fcolor=C_BODY,
+                linesp=scale.linesp,
             )
         )
         own += 1

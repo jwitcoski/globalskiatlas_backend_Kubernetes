@@ -53,6 +53,29 @@ def runs_region_facts_records(facts: RegionalFacts) -> list[TextRun]:
     return runs
 
 
+def runs_region_facts_corner(facts: RegionalFacts) -> list[TextRun]:
+    """Resort & trail/lift superlatives not covered by the facts charts."""
+    scale = type_scale_for_slot("full")
+    runs: list[TextRun] = []
+    lbl = scale.stats_label * 0.88
+    body = scale.body * 0.78
+
+    records = list(facts.resort_records) + list(facts.trail_lift_records)
+    if not records:
+        return runs
+
+    runs.append(TextRun("RECORDS\n", lbl, C_STATS_LABEL))
+    for rec in records:
+        runs.append(TextRun(f"{rec.label}\n", lbl, C_STATS_LABEL))
+        runs.append(TextRun(f"{rec.name} — {rec.detail}\n", body, C_BODY))
+
+    return runs
+
+
+def _has_corner_records(facts: RegionalFacts) -> bool:
+    return bool(facts.resort_records or facts.trail_lift_records)
+
+
 def runs_region_facts(facts: RegionalFacts) -> list[TextRun]:
     """Full text layout (used when no charts are available)."""
     scale = type_scale_for_slot("full")
@@ -123,13 +146,13 @@ def _append_bottom_chart_grid(
     bottom_h: float,
     gap: float,
     charts: dict[str, str],
+    facts: RegionalFacts | None = None,
 ) -> None:
-    """Place up to four charts in the bottom half (2×2): scatter, difficulty, tiers, lifts."""
+    """Bottom half: scatter top-left; lifts + vertical trail difficulty bottom-left; records right."""
     slots: list[tuple[str | None, int, int]] = [
         (charts.get("scatter"), 0, 0),
         (charts.get("trail_difficulty"), 1, 0),
-        (charts.get("tiers"), 0, 1),
-        (charts.get("lift_types"), 1, 1),
+        (charts.get("lift_types"), 0, 1),
     ]
     present = [(path, col, row) for path, col, row in slots if path]
     n = len(present)
@@ -147,6 +170,81 @@ def _append_bottom_chart_grid(
         for i, (path, _, _) in enumerate(present):
             x = x0 + i * (col_w + gap)
             items.append(("image", x, bottom_y, col_w, bottom_h, path))
+        return
+
+    if n == 3:
+        row_h = (bottom_h - gap) / 2.0
+        col_w = (content_w - gap) / 2.0
+        top_y = bottom_y
+        bot_y = bottom_y + row_h + gap
+        grid_bottom = bot_y + row_h
+        left_x = x0
+        right_x = x0 + col_w + gap
+        scatter = charts.get("scatter")
+        diff = charts.get("trail_difficulty")
+        lifts = charts.get("lift_types")
+        has_records = facts is not None and _has_corner_records(facts)
+
+        if scatter:
+            items.append(("image", left_x, top_y, col_w, row_h, scatter))
+
+        if lifts and diff:
+            sub_gap = gap
+            lifts_w = (col_w - sub_gap) * 0.58
+            diff_w = col_w - sub_gap - lifts_w
+            items.append(("image", left_x, bot_y, lifts_w, row_h, lifts))
+            items.append(
+                (
+                    "image",
+                    left_x + lifts_w + sub_gap,
+                    bot_y,
+                    diff_w,
+                    row_h,
+                    diff,
+                )
+            )
+        elif lifts:
+            items.append(("image", left_x, bot_y, col_w, row_h, lifts))
+        elif diff:
+            items.append(("image", left_x, bot_y, col_w, row_h, diff))
+
+        if has_records:
+            records_h = grid_bottom - top_y
+            scale = type_scale_for_slot("full")
+            items.append(
+                (
+                    "shape",
+                    right_x,
+                    top_y,
+                    col_w,
+                    records_h,
+                    "AtlasStatsBg",
+                )
+            )
+            items.append(
+                (
+                    "text",
+                    right_x + 8.0,
+                    top_y + 6.0,
+                    col_w - 16.0,
+                    records_h - 12.0,
+                    runs_region_facts_corner(facts),
+                    scale.linesp * 0.88,
+                )
+            )
+        elif diff:
+            items.append(("image", right_x, top_y, col_w, grid_bottom - top_y, diff))
+        elif lifts:
+            items.append(
+                (
+                    "image",
+                    x0,
+                    bot_y,
+                    content_w,
+                    row_h,
+                    lifts,
+                )
+            )
         return
 
     row_h = (bottom_h - gap) / 2.0
@@ -238,39 +336,32 @@ def layout_region_facts_page(
                     bottom_h=bottom_h,
                     gap=gap,
                     charts=charts,
+                    facts=facts,
                 )
         else:
             row_h = (chart_area_h - gap) / 2.0
             chart_y1 = y0 + header_h + gap
             chart_y2 = chart_y1 + row_h + gap
-            col_w_left = content_w * 0.58
-            col_w_right = content_w - col_w_left - gap
+            half_w = (content_w - gap) / 2.0
 
             if charts.get("scatter"):
                 items.append(
-                    ("image", x0, chart_y1, col_w_left, row_h, charts["scatter"])
+                    ("image", x0, chart_y1, content_w, row_h, charts["scatter"])
                 )
-            if charts.get("tiers"):
-                items.append(
-                    (
-                        "image",
-                        x0 + col_w_left + gap,
-                        chart_y1,
-                        col_w_right,
-                        row_h,
-                        charts["tiers"],
-                    )
-                )
-
-            half_w = (content_w - gap) / 2.0
             if charts.get("trail_difficulty"):
                 items.append(
                     ("image", x0, chart_y2, half_w, row_h, charts["trail_difficulty"])
                 )
-            right_bottom = charts.get("lift_types")
-            if right_bottom:
+            if charts.get("lift_types"):
                 items.append(
-                    ("image", x0 + half_w + gap, chart_y2, half_w, row_h, right_bottom)
+                    (
+                        "image",
+                        x0 + half_w + gap,
+                        chart_y2,
+                        half_w,
+                        row_h,
+                        charts["lift_types"],
+                    )
                 )
 
         if records_h > 0:

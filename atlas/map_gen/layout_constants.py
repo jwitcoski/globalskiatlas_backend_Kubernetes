@@ -45,6 +45,16 @@ def main_map_frame_mm(tier: LayoutTier | str) -> tuple[float, float]:
     return m[key]
 
 
+def _bounds_look_geographic(bounds: tuple[float, float, float, float]) -> bool:
+    """True when bounds are lon/lat degrees (not projected map units)."""
+    xmin, ymin, xmax, ymax = bounds
+    return (
+        max(abs(xmin), abs(xmax), abs(ymin), abs(ymax)) <= 360
+        and abs(xmax - xmin) <= 360
+        and abs(ymax - ymin) <= 180
+    )
+
+
 def expand_bounds_to_main_map_aspect(
     bounds: tuple[float, float, float, float],
     *,
@@ -59,7 +69,7 @@ def expand_bounds_to_main_map_aspect(
 
     For EPSG:4326 extents we approximate "width" in *meters* by scaling longitude span
     by cos(latitude) at the extent midpoint, so the aspect match is much closer to the
-    true rendered aspect.
+    true rendered aspect. Projected CRS bounds (e.g. EPSG:5070) already use map units.
     """
     xmin, ymin, xmax, ymax = bounds
     w = xmax - xmin
@@ -72,17 +82,19 @@ def expand_bounds_to_main_map_aspect(
     fh = frame_height_mm if frame_height_mm is not None else MAIN_MAP_FRAME_HEIGHT_MM
     target_wh = fw / fh
 
-    lat_mid = (ymin + ymax) / 2.0
-    cos_lat = max(0.01, math.cos(math.radians(lat_mid)))
-    # approximate width/height in meters: dx_deg * cos(lat) / dy_deg
-    cur_wh = (w * cos_lat) / h
+    geographic = _bounds_look_geographic(bounds)
+    if geographic:
+        lat_mid = (ymin + ymax) / 2.0
+        cos_lat = max(0.01, math.cos(math.radians(lat_mid)))
+        cur_wh = (w * cos_lat) / h
+    else:
+        cos_lat = 1.0
+        cur_wh = w / h
 
     if cur_wh < target_wh:
-        # need wider: compute required longitude span in degrees
         w_new = (h * target_wh) / cos_lat
         dx = (w_new - w) / 2.0
         return (xmin - dx, ymin, xmax + dx, ymax)
-    # need taller: compute required latitude span in degrees
     h_new = (w * cos_lat) / target_wh
     dy = (h_new - h) / 2.0
     return (xmin, ymin - dy, xmax, ymax + dy)

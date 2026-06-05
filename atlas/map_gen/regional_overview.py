@@ -339,7 +339,11 @@ def _boundary_for_unit(
             g = g.iloc[[0]]
     if g.empty:
         raise ValueError(f"No boundary polygon for {unit}")
-    return g[["geometry"]].copy()
+    out = g[["geometry"]].copy()
+    # Country outlines from NE 10m are very heavy (USA ~1.6 MB GeoJSON); simplify for layout.
+    if unit.kind == "country":
+        out["geometry"] = out.geometry.simplify(tolerance=0.05, preserve_topology=True)
+    return out
 
 
 def _export_resort_points(sub: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
@@ -502,7 +506,7 @@ def export_unit(
         else:
             dem_ok = dem_path.is_file() and crs_ok
 
-        if not dem_ok:
+        if not dem_ok and not data_only:
             import os
             import subprocess
 

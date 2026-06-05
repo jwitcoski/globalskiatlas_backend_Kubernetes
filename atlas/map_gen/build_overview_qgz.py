@@ -142,7 +142,13 @@ def _ensure_dem_layers(
     return (legacy_tif, legacy_tif, None) if legacy_tif.is_file() else None
 
 
-def _build(out_dir: Path, qgis_root: Path | None = None) -> Path:
+def _build(
+    out_dir: Path,
+    qgis_root: Path | None = None,
+    *,
+    skip_dem: bool = False,
+    skip_labels: bool = False,
+) -> Path:
     from atlas.map_gen.export_layouts import ensure_headless_qgis_initialized, shutdown_headless_qgis_if_initialized
 
     admin_path = out_dir / "admin_boundary.geojson"
@@ -155,41 +161,58 @@ def _build(out_dir: Path, qgis_root: Path | None = None) -> Path:
     slug = out_dir.name
     out_qgz = out_dir / f"{slug}_overview_map.qgz"
 
-    import geopandas as gpd
+    proj_admin = out_dir / "admin_boundary_proj.geojson"
+    proj_resorts = out_dir / "ski_resorts_proj.geojson"
+    map_crs = meta.get("crs")
+    vectors_ready = (
+        map_crs
+        and map_crs.upper() not in ("EPSG:4326", "OGC:CRS84")
+        and proj_admin.is_file()
+        and proj_resorts.is_file()
+    )
 
-    from atlas.map_gen.overview_crs import overview_projected_crs
-    from atlas.map_gen.overview_reproject import reproject_overview_vectors
+    if vectors_ready:
+        admin_path, resorts_path = proj_admin, proj_resorts
+        print(f"  Map CRS: {map_crs} (pre-projected)", flush=True)
+    else:
+        # geopandas hangs under QGIS' Python on Windows; use the venv for vector prep.
+        import subprocess
 
-    boundary_wgs = gpd.read_file(admin_path)
-    if boundary_wgs.crs is None:
-        boundary_wgs = boundary_wgs.set_crs("EPSG:4326")
-    map_crs = overview_projected_crs(meta, boundary_wgs)
-    print(f"  Map CRS: {map_crs}", flush=True)
+        venv_py = REPO_ROOT / ".venv/Scripts/python.exe"
+        if not venv_py.is_file():
+            raise RuntimeError(".venv required to project overview vectors before QGIS build")
+        subprocess.run(
+            [
+                str(venv_py),
+                "-c",
+                (
+                    "import json; from pathlib import Path; "
+                    "import geopandas as gpd; "
+                    "from atlas.map_gen.overview_crs import overview_projected_crs; "
+                    "from atlas.map_gen.overview_reproject import reproject_overview_vectors; "
+                    f"out_dir = Path({str(out_dir)!r}); "
+                    "meta = json.loads((out_dir / 'overview_meta.json').read_text(encoding='utf-8')); "
+                    "b = gpd.read_file(out_dir / 'admin_boundary.geojson'); "
+                    "crs = overview_projected_crs(meta, b.set_crs('EPSG:4326') if b.crs is None else b); "
+                    "reproject_overview_vectors(out_dir, meta, crs); "
+                    "print(crs)"
+                ),
+            ],
+            cwd=str(REPO_ROOT),
+            check=True,
+            env=_venv_subprocess_env(),
+        )
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        map_crs = meta.get("crs")
+        if not map_crs or not proj_admin.is_file() or not proj_resorts.is_file():
+            raise RuntimeError(f"Vector reprojection failed in {out_dir}")
+        admin_path, resorts_path = proj_admin, proj_resorts
+        print(f"  Map CRS: {map_crs}", flush=True)
 
-    dem_paths = _ensure_dem_layers(out_dir, map_crs, meta)
+    dem_paths = None if skip_dem else _ensure_dem_layers(out_dir, map_crs, meta)
     stale = out_dir / "dem_hillshade_proj.tif"
     if stale.is_file():
         stale.unlink(missing_ok=True)
-
-    proj_admin = out_dir / "admin_boundary_proj.geojson"
-    proj_resorts = out_dir / "ski_resorts_proj.geojson"
-    if (
-        map_crs.upper() not in ("EPSG:4326", "OGC:CRS84")
-        and proj_admin.is_file()
-        and proj_resorts.is_file()
-        and meta.get("crs") == map_crs
-    ):
-        admin_path, resorts_path = proj_admin, proj_resorts
-    else:
-        try:
-            admin_path, resorts_path, map_crs = reproject_overview_vectors(
-                out_dir, meta, map_crs
-            )
-        except OSError:
-            if proj_admin.is_file() and proj_resorts.is_file():
-                admin_path, resorts_path = proj_admin, proj_resorts
-            else:
-                raise
 
     ensure_headless_qgis_initialized(qgis_root)
     try:
@@ -215,6 +238,7 @@ def _build(out_dir: Path, qgis_root: Path | None = None) -> Path:
             QgsSimpleLineCallout,
             QgsSvgMarkerSymbolLayer,
             QgsProject,
+            QgsRectangle,
             QgsRendererCategory,
             QgsSingleSymbolRenderer,
             QgsSymbol,
@@ -428,8 +452,9 @@ def _build(out_dir: Path, qgis_root: Path | None = None) -> Path:
             rule.setDescription(tier)
             root_rule.appendChild(rule)
 
-        resorts.setLabeling(QgsRuleBasedLabeling(root_rule))
-        resorts.setLabelsEnabled(True)
+        if not skip_labels:
+            resorts.setLabeling(QgsRuleBasedLabeling(root_rule))
+            resorts.setLabelsEnabled(True)
 
         eng = project.labelingEngineSettings()
         eng.setFlag(Qgis.LabelingFlag.UsePartialCandidates, True)
@@ -461,6 +486,15 @@ def _build(out_dir: Path, qgis_root: Path | None = None) -> Path:
 
         pad = max(ext.width(), ext.height()) * 0.06
         ext.grow(pad)
+
+        from atlas.map_gen.layout_constants import expand_bounds_to_main_map_aspect
+
+        b = expand_bounds_to_main_map_aspect(
+            (ext.xMinimum(), ext.yMinimum(), ext.xMaximum(), ext.yMaximum()),
+            frame_width_mm=PAGE_W_MM,
+            frame_height_mm=PAGE_H_MM,
+        )
+        ext = QgsRectangle(b[0], b[1], b[2], b[3])
 
         # Recreate the layout from scratch (older/corrupt layouts can hang QGIS' preview renderer).
         lm = project.layoutManager()
@@ -521,12 +555,27 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Build overview QGZ from GeoJSON folder")
     ap.add_argument("--dir", type=Path, required=True, help="Overview unit folder")
     ap.add_argument("--qgis-root", type=Path, default=None)
+    ap.add_argument(
+        "--no-dem",
+        action="store_true",
+        help="Skip DEM fetch/build (vectors + layout only)",
+    )
+    ap.add_argument(
+        "--no-labels",
+        action="store_true",
+        help="Skip resort name labels (faster for country-scale maps)",
+    )
     args = ap.parse_args()
     out_dir = args.dir
     if not out_dir.is_absolute():
         out_dir = REPO_ROOT / out_dir
     try:
-        path = _build(out_dir, args.qgis_root)
+        path = _build(
+            out_dir,
+            args.qgis_root,
+            skip_dem=args.no_dem,
+            skip_labels=args.no_labels,
+        )
         print(f"Wrote {path}")
         return 0
     except Exception as e:
