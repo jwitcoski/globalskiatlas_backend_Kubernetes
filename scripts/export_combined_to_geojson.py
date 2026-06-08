@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Export combined parquet layers to GeoJSON for MapTiler, ArcGIS, or other web map use.
+Export combined parquet layers to GeoJSON for MapTiler, ArcGIS, Planetiler, or other web map use.
 
 Reads from output/combined/*.parquet and writes to output/combinedmaptiler/*.geojson.
 - lifts.parquet -> lifts.geojson

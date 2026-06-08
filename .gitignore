@@ -9,6 +9,7 @@ __pycache__/
 
 # Generated output (includes combined parquet, pmtiles_staging, pmtiles, etc.)
 output/
+tools/planetiler/planetiler.jar
 osm_batches/
 cache/
 atlas_work/

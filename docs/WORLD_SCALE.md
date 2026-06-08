@@ -77,10 +77,10 @@ Both are in scope; tiles are the target for “entire world, smooth map.”
    From merged continental runs: one `ski_areas`, one `lifts`, one `pistes`, one `osm_nearby` (or equivalent Parquet).
 
 2. **Build vector tiles**  
-   - [tippecanoe](https://github.com/felt/tippecanoe): GeoJSON → vector tiles (e.g. `.mbtiles` or direct to directory).  
+   - [Planetiler](https://github.com/onthegomap/planetiler): GeoParquet or GeoJSON → PMTiles (used by `scripts/build_pmtiles.py`).  
    - [PMTiles](https://github.com/protomaps/PMTiles): single-file tile archive, good for hosting (e.g. S3, Cloudflare R2) and no tile server needed.  
    - Example:  
-     `tippecanoe -o ski_areas.pmtiles -z14 -L ski_areas:ski_areas.geojson -L lifts:lifts.geojson …`
+     `python scripts/build_pmtiles.py` → `output/pmtiles/ski_overview.pmtiles` and `ski_resort_detail.pmtiles`
 
 3. **Serve tiles**  
    - Host the PMTiles file (or a directory of tiles) on a CDN or static host.  
@@ -112,7 +112,7 @@ MapLibre is the right long-term choice for a global map: it’s built for vector
 - [ ] Run pipeline for each region (from `config/regions.yaml`); use `combine_regions.py` to merge Parquet.
 - [ ] Add **viewport bbox** support to API and frontend (request data only for current view).
 - [ ] (Optional) Add DuckDB spatial or PostGIS so bbox queries don’t load full Parquet into memory.
-- [ ] **Tile pipeline:** GeoJSON/Parquet → tippecanoe → PMTiles (or MBTiles); host the result.
+- [x] **Tile pipeline:** GeoParquet/GeoJSON → Planetiler → PMTiles (`scripts/build_pmtiles.py`); host the result.
 - [ ] **Frontend:** MapLibre + vector source for tiles; retire “load entire GeoJSON” for world view.
 - [ ] (Optional) Keep a “full GeoJSON” or “bbox GeoJSON” API for small regions or exports.
 
@@ -124,7 +124,7 @@ Ballpark for **build vector tiles once a month** (world scale) and **host in S3*
 
 | Item | Assumption | Rough monthly cost |
 |------|------------|--------------------|
-| **Build compute** | Run tippecanoe (or similar) once/month. Option A: **EC2** (e.g. c5.xlarge) for 2–4 hours. Option B: **AWS Batch** or a small always-on instance. | **$2–8** (e.g. 4 hr × $0.17/hr ≈ $0.70; add buffer for larger instance or longer run). Spot/right-sizing can cut this. |
+| **Build compute** | Run Planetiler once/month via `scripts/build_pmtiles.py`. Option A: **EC2** (e.g. c5.xlarge) for 2–4 hours. Option B: **AWS Batch** or a small always-on instance. | **$2–8** (e.g. 4 hr × $0.17/hr ≈ $0.70; add buffer for larger instance or longer run). Spot/right-sizing can cut this. |
 | **S3 storage** | One (or a few) PMTiles files; world ski areas + lifts + pistes + osm_near ≈ **1–5 GB**. | **$0.02–0.12** (≈ $0.023/GB). |
 | **S3 requests** | One PUT per month for the new file; GETs for tile serving (depends on traffic). | **&lt; $1** for light/moderate traffic. |
 | **Data transfer (egress)** | Users download only tiles in view (small). First 100 GB out to internet ≈ $0.09/GB. | **$0–5** for small/medium traffic; scales with users. |

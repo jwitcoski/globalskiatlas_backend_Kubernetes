@@ -1,28 +1,25 @@
 #!/usr/bin/env python3
 """
-Build overview and resort-detail PMTiles from combined GeoParquet.
+Build overview and resort-detail PMTiles from combined GeoParquet via Planetiler.
 
-1. Exports GeoJSON via export_combined_to_geojson.py and export_resort_detail_to_geojson.py
-2. Runs tippecanoe (https://github.com/felt/tippecanoe) to write .pmtiles
+Reads GeoParquet from output/combined/ via Planetiler-safe copies in output/pmtiles_staging/
+(default). Combined parquet uses nullable column types Planetiler cannot read directly;
+staging rewrites attributes as strings. Also materializes ski_areas_analyzed centroid
+points into staging because that table has no geometry column.
 
-Tippecanoe on Windows: the PyPI package has no Windows wheels. This script uses native
-`tippecanoe` when it is on PATH; otherwise it runs tippecanoe inside Docker if `docker` is
-available (default image: ghcr.io/versatiles-org/versatiles-tippecanoe:2.79.0).
-
-  docker pull ghcr.io/versatiles-org/versatiles-tippecanoe:2.79.0
-
-On macOS/Linux you can also: pipx install tippecanoe
+Uses Planetiler (https://github.com/onthegomap/planetiler) — not tippecanoe.
+On first run, downloads planetiler.jar to tools/planetiler/. Uses native Java when
+available; otherwise runs Java inside Docker (eclipse-temurin:21-jre).
 
 Example:
   python scripts/build_pmtiles.py
   python scripts/build_pmtiles.py --strip-osm-tags
   python scripts/build_pmtiles.py --skip-export --overview-only
-  python scripts/build_pmtiles.py --tippecanoe-docker
+  python scripts/build_pmtiles.py --from-geojson
+  python scripts/build_pmtiles.py --planetiler-docker
 
-Resort tileset (--resort-min-zoom / --resort-max-zoom): planet-scale OSM (~millions of
-features) at -z17 can run for days; the progress line often sits near ~85% while encoding
-one zoom level. Use defaults (12–15) for full-world builds; raise max zoom only for small
-extracts or expect very long runs.
+Resort tileset (--resort-min-zoom / --resort-max-zoom): planet-scale OSM at z17+
+can run for days. Defaults are z12–15 for full-world builds.
 """
 from __future__ import annotations
 
@@ -30,28 +27,47 @@ import argparse
 import shutil
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
+
+import geopandas as gpd
+import pandas as pd
+from shapely.geometry import Point
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = Path(__file__).resolve().parent
+PMTILES_PROFILE = SCRIPTS_DIR / "pmtiles" / "SkiAtlasTiles.java"
 
-DEFAULT_TIPPECANOE_DOCKER_IMAGE = "ghcr.io/versatiles-org/versatiles-tippecanoe:2.79.0"
+PLANETILER_VERSION = "0.10.2"
+PLANETILER_JAR_URL = (
+    f"https://github.com/onthegomap/planetiler/releases/download/v{PLANETILER_VERSION}/planetiler.jar"
+)
+DEFAULT_PLANETILER_JAR = REPO_ROOT / "tools" / "planetiler" / "planetiler.jar"
+DEFAULT_JAVA_DOCKER_IMAGE = "eclipse-temurin:21-jre"
 
-# Full-planet resort OSM: z17 explodes tile count and encoding time; 12–15 is workable.
 DEFAULT_RESORT_MIN_ZOOM = 12
 DEFAULT_RESORT_MAX_ZOOM = 15
+OVERVIEW_MIN_ZOOM = 0
+OVERVIEW_MAX_ZOOM = 14
+# Layer min-zoom for overview: resort points when zoomed out; geometry as you zoom in.
+DEFAULT_ANALYZED_MIN_ZOOM = 0
+DEFAULT_SKI_AREAS_MIN_ZOOM = 8
+DEFAULT_PISTES_MIN_ZOOM = 10
+DEFAULT_LIFTS_MIN_ZOOM = 10
+DEFAULT_BUFFER_MIN_ZOOM = 12
+DEFAULT_OSM_MIN_ZOOM = 12
+DEFAULT_CONTOURS_MIN_ZOOM = 13
 
-OVERVIEW_LAYERS: list[tuple[str, str]] = [
-    ("lifts", "lifts.geojson"),
-    ("pistes", "pistes.geojson"),
-    ("ski_areas", "ski_areas.geojson"),
-    ("ski_areas_analyzed", "ski_areas_analyzed.geojson"),
+OVERVIEW_PARQUET_SOURCES: list[tuple[str, str]] = [
+    ("lifts", "lifts.parquet"),
+    ("pistes", "pistes.parquet"),
+    ("ski_areas", "ski_areas.parquet"),
 ]
 
-RESORT_LAYERS: list[tuple[str, str]] = [
-    ("osm", "osm_near_winter_sports.geojson"),
-    ("buffer", "ski_areas_1000ft_buffer.geojson"),
-    ("contours", "ski_area_contours.geojson"),
+RESORT_PARQUET_SOURCES: list[tuple[str, str]] = [
+    ("osm", "osm_near_winter_sports.parquet"),
+    ("buffer", "ski_areas_1000ft_buffer.parquet"),
+    ("contours", "ski_area_contours.parquet"),
 ]
 
 
@@ -69,122 +85,197 @@ def _paths_under_repo(repo: Path, *paths: Path) -> tuple[str, ...]:
         except ValueError:
             raise SystemExit(
                 f"Docker mode requires paths under the repo root:\n  {p}\nnot under\n  {repo}\n"
-                "Use default --staging-dir / --output-dir under the repo, or install native tippecanoe."
+                "Use default --staging-dir / --output-dir under the repo, or install native Java."
             ) from None
     return tuple(out)
 
 
-def _tippecanoe_run(
+def ensure_planetiler_jar(jar_path: Path) -> Path:
+    if jar_path.is_file():
+        return jar_path
+    jar_path.parent.mkdir(parents=True, exist_ok=True)
+    print(f"Downloading Planetiler v{PLANETILER_VERSION} -> {jar_path}")
+    urllib.request.urlretrieve(PLANETILER_JAR_URL, jar_path)
+    return jar_path
+
+
+def materialize_analyzed_points(
+    input_dir: Path,
+    out_path: Path,
+    *,
+    force: bool = False,
+) -> int:
+    """Write centroid points from tabular ski_areas_analyzed.parquet to GeoParquet."""
+    src = input_dir / "ski_areas_analyzed.parquet"
+    if not src.exists():
+        print(f"  ski_areas_analyzed.parquet not found in {input_dir}; skipping analyzed points")
+        return 0
+    if out_path.exists() and not force:
+        print(f"  Reusing staged analyzed points: {out_path}")
+        return -1
+
+    df = pd.read_parquet(src)
+    if "centroid_lon" not in df.columns or "centroid_lat" not in df.columns:
+        print("  ski_areas_analyzed: no centroid columns, skipping", file=sys.stderr)
+        return 0
+
+    valid = df["centroid_lon"].notna() & df["centroid_lat"].notna()
+    df = df[valid].copy()
+    geometry = [Point(lon, lat) for lon, lat in zip(df["centroid_lon"], df["centroid_lat"])]
+    gdf = gpd.GeoDataFrame(df, geometry=geometry, crs="EPSG:4326")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    gdf.to_parquet(out_path)
+    print(f"  ski_areas_analyzed points: {len(gdf)} features -> {out_path}")
+    return len(gdf)
+
+
+def materialize_planetiler_parquet(
+    src: Path,
+    dst: Path,
+    *,
+    force: bool = False,
+) -> bool:
+    """Copy GeoParquet to staging with string-typed attributes Planetiler can read."""
+    if dst.exists() and not force:
+        print(f"  Reusing staged parquet: {dst.name}")
+        return True
+    if not src.exists():
+        print(f"  Skipping {src.name} (not found)")
+        return False
+
+    gdf = gpd.read_parquet(src)
+    if not gdf.crs or gdf.crs.to_epsg() != 4326:
+        if gdf.crs:
+            gdf = gdf.to_crs("EPSG:4326")
+        else:
+            gdf = gdf.set_crs("EPSG:4326")
+    for col in list(gdf.columns):
+        if col == "geometry":
+            continue
+        gdf[col] = gdf[col].astype("string")
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    gdf.to_parquet(dst)
+    print(f"  {dst.name}: {len(gdf)} features (from {src.name})")
+    return True
+
+
+def materialize_tileset_parquet(
+    input_dir: Path,
+    staging_dir: Path,
+    layers: list[tuple[str, str]],
+    *,
+    force: bool = False,
+) -> int:
+    """Stage Planetiler-safe GeoParquet copies. Returns count of layers written."""
+    count = 0
+    for source_name, combined_name in layers:
+        src = input_dir / combined_name
+        dst = staging_dir / f"{source_name}.parquet"
+        if materialize_planetiler_parquet(src, dst, force=force):
+            count += 1
+    return count
+
+
+def _planetiler_cmd(
     *,
     use_docker: bool,
     docker_image: str,
-    native_bin: str,
+    java_heap: str,
+    jar_path: Path,
     repo_root: Path,
-    staging_dir: Path,
-    out_file: Path,
-    layers: list[tuple[str, str]],
-    extra_flags: list[str],
-    empty_message: str,
-) -> None:
-    staging_dir = staging_dir.resolve()
-    out_file = out_file.resolve()
-    out_file.parent.mkdir(parents=True, exist_ok=True)
-
-    layer_args: list[str] = []
-    n = 0
-    for layer_name, filename in layers:
-        if (staging_dir / filename).exists():
-            layer_args.extend(["-L", f"{layer_name}:{filename}"])
-            n += 1
-    if n == 0:
-        print(empty_message, file=sys.stderr)
-        sys.exit(1)
-
+    profile_path: Path,
+    planetiler_args: list[str],
+) -> list[str]:
+    java_opts = f"-Xmx{java_heap}"
     if use_docker:
-        rel_staging, rel_out = _paths_under_repo(repo_root, staging_dir, out_file)
-        # Default image (versatiles-tippecanoe) sets ENTRYPOINT to tippecanoe; do not pass "tippecanoe" again
-        # or it is treated as an input filename.
-        cmd = [
+        rel_jar, rel_profile = _paths_under_repo(repo_root, jar_path, profile_path)
+        inner = [
+            "java",
+            java_opts,
+            "-cp",
+            f"/work/{rel_jar}",
+            f"/work/{rel_profile}",
+            *planetiler_args,
+        ]
+        return [
             "docker",
             "run",
             "--rm",
             "-v",
             f"{repo_root.resolve()}:/work",
             "-w",
-            f"/work/{rel_staging}",
+            "/work",
             docker_image,
-            "-f",
-            "-o",
-            f"/work/{rel_out}",
-            *extra_flags,
-            *layer_args,
+            *inner,
         ]
-        _run(cmd)
-    else:
-        cmd = [native_bin, "-f", "-o", str(out_file), *extra_flags, *layer_args]
-        _run(cmd, cwd=staging_dir)
+
+    java_bin = shutil.which("java")
+    if java_bin is None:
+        raise SystemExit(
+            "Java not found on PATH and Docker was not used.\n"
+            "Install Java 21+, or install Docker and re-run (Docker is used automatically when java is missing)."
+        )
+    return [
+        java_bin,
+        java_opts,
+        "-cp",
+        str(jar_path.resolve()),
+        str(profile_path.resolve()),
+        *planetiler_args,
+    ]
 
 
-def _tippecanoe_overview(
+def _planetiler_run(
     *,
-    use_docker: bool,
-    docker_image: str,
-    native_bin: str,
-    repo_root: Path,
+    tileset: str,
+    input_dir: Path,
     staging_dir: Path,
-    out_file: Path,
-) -> None:
-    _tippecanoe_run(
-        use_docker=use_docker,
-        docker_image=docker_image,
-        native_bin=native_bin,
-        repo_root=repo_root,
-        staging_dir=staging_dir,
-        out_file=out_file,
-        layers=OVERVIEW_LAYERS,
-        extra_flags=[
-            "-Z0",
-            "-z14",
-            "--drop-densest-as-needed",
-            "--extend-zooms-if-still-dropping",
-        ],
-        empty_message="No overview GeoJSON found in staging; aborting tippecanoe overview",
-    )
-
-
-def _tippecanoe_resort(
-    *,
-    use_docker: bool,
-    docker_image: str,
-    native_bin: str,
-    repo_root: Path,
-    staging_dir: Path,
-    out_file: Path,
+    output_file: Path,
+    analyzed_path: Path,
     min_zoom: int,
     max_zoom: int,
+    from_geojson: bool,
+    strip_osm_tags: bool,
+    use_docker: bool,
+    docker_image: str,
+    java_heap: str,
+    jar_path: Path,
+    extra_args: list[str] | None = None,
 ) -> None:
-    _tippecanoe_run(
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    args = [
+        f"--tileset={tileset}",
+        f"--input-dir={input_dir.resolve()}",
+        f"--staging-dir={staging_dir.resolve()}",
+        f"--analyzed-path={analyzed_path.resolve()}",
+        f"--output={output_file.resolve()}",
+        f"--minzoom={min_zoom}",
+        f"--maxzoom={max_zoom}",
+        "--force",
+    ]
+    if extra_args:
+        args.extend(extra_args)
+    if from_geojson:
+        args.append("--from-geojson=true")
+    if strip_osm_tags:
+        args.append("--strip-osm-tags=true")
+
+    cmd = _planetiler_cmd(
         use_docker=use_docker,
         docker_image=docker_image,
-        native_bin=native_bin,
-        repo_root=repo_root,
-        staging_dir=staging_dir,
-        out_file=out_file,
-        layers=RESORT_LAYERS,
-        extra_flags=[
-            f"-Z{min_zoom}",
-            f"-z{max_zoom}",
-            "--drop-densest-as-needed",
-            "--extend-zooms-if-still-dropping",
-            "--simplification=10",
-            "--read-parallel",
-        ],
-        empty_message="No resort GeoJSON found in staging; aborting tippecanoe resort",
+        java_heap=java_heap,
+        jar_path=jar_path,
+        repo_root=REPO_ROOT,
+        profile_path=PMTILES_PROFILE,
+        planetiler_args=args,
     )
+    _run(cmd, cwd=REPO_ROOT)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Export combined data and build ski_overview + ski_resort_detail PMTiles")
+    parser = argparse.ArgumentParser(
+        description="Build ski_overview + ski_resort_detail PMTiles from combined GeoParquet via Planetiler",
+    )
     parser.add_argument(
         "--input-dir",
         type=Path,
@@ -195,7 +286,7 @@ def main() -> None:
         "--staging-dir",
         type=Path,
         default=REPO_ROOT / "output" / "pmtiles_staging",
-        help="Staging root for GeoJSON (default: output/pmtiles_staging)",
+        help="Staging root (default: output/pmtiles_staging)",
     )
     parser.add_argument(
         "--output-dir",
@@ -204,48 +295,113 @@ def main() -> None:
         help="Output directory for .pmtiles (default: output/pmtiles)",
     )
     parser.add_argument(
-        "--tippecanoe",
-        default="tippecanoe",
-        help="Native tippecanoe executable when not using Docker (default: tippecanoe)",
+        "--planetiler-jar",
+        type=Path,
+        default=DEFAULT_PLANETILER_JAR,
+        help=f"Path to planetiler.jar (default: {DEFAULT_PLANETILER_JAR.relative_to(REPO_ROOT)})",
     )
     parser.add_argument(
-        "--tippecanoe-docker",
+        "--planetiler-docker",
         action="store_true",
-        help="Run tippecanoe via Docker instead of PATH (see --tippecanoe-docker-image)",
+        help="Run Planetiler via Docker instead of native Java",
     )
     parser.add_argument(
-        "--tippecanoe-docker-image",
-        default=DEFAULT_TIPPECANOE_DOCKER_IMAGE,
-        help=f"Image for --tippecanoe-docker (default: {DEFAULT_TIPPECANOE_DOCKER_IMAGE})",
+        "--planetiler-docker-image",
+        default=DEFAULT_JAVA_DOCKER_IMAGE,
+        help=f"JRE Docker image for --planetiler-docker (default: {DEFAULT_JAVA_DOCKER_IMAGE})",
     )
-    parser.add_argument("--skip-export", action="store_true", help="Reuse existing staging GeoJSON")
+    parser.add_argument(
+        "--java-heap",
+        default="8g",
+        metavar="SIZE",
+        help="Java heap for Planetiler (default: 8g)",
+    )
+    parser.add_argument(
+        "--from-geojson",
+        action="store_true",
+        help="Export/read GeoJSON from staging instead of reading GeoParquet directly",
+    )
+    parser.add_argument(
+        "--skip-export",
+        action="store_true",
+        help="Skip GeoJSON export (--from-geojson) and reuse existing staging; still materializes analyzed points if missing",
+    )
     parser.add_argument("--overview-only", action="store_true")
     parser.add_argument("--resort-only", action="store_true")
     parser.add_argument(
         "--strip-osm-tags",
         action="store_true",
-        help="Pass to resort export: drop OSM tags column",
+        help="Drop OSM tags column from osm layer in resort tileset",
     )
     parser.add_argument(
         "--truncate-osm-tags",
         type=int,
         default=None,
         metavar="N",
-        help="Pass to resort export: truncate tags to N characters",
+        help="Pass to resort GeoJSON export: truncate tags to N characters",
     )
     parser.add_argument(
         "--resort-min-zoom",
         type=int,
         default=DEFAULT_RESORT_MIN_ZOOM,
         metavar="Z",
-        help=f"Resort PMTiles minimum zoom (default: {DEFAULT_RESORT_MIN_ZOOM}; higher = skip heavy low-zoom tiles)",
+        help=f"Resort PMTiles minimum zoom (default: {DEFAULT_RESORT_MIN_ZOOM})",
     )
     parser.add_argument(
         "--resort-max-zoom",
         type=int,
         default=DEFAULT_RESORT_MAX_ZOOM,
         metavar="z",
-        help=f"Resort PMTiles maximum zoom (default: {DEFAULT_RESORT_MAX_ZOOM}; z17+ on global OSM can take days)",
+        help=f"Resort PMTiles maximum zoom (default: {DEFAULT_RESORT_MAX_ZOOM})",
+    )
+    parser.add_argument(
+        "--analyzed-min-zoom",
+        type=int,
+        default=DEFAULT_ANALYZED_MIN_ZOOM,
+        metavar="Z",
+        help=f"Overview: min zoom for ski_areas_analyzed resort points (default: {DEFAULT_ANALYZED_MIN_ZOOM})",
+    )
+    parser.add_argument(
+        "--ski-areas-min-zoom",
+        type=int,
+        default=DEFAULT_SKI_AREAS_MIN_ZOOM,
+        metavar="Z",
+        help=f"Overview: min zoom for ski_areas polygons (default: {DEFAULT_SKI_AREAS_MIN_ZOOM})",
+    )
+    parser.add_argument(
+        "--pistes-min-zoom",
+        type=int,
+        default=DEFAULT_PISTES_MIN_ZOOM,
+        metavar="Z",
+        help=f"Overview: min zoom for pistes lines/polygons/points (default: {DEFAULT_PISTES_MIN_ZOOM})",
+    )
+    parser.add_argument(
+        "--lifts-min-zoom",
+        type=int,
+        default=DEFAULT_LIFTS_MIN_ZOOM,
+        metavar="Z",
+        help=f"Overview: min zoom for lifts (default: {DEFAULT_LIFTS_MIN_ZOOM})",
+    )
+    parser.add_argument(
+        "--buffer-min-zoom",
+        type=int,
+        default=DEFAULT_BUFFER_MIN_ZOOM,
+        metavar="Z",
+        help=f"Resort: min zoom for ski area buffers (default: {DEFAULT_BUFFER_MIN_ZOOM})",
+    )
+    parser.add_argument(
+        "--osm-min-zoom",
+        type=int,
+        default=DEFAULT_OSM_MIN_ZOOM,
+        metavar="Z",
+        help=f"Resort: min zoom for nearby OSM (default: {DEFAULT_OSM_MIN_ZOOM})",
+    )
+    parser.add_argument(
+        "--contours-min-zoom",
+        type=int,
+        default=DEFAULT_CONTOURS_MIN_ZOOM,
+        metavar="Z",
+        help=f"Resort: min zoom for elevation contours (default: {DEFAULT_CONTOURS_MIN_ZOOM})",
     )
     args = parser.parse_args()
 
@@ -257,39 +413,41 @@ def main() -> None:
         print("Choose at most one of --overview-only / --resort-only", file=sys.stderr)
         sys.exit(2)
 
-    native_tippecanoe = shutil.which(args.tippecanoe)
+    java_ok = shutil.which("java") is not None
     docker_ok = shutil.which("docker") is not None
-    use_docker = args.tippecanoe_docker or (native_tippecanoe is None and docker_ok)
+    use_docker = args.planetiler_docker or (not java_ok and docker_ok)
 
     if use_docker and not docker_ok:
         print("Docker was requested but `docker` is not on PATH.", file=sys.stderr)
         sys.exit(1)
-    if not use_docker and native_tippecanoe is None:
+    if not use_docker and not java_ok:
         print(
-            f"tippecanoe not found ({args.tippecanoe!r}) and `docker` is not on PATH.\n"
-            "Install tippecanoe (https://github.com/felt/tippecanoe), or install Docker and run:\n"
-            f"  docker pull {args.tippecanoe_docker_image}\n"
-            "then re-run this script (Docker is used automatically when tippecanoe is missing).",
+            "Java not found on PATH and `docker` is not on PATH.\n"
+            "Install Java 21+ (https://adoptium.net/) or Docker, then re-run.",
             file=sys.stderr,
         )
         sys.exit(1)
     if use_docker:
-        print(f"Using tippecanoe in Docker: {args.tippecanoe_docker_image}")
+        print(f"Using Planetiler in Docker ({args.planetiler_docker_image})")
+    else:
+        print("Using native Java for Planetiler")
 
     input_dir: Path = args.input_dir
     staging_root: Path = args.staging_dir
     staging_overview = staging_root / "overview"
     staging_resort = staging_root / "resort"
     output_dir: Path = args.output_dir
+    analyzed_path = staging_overview / "ski_areas_analyzed.geoparquet"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     do_overview = not args.resort_only
     do_resort = not args.overview_only
 
-    if not args.skip_export:
-        if not input_dir.exists():
-            print(f"Input directory not found: {input_dir}", file=sys.stderr)
-            sys.exit(1)
+    if not input_dir.exists():
+        print(f"Input directory not found: {input_dir}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.from_geojson and not args.skip_export:
         if do_overview:
             _run(
                 [
@@ -316,33 +474,77 @@ def main() -> None:
             if args.truncate_osm_tags is not None:
                 resort_cmd.extend(["--truncate-osm-tags", str(args.truncate_osm_tags)])
             _run(resort_cmd, cwd=REPO_ROOT)
+    elif do_overview and not args.from_geojson:
+        materialize_tileset_parquet(
+            input_dir,
+            staging_overview,
+            OVERVIEW_PARQUET_SOURCES,
+            force=not args.skip_export,
+        )
+        materialize_analyzed_points(
+            input_dir,
+            analyzed_path,
+            force=not args.skip_export,
+        )
+    elif do_resort and not args.from_geojson:
+        materialize_tileset_parquet(
+            input_dir,
+            staging_resort,
+            RESORT_PARQUET_SOURCES,
+            force=not args.skip_export,
+        )
+
+    jar_path = ensure_planetiler_jar(args.planetiler_jar)
 
     if do_overview:
-        _tippecanoe_overview(
+        print("Building ski_overview.pmtiles ...")
+        _planetiler_run(
+            tileset="overview",
+            input_dir=input_dir,
+            staging_dir=staging_root,
+            output_file=output_dir / "ski_overview.pmtiles",
+            analyzed_path=analyzed_path,
+            min_zoom=OVERVIEW_MIN_ZOOM,
+            max_zoom=OVERVIEW_MAX_ZOOM,
+            from_geojson=args.from_geojson,
+            strip_osm_tags=False,
             use_docker=use_docker,
-            docker_image=args.tippecanoe_docker_image,
-            native_bin=args.tippecanoe,
-            repo_root=REPO_ROOT,
-            staging_dir=staging_overview,
-            out_file=output_dir / "ski_overview.pmtiles",
+            docker_image=args.planetiler_docker_image,
+            java_heap=args.java_heap,
+            jar_path=jar_path,
+            extra_args=[
+                f"--analyzed-min-zoom={args.analyzed_min_zoom}",
+                f"--ski-areas-min-zoom={args.ski_areas_min_zoom}",
+                f"--pistes-min-zoom={args.pistes_min_zoom}",
+                f"--lifts-min-zoom={args.lifts_min_zoom}",
+            ],
         )
         print(f"Wrote {output_dir / 'ski_overview.pmtiles'}")
 
     if do_resort:
         print(
-            f"Resort tippecanoe zooms: -Z{args.resort_min_zoom} -z{args.resort_max_zoom} "
-            f"(override with --resort-min-zoom / --resort-max-zoom if needed)",
+            f"Building ski_resort_detail.pmtiles (z{args.resort_min_zoom}-z{args.resort_max_zoom}) ...",
             file=sys.stderr,
         )
-        _tippecanoe_resort(
-            use_docker=use_docker,
-            docker_image=args.tippecanoe_docker_image,
-            native_bin=args.tippecanoe,
-            repo_root=REPO_ROOT,
-            staging_dir=staging_resort,
-            out_file=output_dir / "ski_resort_detail.pmtiles",
+        _planetiler_run(
+            tileset="resort",
+            input_dir=input_dir,
+            staging_dir=staging_root,
+            output_file=output_dir / "ski_resort_detail.pmtiles",
+            analyzed_path=analyzed_path,
             min_zoom=args.resort_min_zoom,
             max_zoom=args.resort_max_zoom,
+            from_geojson=args.from_geojson,
+            strip_osm_tags=args.strip_osm_tags,
+            use_docker=use_docker,
+            docker_image=args.planetiler_docker_image,
+            java_heap=args.java_heap,
+            jar_path=jar_path,
+            extra_args=[
+                f"--buffer-min-zoom={args.buffer_min_zoom}",
+                f"--osm-min-zoom={args.osm_min_zoom}",
+                f"--contours-min-zoom={args.contours_min_zoom}",
+            ],
         )
         print(f"Wrote {output_dir / 'ski_resort_detail.pmtiles'}")
 

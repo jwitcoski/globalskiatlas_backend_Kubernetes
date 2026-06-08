@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Export combined resort-context GeoParquet layers to GeoJSON for tippecanoe / PMTiles.
+Export combined resort-context GeoParquet layers to GeoJSON for Planetiler / PMTiles.
 
 Reads from output/combined/ (or --input-dir):
   - osm_near_winter_sports.parquet
