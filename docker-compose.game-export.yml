@@ -1,0 +1,35 @@
+# Optional game-scene export. Does not run the OSM/DEM ingestion pipeline.
+# Build once: docker build -f Dockerfile.aws -t globalskiatlas-pipeline .
+#
+# GIS inputs default to S3 (needs AWS credentials). Scenes write to ./output/game_scenes.
+#
+# docker compose -f docker-compose.game-export.yml run --rm game-export
+# docker compose -f docker-compose.game-export.yml run --rm game-export --picked-batch
+# docker compose -f docker-compose.game-export.yml run --rm game-export --fetch-skadi
+# Local GIS instead of S3:
+# docker compose -f docker-compose.game-export.yml run --rm game-export --no-from-s3 --data-root /data
+
+services:
+  game-export:
+    image: globalskiatlas-pipeline
+    build:
+      context: .
+      dockerfile: Dockerfile.aws
+    working_dir: /app
+    environment:
+      - PYTHONUNBUFFERED=1
+      - CACHE=/cache
+      - AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY
+      - AWS_SESSION_TOKEN
+      - AWS_PROFILE
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_DEFAULT_REGION=${AWS_REGION:-us-east-1}
+      - S3_BUCKET=${S3_BUCKET:-globalskiatlas-backend-k8s-output}
+    volumes:
+      - ./output:/data
+      - ./cache:/cache
+      - ./config:/app/config
+      - ./game_export:/app/game_export
+    entrypoint: ["python", "-m", "game_export"]
+    command: ["--from-s3", "--out-root", "/data/game_scenes"]

@@ -2,7 +2,7 @@
 
 **Quick setup:** For a step-by-step **local PC → GitHub → GitHub Actions → AWS** checklist, see [WORKFLOW_SETUP.md](WORKFLOW_SETUP.md).
 
-**globalskiatlas_backend_Kubernetes** — Docker/ECS backend (distinct from the Lambda-based setup). This guide walks through running the ski atlas pipeline (Iceland first, then continent-wide) on AWS using Docker, ECS Fargate, and S3. The flow is designed for **monthly batch jobs** that extract parquet files into an S3 bucket.
+**globalskiatlas_backend_Kubernetes** — Docker/ECS backend (distinct from the Lambda-based setup). This guide walks through running the ski atlas pipeline (Iceland first, then continent-wide) on AWS using Docker, ECS Fargate, and S3. The flow is designed for **batch jobs** that extract parquet files into an S3 bucket (current region prefix, overwritten on each run).
 
 ---
 
@@ -12,7 +12,7 @@
 2. **GitHub**: Add secrets (AWS keys, ECR repo, ECS cluster, subnets, security group, S3 bucket).
 3. **Push to main**: GitHub Actions builds the image and pushes to ECR.
 4. **Run Iceland**: Either manually in Actions (Run workflow → check "Run ECS task") or via `aws ecs run-task`.
-5. **Output**: Parquet files appear in `s3://globalskiatlas-backend-k8s-output/iceland/YYYY-MM/`.
+5. **Output**: Parquet files appear in `s3://globalskiatlas-backend-k8s-output/iceland/` (overwrite in place).
 
 **GitHub repo name:** `globalskiatlas_backend_Kubernetes` (to differentiate from the Lambda backend).
 
@@ -52,17 +52,20 @@ aws s3api put-bucket-versioning --bucket $BUCKET_NAME \
 ```
 s3://globalskiatlas-backend-k8s-output/
   iceland/
-    2025-02/
-      ski_areas.parquet
-      ski_areas_analyzed.csv
-      ski_areas_analyzed.parquet
-      lifts.parquet
-      pistes.parquet
-      osm_near_winter_sports.parquet
-  europe/          # future: continent-wide
-    2025-02/
-      ...
+    ski_areas.parquet
+    ski_areas_analyzed.csv
+    ski_areas_analyzed.parquet
+    lifts.parquet
+    pistes.parquet
+    osm_near_winter_sports.parquet
+  europe/iceland/
+    ...
+  north-america/us/virginia/
+    ...
+  combined/
+    ...
 ```
+Re-runs overwrite the same keys. Optional dated copies are a separate snapshot workflow (see VERSIONED_OUTPUTS.md), not the ECS default.
 
 ### 1.2 Create ECR Repository
 

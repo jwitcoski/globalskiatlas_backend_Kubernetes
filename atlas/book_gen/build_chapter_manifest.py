@@ -14,7 +14,11 @@ from atlas.book_gen.local_data import (
     load_chapter_from_local_parquet,
     pick_map_from_index,
 )
-from atlas.book_gen.map_resolver import map_tier_for_category, resolve_local_map
+from atlas.book_gen.map_resolver import (
+    map_tier_for_category,
+    prefer_landscape_for_slot,
+    resolve_local_map,
+)
 from atlas.book_gen.render_resort_fields import build_scribus_fields
 from atlas.book_gen.resort_category import page_fraction, slot_for_fraction
 from atlas.book_gen.log_util import log, log_phase
@@ -123,7 +127,8 @@ def build_manifest(
         if isinstance(row_region, str):
             row_region = row_region.replace("\\", "/").strip("/") or None
 
-        prefer_landscape = slot in ("full", "spread", "half")
+        # Large/half → landscape (wider); mega spread → portrait (taller).
+        prefer_landscape = prefer_landscape_for_slot(slot)
         map_path: str | None = None
         map_tier = map_tier_for_category(cat)
         warnings: list[str] = []
@@ -134,6 +139,7 @@ def build_manifest(
                 slug,
                 page_id=pid,
                 prefer_landscape=prefer_landscape,
+                map_tier=map_tier,
             )
             if chosen is None:
                 local, map_tier = resolve_local_map(
@@ -147,6 +153,12 @@ def build_manifest(
                 chosen = local
             if chosen and chosen.is_file():
                 map_path = str(chosen.resolve())
+                # Warn when a different plate tier is used as fallback.
+                parent = chosen.parent.name
+                if "-layout-" in parent and f"-layout-{map_tier}-" not in parent:
+                    warnings.append(
+                        f"map fallback: {parent} for {map_tier} slot"
+                    )
             else:
                 warnings.append("no local map PNG in atlas_work")
 

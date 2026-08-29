@@ -1,0 +1,70 @@
+{
+  "built_at_utc": "2026-08-28T02:00:10Z",
+  "source": "C:/Users/jwitc/Documents/GitHub/globalskiatlas_data/output/combined/ski_areas_analyzed.parquet",
+  "filter": {
+    "downhill_only": true,
+    "min_trails": 1,
+    "min_trail_m": 75.0,
+    "region": "north-america/us/virginia",
+    "state": null,
+    "unnamed_trails_ok": true
+  },
+  "counts": {
+    "analyzed": 4330,
+    "downhill_ski_resort": 3035,
+    "downhill_trails_ge_1": 2867,
+    "candidates": 5
+  },
+  "candidates": [
+    {
+      "winter_sports_id": "543145559",
+      "region": "north-america/us/virginia",
+      "name": "Massanutten Resort Ski Area",
+      "state": "Virginia",
+      "country": "United States of America",
+      "downhill_trails": 44.0,
+      "total_lifts": 9.0,
+      "longest_trail_mi": 0.07
+    },
+    {
+      "winter_sports_id": "896007563",
+      "region": "north-america/us/virginia",
+      "name": "Snowflex",
+      "state": "Virginia",
+      "country": "United States of America",
+      "downhill_trails": 2.0,
+      "total_lifts": 4.0,
+      "longest_trail_mi": 0.0
+    },
+    {
+      "winter_sports_id": "1010720455",
+      "region": "north-america/us/virginia",
+      "name": "Bryce Resort",
+      "state": "Virginia",
+      "country": "United States of America",
+      "downhill_trails": 21.0,
+      "total_lifts": 6.0,
+      "longest_trail_mi": 0.0
+    },
+    {
+      "winter_sports_id": "1023791593",
+      "region": "north-america/us/virginia",
+      "name": "Wintergreen Ski Resort",
+      "state": "Virginia",
+      "country": "United States of America",
+      "downhill_trails": 48.0,
+      "total_lifts": 9.0,
+      "longest_trail_mi": 0.05
+    },
+    {
+      "winter_sports_id": "1242402506",
+      "region": "north-america/us/virginia",
+      "name": "The Homestead Ski Area",
+      "state": "Virginia",
+      "country": "United States of America",
+      "downhill_trails": 19.0,
+      "total_lifts": 2.0,
+      "longest_trail_mi": 0.0
+    }
+  ]
+}

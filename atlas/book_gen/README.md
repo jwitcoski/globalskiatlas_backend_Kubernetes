@@ -63,10 +63,10 @@ py -m atlas.book_gen.run_scribus_book --state Virginia --merge-pdf-only
 
 Within each state chapter, resorts are ordered **by size tier**, then **alphabetically by title** within that tier:
 
-1. **Small** (`small_hill`) — horizontal rows sized to the **small QGIS plate** (105×74.25 mm at export DPI); **map alternates right / left** for each resort (1st right, 2nd left, …); counter **resets at medium**. **100% scale** (no shrink in Scribus). Up to four rows per page when they fit; if only three (or fewer) fit, rows **expand vertically** to fill the page. **Body blurb** shown below stats (char limit in `slot_body_char_limit.quarter` in `book.yaml`, default 400).
-2. **Medium** (`ski_mountain`) — half page: landscape map at **100% export scale**, text in the side strip and below the map when space allows.
-3. **Large** (`multiple_mountains`) — full page: landscape map **top-right at 100% export scale**; header + side body in the left column (stops above the bottom band); remaining body in a full-width band above the footer.
-4. **Mega** (`mega_resort`) — two-page spread.
+1. **Small** (`small_hill`) — horizontal rows sized to the **small QGIS plate** (105×74.25 mm at export DPI); **map alternates right / left** per resort. Native plate height fits **three** rows per page; rows **expand vertically** when fewer than three remain. **Body blurb** below stats (`slot_body_char_limit.quarter` in `book.yaml`, default 400).
+2. **Medium** (`ski_mountain`) — two equal **half pages** (`y=0/0.5`); landscape map when available; text in the side strip and bottom band. A single leftover medium expands to a full page.
+3. **Large** (`multiple_mountains`) — full page: prefer **landscape** (wider) map; map sized to leave a readable side column (~200 pt); header + side body; remaining body in a full-width band above the footer. (Note: folder `*-layout-large-landscape` is the tall swapped plate — the wide plate is base `large`.)
+4. **Mega** (`mega_resort`) — two-page spread: prefer **portrait** map on page 1 (full-bleed contain-fit); wiki text on page 2.
 
 Set `quarters_per_sheet: 4` in `config/book.yaml` (default). Use `1` only for debugging one resort per page.
 

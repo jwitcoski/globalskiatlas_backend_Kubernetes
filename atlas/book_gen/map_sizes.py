@@ -30,20 +30,52 @@ def tier_size_pt(tier: str) -> tuple[float, float]:
     return mm_to_pt(w_mm), mm_to_pt(h_mm)
 
 
-def infer_export_dpi(width_px: int, height_px: int, tier: str) -> int | None:
-    """Guess QGIS export DPI from pixel size vs nominal plate mm (portrait or landscape)."""
-    w_mm, h_mm = main_map_frame_mm(tier)  # type: ignore[arg-type]
-    orientations = ((w_mm, h_mm), (h_mm, w_mm))
+_DPI_INFER_TIERS = (
+    "small",
+    "medium",
+    "large",
+    "mega",
+    "small_landscape",
+    "medium_landscape",
+    "large_landscape",
+    "mega_landscape",
+)
+
+
+def infer_export_dpi(
+    width_px: int,
+    height_px: int,
+    tier: str,
+    *,
+    try_all_plates: bool = True,
+) -> int | None:
+    """Guess QGIS export DPI from pixel size vs nominal plate mm."""
+    tiers: list[str] = []
+    t = str(tier or "small").strip().lower()
+    if t:
+        tiers.append(t)
+        if not t.endswith("_landscape") and f"{t}_landscape" in _DPI_INFER_TIERS:
+            tiers.append(f"{t}_landscape")
+    if try_all_plates:
+        for other in _DPI_INFER_TIERS:
+            if other not in tiers:
+                tiers.append(other)
+
     best_dpi: int | None = None
     best_err = 1e9
-    for dpi in (300, 150, 72):
-        for ew, eh in orientations:
-            exp_w = ew / MM_PER_IN * dpi
-            exp_h = eh / MM_PER_IN * dpi
-            err = abs(width_px - exp_w) + abs(height_px - exp_h)
-            if err < best_err:
-                best_err = err
-                best_dpi = dpi
+    for plate in tiers:
+        try:
+            w_mm, h_mm = main_map_frame_mm(plate)  # type: ignore[arg-type]
+        except KeyError:
+            continue
+        for dpi in (300, 150, 72):
+            for ew, eh in ((w_mm, h_mm), (h_mm, w_mm)):
+                exp_w = ew / MM_PER_IN * dpi
+                exp_h = eh / MM_PER_IN * dpi
+                err = abs(width_px - exp_w) + abs(height_px - exp_h)
+                if err < best_err:
+                    best_err = err
+                    best_dpi = dpi
     if best_err <= 24.0:
         return best_dpi
     return None
@@ -59,6 +91,8 @@ def map_dimensions_pt(
     Physical size of map in Scribus points (1:1 with exported plate).
 
     Uses PNG pixels and inferred export DPI when a file exists; otherwise tier mm.
+    DPI inference tries all known plates so a medium slot using a large PNG
+    still gets the correct print size (not silently halved).
     """
     tier = str(map_tier or "small").strip().lower()
     if map_path:
@@ -66,7 +100,31 @@ def map_dimensions_pt(
         if path.is_file():
             try:
                 w_px, h_px = _png_size_px(path)
-                dpi = infer_export_dpi(w_px, h_px, tier) or default_dpi
+                # Infer plate from path when possible for better DPI match.
+                parent = path.parent.name
+                infer_tier = tier
+                for name in (
+                    "mega_landscape",
+                    "large_landscape",
+                    "medium_landscape",
+                    "small_landscape",
+                    "mega",
+                    "large",
+                    "medium",
+                    "small",
+                ):
+                    token = name.replace("_", "-")
+                    if f"-layout-{token}" in parent or parent.endswith(
+                        f"-layout-{token}"
+                    ):
+                        infer_tier = name
+                        break
+                    if name.endswith("_landscape") and parent.endswith(
+                        f"-layout-{name.split('_')[0]}-landscape"
+                    ):
+                        infer_tier = name
+                        break
+                dpi = infer_export_dpi(w_px, h_px, infer_tier) or default_dpi
                 return px_to_pt(w_px, dpi), px_to_pt(h_px, dpi)
             except (OSError, ValueError):
                 pass

@@ -1,0 +1,112 @@
+[
+  {
+    "resort_id": "vogel_slovenia",
+    "display_name": "Vogel",
+    "winter_sports_id": "601126479",
+    "region": "europe/slovenia",
+    "state": "Bohinj",
+    "country": "Slovenia",
+    "approximate_location_name": "Bohinj",
+    "piste_n": 29,
+    "diag_km": 4.7
+  },
+  {
+    "resort_id": "skigebiet_oberwiesenthal_germany",
+    "display_name": "Skigebiet Oberwiesenthal",
+    "winter_sports_id": "53183839",
+    "region": "europe/czech-republic",
+    "state": "Sachsen",
+    "country": "Germany",
+    "approximate_location_name": "Sachsen",
+    "piste_n": 36,
+    "diag_km": 2.53
+  },
+  {
+    "resort_id": "glenshee_ski_center_united_kingdom",
+    "display_name": "Glenshee Ski Center",
+    "winter_sports_id": "1266093483",
+    "region": "europe/united-kingdom/scotland",
+    "state": "Aberdeenshire",
+    "country": "United Kingdom",
+    "approximate_location_name": "Aberdeenshire",
+    "piste_n": 28,
+    "diag_km": 4.95
+  },
+  {
+    "resort_id": "levin_hiihtokeskus_finland",
+    "display_name": "Levin hiihtokeskus",
+    "winter_sports_id": "1107815765",
+    "region": "europe/finland",
+    "state": "Lapland",
+    "country": "Finland",
+    "approximate_location_name": "Lapland",
+    "piste_n": 54,
+    "diag_km": 5.9
+  },
+  {
+    "resort_id": "ski_telg_rt_slovakia",
+    "display_name": "Ski Telg\u00e1rt",
+    "winter_sports_id": "547493174",
+    "region": "europe/slovakia/banskobystricky",
+    "state": "Banskobystrick\u00fd",
+    "country": "Slovakia",
+    "approximate_location_name": "Banskobystrick\u00fd",
+    "piste_n": 20,
+    "diag_km": 1.95
+  },
+  {
+    "resort_id": "cerro_perito_moreno_argentina",
+    "display_name": "Cerro Perito Moreno",
+    "winter_sports_id": "934096931",
+    "region": "south-america",
+    "state": "R\u00edo Negro",
+    "country": "Argentina",
+    "approximate_location_name": "R\u00edo Negro",
+    "piste_n": 29,
+    "diag_km": 4.49
+  },
+  {
+    "resort_id": "brezovica_brezovic_kosovo",
+    "display_name": "Brezovica (Brezovic\u00eb)",
+    "winter_sports_id": "1245650182",
+    "region": "europe/kosovo",
+    "state": "\u0160trpce",
+    "country": "Kosovo",
+    "approximate_location_name": "\u0160trpce",
+    "piste_n": 20,
+    "diag_km": 3.09
+  },
+  {
+    "resort_id": "kvitfjell_norway",
+    "display_name": "Kvitfjell",
+    "winter_sports_id": "1466199986",
+    "region": "europe/norway/oppland",
+    "state": "Oppland",
+    "country": "Norway",
+    "approximate_location_name": "Oppland",
+    "piste_n": 31,
+    "diag_km": 6.75
+  },
+  {
+    "resort_id": "perisher_australia",
+    "display_name": "Perisher",
+    "winter_sports_id": "178133225",
+    "region": "australia-oceania",
+    "state": "New South Wales",
+    "country": "Australia",
+    "approximate_location_name": "New South Wales",
+    "piste_n": 21,
+    "diag_km": 7.39
+  },
+  {
+    "resort_id": "pal_arinsal_andorra",
+    "display_name": "Pal-Arinsal",
+    "winter_sports_id": "987243867",
+    "region": "europe/spain/cataluna",
+    "state": "La Massana",
+    "country": "Andorra",
+    "approximate_location_name": "La Massana",
+    "piste_n": 55,
+    "diag_km": 7.21
+  }
+]

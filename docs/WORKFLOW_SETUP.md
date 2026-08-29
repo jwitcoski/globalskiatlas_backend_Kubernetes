@@ -99,7 +99,7 @@ Use the same names/IDs in the GitHub secrets (ECR repo, cluster, S3 bucket, subn
 - **Manual "Run ECS task"**:  
   - Actions → **Deploy pipeline to AWS** → **Run workflow**.  
   - Set **Run ECS task after push** = true, choose **Region** (e.g. iceland, europe).  
-  - After build-and-push, the workflow runs an ECS task for that region; the task runs the pipeline and uploads Parquet/CSV to `s3://S3_BUCKET/<region>/YYYY-MM/`.
+  - After build-and-push, the workflow runs an ECS task for that region; the task runs the pipeline and uploads Parquet/CSV to `s3://S3_BUCKET/<region>/`.
 
 ---
 

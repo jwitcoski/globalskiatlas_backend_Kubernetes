@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -42,9 +41,7 @@ def index_local_maps(work_dir: Path, region: Optional[str]) -> dict[str, Path]:
             log(f"  map index: found {n_files} PNG(s) so far ...")
         folder = png.parent.name
         index[folder] = png
-        m = re.match(r"^(?P<base>.+)-layout-.+-landscape$", folder)
-        if m:
-            index.setdefault(m.group("base"), png)
+        # Do not alias base slug -> landscape PNG; that steals portrait lookups.
     log(f"  map index: {n_files} PNG file(s) -> {len(index)} lookup key(s)")
     return index
 
@@ -55,9 +52,12 @@ def pick_map_from_index(
     *,
     page_id: Optional[str] = None,
     prefer_landscape: bool,
+    map_tier: Optional[str] = None,
 ) -> Optional[Path]:
     if not index:
         return None
+
+    from atlas.book_gen.map_resolver import pick_map_path
 
     candidates: list[str] = []
     if slug:
@@ -77,19 +77,37 @@ def pick_map_from_index(
             seen.add(c)
             keys_to_try.append(c)
 
-    if prefer_landscape:
-        for key in keys_to_try:
-            for idx_key, path in index.items():
-                if (idx_key == key or idx_key.startswith(key + "-")) and "landscape" in idx_key:
-                    return path
+    tier = (map_tier or "").strip().lower() or None
+    portrait: Optional[Path] = None
+    landscape: Optional[Path] = None
+    tier_landscape: Optional[Path] = None
 
     for key in keys_to_try:
-        if key in index:
-            return index[key]
+        if key in index and index[key].is_file():
+            # Exact folder key is the portrait dir basename.
+            if portrait is None and "-layout-" not in key:
+                portrait = index[key]
         for idx_key, path in index.items():
-            if idx_key == key or idx_key.startswith(key + "-"):
-                return path
-    return None
+            if not path.is_file():
+                continue
+            if not (idx_key == key or idx_key.startswith(key + "-")):
+                continue
+            if "-layout-" in idx_key and idx_key.endswith("-landscape"):
+                if landscape is None:
+                    landscape = path
+                if tier and f"-layout-{tier}-landscape" in idx_key:
+                    tier_landscape = path
+            elif portrait is None and "-layout-" not in idx_key:
+                portrait = path
+
+    return pick_map_path(
+        {
+            "portrait": portrait,
+            "landscape": tier_landscape or landscape,
+        },
+        prefer_landscape=prefer_landscape,
+        map_tier=tier,
+    )
 
 
 def load_chapter_from_local_parquet(

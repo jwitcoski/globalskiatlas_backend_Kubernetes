@@ -11,8 +11,8 @@ from atlas.book_gen.constants import CATEGORY_BOOK_ORDER
 from atlas.book_gen.log_util import log
 from atlas.book_gen.map_sizes import (
     QUARTER_ROW_GAP_FRAC,
-    map_dimensions_pt,
     slot_height_fraction,
+    tier_size_pt,
 )
 from atlas.book_gen.resort_category import page_fraction, slot_for_fraction
 
@@ -99,6 +99,7 @@ def pack_manifest_entries(
         if not composite_placements:
             return
         _expand_quarter_placements_to_fill_page(composite_placements)
+        _expand_orphan_half_to_fill_page(composite_placements)
         pages.append(
             PhysicalPage(
                 page_index=page_index,
@@ -113,11 +114,13 @@ def pack_manifest_entries(
         half_top_used = False
 
     def _map_row_frac(entry: dict[str, Any]) -> float:
-        _, mh = map_dimensions_pt(
-            entry.get("mapPath"),
-            entry.get("mapTier") or "small",
-            default_dpi=map_export_dpi,
-        )
+        # Pack by nominal plate height for the map tier so fallback/wrong-DPI
+        # PNGs do not blow out row shares (keeps ~3 small hills per page).
+        tier = str(entry.get("mapTier") or "small")
+        try:
+            _, mh = tier_size_pt(tier)
+        except KeyError:
+            _, mh = tier_size_pt("small")
         return slot_height_fraction(mh, ch)
 
     def add_to_composite(entry: dict[str, Any], frac: float) -> bool:
@@ -167,14 +170,13 @@ def pack_manifest_entries(
             return True
 
         if frac <= 0.5:
-            h_frac = _map_row_frac(entry)
-            if h_frac > 0.5 + 1e-6:
-                h_frac = 0.5
+            # Equal halves so two mediums fill the page (no mid-page dead band).
+            h_frac = 0.5
             if composite_capacity + h_frac > 1.0 + 1e-6:
                 return False
             if half_top_used:
                 y = 0.5
-                h = min(0.5, 1.0 - composite_capacity)
+                h = 0.5
             else:
                 y = 0.0
                 h = h_frac
@@ -355,3 +357,17 @@ def _expand_quarter_placements_to_fill_page(
         f"  pack_pages: expanded {n} small-hill row(s) to fill page "
         f"(height scale {scale:.2f})"
     )
+
+
+def _expand_orphan_half_to_fill_page(placements: list[Placement]) -> None:
+    """When a composite page has a single half placement, grow it to full height."""
+    if len(placements) != 1:
+        return
+    p = placements[0]
+    if p.slot != "half":
+        return
+    if p.h >= 1.0 - 1e-6:
+        return
+    p.y = 0.0
+    p.h = 1.0
+    log(f"  pack_pages: expanded orphan half ({p.pageId}) to full page")

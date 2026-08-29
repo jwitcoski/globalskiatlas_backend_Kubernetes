@@ -1,0 +1,40 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PublicReadCombined",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::globalskiatlas-backend-k8s-output/combined/*"
+    },
+    {
+      "Sid": "PublicReadIcebergStats",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::globalskiatlas-backend-k8s-output/iceberg-stats/*"
+    },
+    {
+      "Sid": "PublicReadTippecanoeGeojson",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::globalskiatlas-backend-k8s-output/tippecanoe_geojson/*"
+    },
+    {
+      "Sid": "PublicReadPmtiles",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::globalskiatlas-backend-k8s-output/pmtiles/*"
+    },
+    {
+      "Sid": "PublicReadGameScenes",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::globalskiatlas-backend-k8s-output/game_scenes/*"
+    }
+  ]
+}

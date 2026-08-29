@@ -74,7 +74,7 @@ To run the **full world** (or a continent) with output and S3 organized by **con
 **Scripts:**
 
 - **`scripts/list_regions_for_pipeline.py`** — Lists regions (REGION, PBF_URL, optional cluster_dist_m). Optional `--continent` and `--slug` filters.
-- **`scripts/run_world_pipeline_aws.sh`** — Runs the pipeline for each region; output under `$DATA_ROOT/<REGION>/` (e.g. `/data/europe/iceland/`). S3 uploads go to `s3://$S3_BUCKET/<REGION>/<YYYY-MM>/`.
+- **`scripts/run_world_pipeline_aws.sh`** — Runs the pipeline for each region; output under `$DATA_ROOT/<REGION>/` (e.g. `/data/europe/iceland/`). S3 uploads go to `s3://$S3_BUCKET/<REGION>/`.
 
 **Requirements:** Same as the single-region pipeline: `/db`, `/data` (or `DATA_ROOT`), `/boundaries`, and the pipeline image. Run from repo root (e.g. in Docker or on a VM with the pipeline script and dependencies).
 
@@ -96,7 +96,7 @@ To run the **full world** (or a continent) with output and S3 organized by **con
 **Environment:**
 
 - `DATA_ROOT` — Base output directory (default `/data`). Each region writes to `$DATA_ROOT/<REGION>/`.
-- `S3_BUCKET` — If set, each region’s output is synced to `s3://$S3_BUCKET/<REGION>/<YYYY-MM>/`.
+- `S3_BUCKET` — If set, each region’s output is synced to `s3://$S3_BUCKET/<REGION>/`.
 - `DB`, `BOUNDARIES` — Same as `run_iceland_pipeline_aws.sh`.
 
 The pipeline already enriches features with **Country** and **State** (admin 0/1) from Natural Earth in `enrich_geojson_properties.py` and `analyze_ski_areas.py`; the world runner adds **continent/country/state** organization via the `REGION` path and S3 prefix.

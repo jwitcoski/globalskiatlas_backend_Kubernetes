@@ -74,7 +74,8 @@ python scripts/translate_resort_names.py -i "$DATA/ski_areas_analyzed.parquet" -
 # 10. Elevation and contours (Skadi DEM; merges elevation + ski_north_angle into ski_areas_analyzed.parquet)
 # Requires: ski_areas.parquet with polygon geometry; geopandas, rasterio, matplotlib in the image.
 echo "[10/11] Elevation and contours..."
-python scripts/ski_area_elevation_contours.py -i "$DATA/ski_areas.parquet" -o "$DATA" --cache-dir "$DATA/cache/skadi"
+mkdir -p "$DATA/cache"
+python scripts/ski_area_elevation_contours.py -i "$DATA/ski_areas.parquet" -o "$DATA" --cache-dir "$DATA/cache" --save-dem --clear-cache-every 50
 # Re-export CSV from parquet so ski_areas_analyzed.csv includes elevation_low_m, elevation_high_m, ski_north_angle
 python -c "import pandas as pd; pd.read_parquet('$DATA/ski_areas_analyzed.parquet').to_csv('$DATA/ski_areas_analyzed.csv', index=False)"
 echo "Updated ski_areas_analyzed.csv with elevation."
@@ -82,15 +83,17 @@ echo "Updated ski_areas_analyzed.csv with elevation."
 # 11. Upload to S3
 if [ -n "$S3_BUCKET" ]; then
   echo "[11/11] Uploading to S3..."
-  MONTH=$(date +%Y-%m)
-  S3_PREFIX="s3://$S3_BUCKET/$REGION/$MONTH/"
+  S3_PREFIX="s3://$S3_BUCKET/$REGION/"
   aws s3 sync "$DATA" "$S3_PREFIX" \
     --exclude "*" \
     --include "*.parquet" \
     --include "*.geojson" \
     --include "*.csv" \
+    --include "dems/*.tif" \
+    --include "dems/**/*.tif" \
     --no-progress
   echo "Uploaded to $S3_PREFIX"
+  rm -rf "$DATA/cache"
 else
   echo "[11/11] S3_BUCKET not set, skipping upload."
 fi

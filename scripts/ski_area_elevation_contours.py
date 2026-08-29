@@ -22,6 +22,7 @@ stay inside the resort polygon.
 import argparse
 import gc
 import gzip
+import json
 import math
 import os
 import shutil
@@ -456,6 +457,8 @@ def process_ski_area(
     Returns (elevation_low_m, elevation_high_m, contour features, elevation point features, ski_north_angle).
     """
     ws_id, region = _ski_area_id(row)
+    if region is None or (isinstance(region, float) and pd.isna(region)) or not str(region).strip():
+        region = os.environ.get("REGION", "") or ""
     region_str = str(region) if region is not None and not (hasattr(region, "__float__") and pd.isna(region)) else ""
     wi = ws_id
     if wi is not None and pd.notna(wi):
@@ -682,6 +685,17 @@ def main() -> None:
         help="Skip areas that already have elevation in output; merge with existing elevation/contours",
     )
     parser.add_argument(
+        "--ids-file",
+        default=None,
+        help="JSON from elevation_preflight.py (candidates[].winter_sports_id) or a text file of ids",
+    )
+    parser.add_argument(
+        "--clear-cache-every",
+        type=int,
+        default=50,
+        help="Delete cached Skadi tiles after this many newly processed areas (default 50; 0=never)",
+    )
+    parser.add_argument(
         "--boundaries",
         default=None,
         help="Path to ski_areas.parquet with polygon geometry; used to clip contours and constrain base/summit points to resort boundaries (default: <output-dir>/ski_areas.parquet when it exists)",
@@ -778,6 +792,28 @@ def main() -> None:
                 sys.exit(0)
 
     n_total = len(gdf)
+    if args.ids_file:
+        id_path = Path(args.ids_file)
+        if not id_path.exists():
+            print(f"ids-file not found: {id_path}", file=sys.stderr)
+            sys.exit(1)
+        raw = id_path.read_text(encoding="utf-8")
+        want = set()
+        if id_path.suffix.lower() == ".json":
+            payload = json.loads(raw)
+            rows = payload.get("candidates", payload if isinstance(payload, list) else [])
+            for item in rows:
+                if isinstance(item, dict):
+                    want.add(str(item.get("winter_sports_id", "")).strip())
+                else:
+                    want.add(str(item).strip())
+        else:
+            want = {ln.strip() for ln in raw.splitlines() if ln.strip() and not ln.startswith("#")}
+        want.discard("")
+        before = len(gdf)
+        gdf = gdf[gdf.apply(lambda r: str(_ski_area_id(r)[0]).strip() in want, axis=1)].copy()
+        print(f"Filtered to {len(gdf)} ski areas from ids-file ({before} in input, {len(want)} ids)")
+        n_total = len(gdf)
     if args.skip:
         gdf = gdf.iloc[args.skip:]
         print(f"Skipped first {args.skip} ski areas; {len(gdf)} remaining")
@@ -884,13 +920,14 @@ def main() -> None:
             boundaries_by_key=boundaries_by_key,
         )
         n_processed_since_clear += 1
-        if n_processed_since_clear >= 1000:
+        every = int(args.clear_cache_every or 0)
+        if every > 0 and n_processed_since_clear >= every:
             skadi_dir = cache_dir / "skadi"
             if skadi_dir.exists():
                 try:
                     shutil.rmtree(skadi_dir)
                     skadi_dir.mkdir(parents=True, exist_ok=True)
-                    print(f"  Cleared tile cache (every 1000 areas)", file=sys.stderr)
+                    print(f"  Cleared tile cache (every {every} areas)", file=sys.stderr)
                 except Exception as e:
                     print(f"  Warning: could not clear cache: {e}", file=sys.stderr)
             n_processed_since_clear = 0
@@ -913,7 +950,7 @@ def main() -> None:
     elev_df = pd.DataFrame(elevation_rows)
     elev_path = output_dir / "ski_areas_elevation.parquet"
     # If we ran with skip/limit and had existing data, merge so we don't drop other batches
-    if (args.skip or args.limit) and args.resume and existing_elev_path.exists() and len(existing_elev_by_key) > 0:
+    if (args.skip or args.limit or args.ids_file) and args.resume and existing_elev_path.exists() and len(existing_elev_by_key) > 0:
         existing_elev_df = pd.read_parquet(existing_elev_path)
 
         def _elev_key(r):
@@ -935,6 +972,11 @@ def main() -> None:
         # Normalize join keys for reliable merge (e.g. int vs float winter_sports_id)
         merge_on = ["winter_sports_id", "region"]
         if all(c in analyzed_df.columns for c in merge_on):
+            elev_r = set(elev_df["region"].astype(str)) if "region" in elev_df.columns else set()
+            an_r = set(analyzed_df["region"].astype(str))
+            if not (elev_r & an_r):
+                merge_on = ["winter_sports_id"]
+                print("  Elevation merge on winter_sports_id only (region values differ)")
             elev_cols = ["winter_sports_id", "region", "elevation_low_m", "elevation_high_m", "elevation_source"]
             if "ski_north_angle" in elev_df.columns:
                 elev_cols.append("ski_north_angle")

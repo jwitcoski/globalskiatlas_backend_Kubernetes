@@ -127,8 +127,14 @@ def discover_export_paths(
     work_dir: Path,
     slug: str,
     region: Optional[str] = None,
+    *,
+    prefer_tier: Optional[str] = None,
 ) -> dict[str, Optional[Path]]:
-    """Find portrait/landscape PNGs already under atlas_work (tier-agnostic)."""
+    """Find portrait/landscape PNGs under atlas_work.
+
+    When *prefer_tier* is set (e.g. ``medium``), prefer
+    ``{slug}-layout-{tier}-landscape`` over other landscape folders.
+    """
     prefix = resort_work_prefix(work_dir, region)
     portrait: Optional[Path] = None
     landscape: Optional[Path] = None
@@ -137,11 +143,18 @@ def discover_export_paths(
         candidate = export_png_path(pdir)
         if candidate.is_file():
             portrait = candidate
-    for ldir in sorted(prefix.glob(f"{slug}-layout-*-landscape")):
-        candidate = export_png_path(ldir)
+    tier = (prefer_tier or "").strip().lower() or None
+    if tier:
+        preferred = prefix / f"{slug}-layout-{tier}-landscape"
+        candidate = export_png_path(preferred)
         if candidate.is_file():
             landscape = candidate
-            break
+    if landscape is None:
+        for ldir in sorted(prefix.glob(f"{slug}-layout-*-landscape")):
+            candidate = export_png_path(ldir)
+            if candidate.is_file():
+                landscape = candidate
+                break
     return {"portrait": portrait, "landscape": landscape}
 
 
@@ -160,12 +173,18 @@ def resolve_export_paths(
     if ls:
         from atlas.map_gen.data_to_qgis import _template_qgz_for_tier
 
-        if _template_qgz_for_tier(config, ls).exists():
-            landscape = export_png_path(
-                landscape_dir(work_dir, slug, portrait_tier, region)
-            )
+        # Prefer on-disk same-tier landscape even if template path check fails.
+        candidate = export_png_path(
+            landscape_dir(work_dir, slug, portrait_tier, region)
+        )
+        if candidate.is_file():
+            landscape = candidate
+        elif _template_qgz_for_tier(config, ls).exists():
+            landscape = candidate
     paths: dict[str, Optional[Path]] = {"portrait": portrait, "landscape": landscape}
-    discovered = discover_export_paths(work_dir, slug, region)
+    discovered = discover_export_paths(
+        work_dir, slug, region, prefer_tier=portrait_tier
+    )
     for key in ("portrait", "landscape"):
         p = paths.get(key)
         if p is None or not p.is_file():

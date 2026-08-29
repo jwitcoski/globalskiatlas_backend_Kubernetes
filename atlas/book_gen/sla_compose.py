@@ -49,8 +49,13 @@ def _overview_text_runs(
 SCRIBUS_CANVAS_Y = 20.0
 PAGE_GAP_PT = 40.0
 
-# Full/half pages: landscape map top-right at 100% export scale; bottom body band + footer.
+# Full/half pages: map top-right/left; bottom body band + footer.
 MIN_SIDE_TEXT_PT = 40.0
+# Readable side column floors (stats/title need more than the absolute minimum).
+MIN_SIDE_BY_SLOT_PT = {
+    "full": 200.0,
+    "half": 140.0,
+}
 # Full-page bottom body band (from hand-tuned Arapahoe Basin page 10 SLA).
 FULL_BOTTOM_BODY_FRAC = 107.33 / 720.0
 HALF_BOTTOM_BODY_FRAC = FULL_BOTTOM_BODY_FRAC * 0.55
@@ -128,10 +133,11 @@ def _native_map_layout(
     slot: str = "full",
 ) -> dict[str, float]:
     """
-    Map pinned top-right at 100% native export scale (shrink only if taller/wider than slot).
+    Map pinned top-right/left; shrink to leave a usable side column.
 
-    Reserves a bottom body band and footer snapped to the slot edges. The side
-    column (header + body) ends at split_y — it does not extend into the bottom band.
+    Reserves a bottom body band and footer. Side column (header + body) ends at
+    split_y — it does not extend into the bottom band. Side width/position use
+    the *displayed* map size after scaling.
     """
     from atlas.book_gen.wiki_style import type_scale_for_slot
 
@@ -148,23 +154,24 @@ def _native_map_layout(
         nat_w = inner_w * 0.55
         nat_h = inner_h * 0.45
 
-    plate_w = min(nat_w, inner_w - MIN_SIDE_TEXT_PT - gap)
+    min_side = max(MIN_SIDE_TEXT_PT, MIN_SIDE_BY_SLOT_PT.get(slot, MIN_SIDE_TEXT_PT))
+    plate_budget_w = max(40.0, inner_w - min_side - gap)
     display_scale = 1.0
     if nat_h > top_zone_h:
         display_scale = min(display_scale, top_zone_h / nat_h)
-    if nat_w > plate_w:
-        display_scale = min(display_scale, plate_w / nat_w)
+    if nat_w > plate_budget_w:
+        display_scale = min(display_scale, plate_budget_w / nat_w)
     map_w = nat_w * display_scale
     map_h = nat_h * display_scale
 
     if map_on_right:
-        side_w = max(MIN_SIDE_TEXT_PT, inner_w - plate_w - gap)
         map_x = inner_x + inner_w - map_w
         side_x = inner_x
+        side_w = max(min_side, map_x - inner_x - gap)
     else:
-        side_w = max(MIN_SIDE_TEXT_PT, inner_w - plate_w - gap)
         map_x = inner_x
-        side_x = inner_x + plate_w + gap
+        side_x = inner_x + map_w + gap
+        side_w = max(min_side, inner_x + inner_w - side_x)
 
     map_y = inner_y
     return {
@@ -439,7 +446,8 @@ def _append_placement_objects(
         fw = float(pl["w"]) * content_w
         fh = float(pl["h"]) * content_h
         slot = str(pl.get("slot") or "full")
-        if slot == "quarter" and float(pl.get("h") or 0) >= 0.99:
+        # Expanded orphan quarter/half rows use the full-page wiki layout.
+        if slot in ("quarter", "half") and float(pl.get("h") or 0) >= 0.99:
             slot = "full"
         spread_page = pl.get("spread_page")
         map_on_right = bool(pl.get("map_on_right", True))

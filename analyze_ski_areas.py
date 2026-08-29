@@ -54,6 +54,30 @@ def _way_length_m(geom: List[Dict[str, float]]) -> float:
     return total
 
 
+def _is_closed_ring(geom: List[Dict[str, float]]) -> bool:
+    """True when a way is a closed ring (area), not an open centerline."""
+    if len(geom) < 4:
+        return False
+    a, b = geom[0], geom[-1]
+    return abs(float(a["lat"]) - float(b["lat"])) < 1e-8 and abs(float(a["lon"]) - float(b["lon"])) < 1e-8
+
+
+def _max_span_m(geom: List[Dict[str, float]]) -> float:
+    """Longest vertex-to-vertex span (m). Proxy for run length on area-mapped pistes."""
+    n = len(geom)
+    if n < 2:
+        return 0.0
+    best = 0.0
+    for i in range(n):
+        pi = geom[i]
+        for j in range(i + 1, n):
+            pj = geom[j]
+            d = _haversine_m(pi["lat"], pi["lon"], pj["lat"], pj["lon"])
+            if d > best:
+                best = d
+    return best
+
+
 def _polygon_area_m2(geom: List[Dict[str, float]]) -> float:
     """Approximate polygon area in square meters (planar projection at centroid)."""
     if len(geom) < 3:
@@ -462,9 +486,10 @@ def analyze(
                     has_gladed = True
                 g = _get_geometry(elem)
                 if g:
-                    if len(g) >= 3 and elem.get("type") == "way":
+                    # Open ways (typical centerlines) always have 3+ nodes; do not treat those as polygons.
+                    if _is_closed_ring(g):
                         skiable_m2 += _polygon_area_m2(g)
-                        # skip polygon in trail lengths (longest/avg are for linear runs)
+                        trail_lengths_m.append(_max_span_m(g))
                     else:
                         width = float(etags.get("piste:width", PISTE_WIDTH_M))
                         length_m = _way_length_m(g)

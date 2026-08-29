@@ -20,6 +20,9 @@ cache/name_translations.json
 # Env / secrets
 .env
 
+# Local clone of third-party skills (committed copy lives in .cursor/skills/)
+_vendor/
+
 # IDE
 .idea/
 .vscode/

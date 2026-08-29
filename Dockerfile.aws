@@ -26,6 +26,8 @@ RUN pip install --no-cache-dir -r requirements.txt awscli
 COPY *.py .
 COPY scripts/ scripts/
 COPY boundaries/ boundaries/
+COPY game_export/ game_export/
+COPY config/ config/
 
 # Default boundaries path (can override with -e BOUNDARIES=...)
 ENV BOUNDARIES=/app/boundaries

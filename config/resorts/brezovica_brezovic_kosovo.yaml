@@ -1,0 +1,41 @@
+# OSM winter_sports way 1245650182
+resort_id: brezovica_brezovic_kosovo
+display_name: "Brezovica (Brezovic\u00eb)"
+winter_sports_id: "1245650182"
+region: europe/kosovo
+state: "\u0160trpce"
+country: "Kosovo"
+approximate_location_name: "\u0160trpce"
+game_style: classic_arcade
+seed: 20260826
+status: prototype
+
+target_crs: auto_utm
+terrain_tile_size_m: 256
+terrain_mesh_resolution_m: 4
+heightfield_resolution_m: 2
+collision_heightfield_resolution_m: 4
+route_min_vertical_drop_m: 25
+route_max_uphill_fraction: 0.10
+route_min_length_m: 75
+piste_corridor_default_half_width_m: 18
+piste_corridor_min_half_width_m: 12
+piste_corridor_max_half_width_m: 35
+scene_bounds_buffer_m: 300
+route_sample_spacing_m: 8
+route_connect_endpoint_m: 25
+steep_hazard_degrees: 45
+building_buffer_m: 8
+water_buffer_m: 6
+road_buffer_m: 6
+cliff_buffer_m: 10
+terrain_boundary_buffer_m: 8
+highway_hazard_types:
+  - motorway
+  - trunk
+  - primary
+  - secondary
+  - tertiary
+  - residential
+  - service
+  - unclassified

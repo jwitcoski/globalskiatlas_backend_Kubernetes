@@ -135,6 +135,22 @@ python scripts/ski_area_elevation_contours.py
 
 Input: `output/combined/ski_areas.parquet` (polygon or point geometry). Outputs: `ski_areas_elevation.parquet` (elevation_low_m, elevation_high_m) and `ski_area_contours.geojson` / `.parquet`. Join to `ski_areas_analyzed` on `(winter_sports_id, region)`. Use `--limit N` to test on a few areas first. Add `--save-dem` to write a cropped DEM GeoTIFF per ski area under `output/combined/dems/<region>/<winter_sports_id>.tif` for later use (e.g. hillshade, different contour intervals).
 
+### Batched elevation (disk-safe)
+
+OSM preflight (no DEM download), then Docker per region, optional S3, then delete the Skadi cache. Default candidates: downhill resort, ≥1 downhill piste, longest trail ≥ 75 m. Unnamed trails are allowed.
+
+```powershell
+python scripts/elevation_preflight.py --report-only
+python scripts/elevation_preflight.py --region north-america/us/virginia
+python scripts/run_elevation_batches.py --region north-america/us/virginia --no-upload --keep-dems
+# Overnight (all candidate regions that have local ski_areas.parquet):
+python scripts/run_elevation_batches.py --upload
+```
+
+Uses image `globalskiatlas-pipeline`. `--upload` writes elevation parquet/geojson and `dems/**/*.tif` to `s3://globalskiatlas-backend-k8s-output/<region>/` (overwrite in place). This is **not** playable game-scene export.
+
+**TODO after overnight elevation finishes:** free ~20 GB by deleting regional `output/` trees (`europe`, `asia`, `north-america`, `africa`, `australia-oceania`, `south-america`, leftover `**/cache/**/*.hgt`). **Keep** `output/combined/`, `atlas_work/`, `output/game_scenes/` (scene cakes only; the skier UI is in GlobalSkiAtlas_2), and all source (`atlas/`, `config/`, `scripts/`, `game_export/`). Do not delete `output/combined`.
+
 ---
 
 ## OOM Avoidance (Large Regions)
