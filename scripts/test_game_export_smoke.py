@@ -150,6 +150,9 @@ def main() -> int:
         if glb[:4] != b"glTF":
             print("invalid glb", file=sys.stderr)
             return 1
+        if b"KHR_draco_mesh_compression" not in glb:
+            print("expected Draco-compressed terrain GLB", file=sys.stderr)
+            return 1
         print("SMOKE OK", scene)
         print("manifest keys", sorted(manifest.keys())[:8], "...")
         return 0
