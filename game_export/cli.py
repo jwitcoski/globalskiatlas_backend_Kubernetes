@@ -293,8 +293,9 @@ def _export_resort(
     }
     for name, fname in layer_files.items():
         feats = layers.get(name) or []
-        if feats:
-            write_local_geojson(out / "vectors" / fname, feats, local, name)
+        # Always write (even empty) so the client never hits S3/CloudFront 403 for
+        # missing keys that the manifest still advertises.
+        write_local_geojson(out / "vectors" / fname, feats, local, name)
 
     corridors = piste_corridors(layers.get("pistes") or [], cfg)
     write_local_geojson(out / "vectors" / "piste-corridors.geojson", corridors, local, "piste-corridors")

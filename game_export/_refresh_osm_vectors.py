@@ -53,8 +53,6 @@ def main() -> int:
     written = {}
     for name, fname in LAYER_FILES.items():
         feats = layers.get(name) or []
-        if not feats:
-            continue
         write_local_geojson(vec / fname, feats, local, name)
         written[name] = len(feats)
     man.setdefault("vectors", {}).update(
