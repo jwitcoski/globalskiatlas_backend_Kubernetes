@@ -97,6 +97,17 @@ def parse_args(argv=None):
         default=None,
         help="Build from config/resorts/_playable_candidates.json instead of YAML",
     )
+    p.add_argument(
+        "--homepage-scene",
+        action="store_true",
+        help="Export a mesh-only homepage hero scene under <data-root>/homepage_scene/",
+    )
+    p.add_argument(
+        "--homepage-mesh-m",
+        type=float,
+        default=None,
+        help="Homepage terrain vertex spacing in meters (default 12; target mesh <1 MB)",
+    )
     return p.parse_args(argv)
 
 
@@ -146,6 +157,42 @@ def main(argv=None) -> int:
     if args.catalog_only:
         dest = write_catalog(out_root)
         print(f"Catalog written: {dest}")
+        return 0
+
+    if args.homepage_scene:
+        from game_export.homepage import DEFAULT_MESH_RESOLUTION_M, export_homepage_scene
+
+        cfg_path = args.config or default_config_path(args.resort)
+        if not cfg_path.is_file():
+            log.error("Config not found: %s", cfg_path)
+            return 2
+        cfg = load_resort_config(cfg_path)
+        mesh_m = args.homepage_mesh_m if args.homepage_mesh_m is not None else DEFAULT_MESH_RESOLUTION_M
+        if args.dry_run:
+            print(
+                f"DRY RUN homepage scene: resort={cfg.resort_id} mesh={mesh_m}m "
+                f"out={data_root / 'homepage_scene' / cfg.resort_id}"
+            )
+            return 0
+        try:
+            scene = export_homepage_scene(
+                cfg,
+                data_root=data_root,
+                cache_dir=cache_dir,
+                out_root=data_root,
+                from_s3=from_s3,
+                s3_bucket=s3_bucket,
+                fetch_skadi=args.fetch_skadi,
+                mesh_resolution_m=mesh_m,
+                force=args.force,
+            )
+        except (FileNotFoundError, RuntimeError, PermissionError) as e:
+            log.error("%s", e)
+            return 1
+        glb = scene / "terrain" / "terrain-mesh.glb"
+        print(f"Homepage scene written: {scene}")
+        if glb.is_file():
+            print(f"Terrain mesh: {glb} ({glb.stat().st_size:,} bytes)")
         return 0
 
     if args.picked_batch:

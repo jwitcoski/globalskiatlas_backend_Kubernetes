@@ -69,4 +69,29 @@ Version id is `v0-` + a content hash of config + DEM + OSM fingerprints (S3 ETag
 
 **Limitations:** OSM downhill pistes at Montage may be incomplete. Routes are tagged `approved` / `review_needed` / `rejected`. Not an official map or safety product.
 
-The browser game is not in this repo. Scene cakes (manifest, heightfield, mesh, vectors) are consumed by the GlobalSkiAtlas_2 playable client.
+**Homepage hero scene** (mesh-only, under 1 MB for fast homepage load):
+
+```powershell
+python -m game_export --resort montage_mountain_pa --homepage-scene --force
+```
+
+Output: `output/homepage_scene/<resort_id>/` (`scene-manifest.json`, Draco `terrain-mesh.glb`, OSM vectors, attribution). Default vertex spacing is 12 m; larger resorts auto-coarsen until the mesh is under 1 MB.
+
+Global homepage catalog (one medium resort per continent + Montage NA): `config/homepage_scene/catalog.json`. Batch export:
+
+```powershell
+foreach ($r in @("montage_mountain_pa","pal_arinsal_andorra","hakuba_cortina_japan","cerro_perito_moreno_argentina","perisher_australia")) {
+  python -m game_export --resort $r --homepage-scene --force
+}
+```
+
+Copy into **GlobalSkiAtlas_2** for the homepage hero (daily rotation via `homepage_scene/catalog.json`):
+
+```powershell
+Copy-Item -Force config/homepage_scene/catalog.json ..\GlobalSkiAtlas_2\homepage_scene\
+foreach ($r in @("montage_mountain_pa","pal_arinsal_andorra","hakuba_cortina_japan","cerro_perito_moreno_argentina","perisher_australia")) {
+  Copy-Item -Recurse -Force output/homepage_scene/$r ..\GlobalSkiAtlas_2\homepage_scene\
+}
+```
+
+The browser game is not in this repo.

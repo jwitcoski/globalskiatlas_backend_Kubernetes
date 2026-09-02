@@ -184,6 +184,128 @@ def sample_elev(elev: np.ndarray, transform: rasterio.Affine, easting: float, no
     return v
 
 
+def export_homepage_terrain(
+    dem_path: Path,
+    out_dir: Path,
+    cfg,
+    *,
+    mesh_resolution_m: float,
+) -> dict:
+    """Coarse terrain mesh only — no heightfields, previews, or collision grids."""
+    from game_export.config import GameExportConfig
+
+    assert isinstance(cfg, GameExportConfig)
+    mesh_res = float(mesh_resolution_m)
+    work_res = mesh_res
+
+    with rasterio.open(dem_path) as src:
+        src_crs = src.crs.to_string() if src.crs else "EPSG:4326"
+        b = src.bounds
+        clon = (b.left + b.right) / 2
+        clat = (b.bottom + b.top) / 2
+        if src.crs and src.crs.to_epsg() != 4326:
+            to_wgs = rasterio.warp.transform(src.crs, "EPSG:4326", [clon], [clat])
+            clon, clat = float(to_wgs[0][0]), float(to_wgs[1][0])
+
+    if cfg.target_crs == "auto_utm":
+        projected = utm_crs_from_lonlat(clon, clat)
+    else:
+        projected = cfg.target_crs
+
+    log.info("Homepage terrain %s → %s @ %sm", dem_path, projected, work_res)
+    elev, transform, src_crs_str = warp_dem_to_utm(dem_path, projected, work_res)
+    rows, cols = elev.shape
+    xs, ys = _grid_xy(transform, rows, cols)
+    west_e = float(transform.c)
+    north_n = float(transform.f)
+    east_e = west_e + cols * work_res
+    south_n = north_n - rows * work_res
+
+    to_proj, to_wgs = make_transformers(projected)
+    origin_e, origin_n = west_e, south_n
+    olon, olat = to_wgs.transform(origin_e, origin_n)
+    local = LocalCRS(
+        source_crs=src_crs_str,
+        projected_crs=projected,
+        origin_easting_m=float(origin_e),
+        origin_northing_m=float(origin_n),
+        origin_longitude=float(olon),
+        origin_latitude=float(olat),
+    )
+
+    nodata = ~np.isfinite(elev)
+    slope_deg, slope_pct, aspect, hs, gx, gy, gz, roughness = _slope_aspect_hillshade_normals(
+        np.where(nodata, np.nan, elev), work_res
+    )
+
+    terrain_dir = out_dir / "terrain"
+    terrain_dir.mkdir(parents=True, exist_ok=True)
+
+    mesh_elev = elev
+    mesh_cell = work_res
+    mr, mc = mesh_elev.shape
+    mx, my = _grid_xy(
+        rasterio.Affine(mesh_cell, 0, west_e, 0, -mesh_cell, north_n), mr, mc
+    )
+    valid = np.isfinite(mesh_elev)
+    xg = mx - local.origin_easting_m
+    zg = -(my - local.origin_northing_m)
+    yg = np.where(valid, mesh_elev, 0.0).astype(np.float64)
+    pos = np.stack([xg, yg, zg], axis=-1).reshape(-1, 3).astype(np.float32)
+    nrm = np.stack(
+        [np.nan_to_num(gx, nan=0.0), np.nan_to_num(gy, nan=1.0), np.nan_to_num(gz, nan=0.0)],
+        axis=-1,
+    ).reshape(-1, 3).astype(np.float32)
+    ii = np.arange(mr * mc, dtype=np.uint32).reshape(mr, mc)
+    tmask = valid[:-1, :-1] & valid[:-1, 1:] & valid[1:, :-1] & valid[1:, 1:]
+    i00 = ii[:-1, :-1][tmask]
+    i10 = ii[:-1, 1:][tmask]
+    i01 = ii[1:, :-1][tmask]
+    i11 = ii[1:, 1:][tmask]
+    idx = np.stack([i00, i10, i11, i00, i11, i01], axis=1).reshape(-1).astype(np.uint32)
+    glb_info = write_terrain_glb(terrain_dir / "terrain-mesh.glb", pos, nrm, idx)
+
+    valid_elev = elev[np.isfinite(elev)]
+    zmin = float(np.nanmin(valid_elev))
+    zmax = float(np.nanmax(valid_elev))
+    terrain_meta = {
+        "kind": "homepage_hero",
+        "source_dem": str(dem_path),
+        "source_crs": src_crs_str,
+        "projected_crs": projected,
+        "work_resolution_m": work_res,
+        "mesh": {
+            "file": "terrain-mesh.glb",
+            **glb_info,
+            "vertex_spacing_m": mesh_cell,
+            "coordinate_space": "game (X east, Y elevation, Z negative north)",
+        },
+        "local_crs": local.to_dict(),
+        "grid": {"rows": rows, "cols": cols, "cell_m": work_res},
+        "elevation_min_m": zmin,
+        "elevation_max_m": zmax,
+    }
+    (terrain_dir / "terrain-metadata.json").write_text(
+        jsonutil.dumps(terrain_meta), encoding="utf-8"
+    )
+    return {
+        "local": local,
+        "elev": elev,
+        "transform": transform,
+        "cell_m": work_res,
+        "slope_deg": slope_deg,
+        "slope_pct": slope_pct,
+        "hillshade": hs,
+        "to_proj": to_proj,
+        "to_wgs": to_wgs,
+        "terrain_meta": terrain_meta,
+        "west_e": west_e,
+        "south_n": south_n,
+        "east_e": east_e,
+        "north_n": north_n,
+    }
+
+
 def export_terrain(
     dem_path: Path,
     out_dir: Path,

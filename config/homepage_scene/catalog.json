@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "description": "Homepage hero scenes — one medium resort per continent (plus Montage NA PoC).",
+  "resorts": [
+    {
+      "id": "montage_mountain_pa",
+      "display_name": "Montage Mountain",
+      "continent": "north_america",
+      "country": "US",
+      "playable_ver": "v0-107b3a77b75f"
+    },
+    {
+      "id": "pal_arinsal_andorra",
+      "display_name": "Pal-Arinsal",
+      "continent": "europe",
+      "country": "Andorra",
+      "playable_ver": "v0-f11def8ddced"
+    },
+    {
+      "id": "hakuba_cortina_japan",
+      "display_name": "Hakuba Cortina",
+      "continent": "asia",
+      "country": "Japan",
+      "playable_ver": null
+    },
+    {
+      "id": "cerro_perito_moreno_argentina",
+      "display_name": "Cerro Perito Moreno",
+      "continent": "south_america",
+      "country": "Argentina",
+      "playable_ver": "v0-913ffa98129f"
+    },
+    {
+      "id": "perisher_australia",
+      "display_name": "Perisher",
+      "continent": "oceania",
+      "country": "Australia",
+      "playable_ver": "v0-235c8a0aa6be"
+    }
+  ]
+}
