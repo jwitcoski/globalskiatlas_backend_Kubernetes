@@ -98,9 +98,14 @@ def parse_args(argv=None):
         help="Build from config/resorts/_playable_candidates.json instead of YAML",
     )
     p.add_argument(
+        "--clay-scene",
+        action="store_true",
+        help="Export a mesh-only clay scene under <data-root>/clay_scenes/ (wiki + homepage)",
+    )
+    p.add_argument(
         "--homepage-scene",
         action="store_true",
-        help="Export a mesh-only homepage hero scene under <data-root>/homepage_scene/",
+        help="Alias for --clay-scene (compat)",
     )
     p.add_argument(
         "--homepage-mesh-m",
@@ -159,7 +164,7 @@ def main(argv=None) -> int:
         print(f"Catalog written: {dest}")
         return 0
 
-    if args.homepage_scene:
+    if args.clay_scene or args.homepage_scene:
         from game_export.homepage import DEFAULT_MESH_RESOLUTION_M, export_homepage_scene
 
         cfg_path = args.config or default_config_path(args.resort)
@@ -170,8 +175,8 @@ def main(argv=None) -> int:
         mesh_m = args.homepage_mesh_m if args.homepage_mesh_m is not None else DEFAULT_MESH_RESOLUTION_M
         if args.dry_run:
             print(
-                f"DRY RUN homepage scene: resort={cfg.resort_id} mesh={mesh_m}m "
-                f"out={data_root / 'homepage_scene' / cfg.resort_id}"
+                f"DRY RUN clay scene: resort={cfg.resort_id} mesh={mesh_m}m "
+                f"out={data_root / 'clay_scenes' / cfg.resort_id}"
             )
             return 0
         try:
@@ -190,7 +195,7 @@ def main(argv=None) -> int:
             log.error("%s", e)
             return 1
         glb = scene / "terrain" / "terrain-mesh.glb"
-        print(f"Homepage scene written: {scene}")
+        print(f"Clay scene written: {scene}")
         if glb.is_file():
             print(f"Terrain mesh: {glb} ({glb.stat().st_size:,} bytes)")
         return 0

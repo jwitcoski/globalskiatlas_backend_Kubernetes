@@ -69,28 +69,40 @@ Version id is `v0-` + a content hash of config + DEM + OSM fingerprints (S3 ETag
 
 **Limitations:** OSM downhill pistes at Montage may be incomplete. Routes are tagged `approved` / `review_needed` / `rejected`. Not an official map or safety product.
 
-**Homepage hero scene** (mesh-only, under 1 MB for fast homepage load):
+**Clay 3D scene** (mesh + vectors for homepage hero and wiki **3D Map** tab; mesh under 1 MB):
 
 ```powershell
-python -m game_export --resort montage_mountain_pa --homepage-scene --force
+python -m game_export --resort montage_mountain_pa --clay-scene --force
 ```
 
-Output: `output/homepage_scene/<resort_id>/` (`scene-manifest.json`, Draco `terrain-mesh.glb`, OSM vectors, attribution). Default vertex spacing is 12 m; larger resorts auto-coarsen until the mesh is under 1 MB.
+(`--homepage-scene` is a compat alias for `--clay-scene`.)
 
-Global homepage catalog (one medium resort per continent + Montage NA): `config/homepage_scene/catalog.json`. Batch export:
+Output: `output/clay_scenes/<resort_id>/` (`scene-manifest.json`, Draco `terrain-mesh.glb`, OSM vectors, attribution, `ski-area-buffer` when available). Default vertex spacing is 12 m; larger resorts auto-coarsen until the mesh is under 1 MB.
+
+**ID contract:** Wiki joins on `winter_sports_id` → catalog `id` → folder `clay_scenes/{id}/`. Do **not** use wiki `pageId` (different slug scheme). Catalog: `config/clay_scenes/catalog.json` (copied to the site as `clay_scenes/catalog.json`).
+
+**Scale note:** Fine to ship a full catalog for tens/hundreds of resorts. At ~2k–4k entries, prefer a per-id lookup such as `/clay_scenes/by-ws/{winter_sports_id}.json` instead of loading the whole catalog on every wiki page.
+
+Batch export:
 
 ```powershell
 foreach ($r in @("montage_mountain_pa","pal_arinsal_andorra","hakuba_cortina_japan","cerro_perito_moreno_argentina","perisher_australia")) {
-  python -m game_export --resort $r --homepage-scene --force
+  python -m game_export --resort $r --clay-scene --force
 }
 ```
 
-Copy into **GlobalSkiAtlas_2** for the homepage hero (daily rotation via `homepage_scene/catalog.json`):
+Upload to S3 (public `clay_scenes/` prefix, same bucket as `game_scenes/`):
 
 ```powershell
-Copy-Item -Force config/homepage_scene/catalog.json ..\GlobalSkiAtlas_2\homepage_scene\
+python scripts/upload_clay_scenes.py
+```
+
+Copy into **GlobalSkiAtlas_2**:
+
+```powershell
+Copy-Item -Force config/clay_scenes/catalog.json ..\GlobalSkiAtlas_2\clay_scenes\
 foreach ($r in @("montage_mountain_pa","pal_arinsal_andorra","hakuba_cortina_japan","cerro_perito_moreno_argentina","perisher_australia")) {
-  Copy-Item -Recurse -Force output/homepage_scene/$r ..\GlobalSkiAtlas_2\homepage_scene\
+  Copy-Item -Recurse -Force output/clay_scenes/$r ..\GlobalSkiAtlas_2\clay_scenes\
 }
 ```
 

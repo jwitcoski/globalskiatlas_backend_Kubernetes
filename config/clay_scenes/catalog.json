@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.0",
+  "description": "Clay 3D resort scenes for homepage hero and wiki 3D Map tab. Join key: winter_sports_id → id (folder clay_scenes/{id}/). Do not use wiki pageId.",
+  "path_contract": {
+    "asset_root": "clay_scenes/{resort_id}/",
+    "catalog": "clay_scenes/catalog.json",
+    "wiki_join_key": "winter_sports_id",
+    "scale_note": "At ~2k–4k resorts, prefer /clay_scenes/by-ws/{winter_sports_id}.json instead of loading the full catalog on every page."
+  },
+  "resorts": [
+    {
+      "id": "montage_mountain_pa",
+      "winter_sports_id": "45096232",
+      "display_name": "Montage Mountain",
+      "short_name": "Montage",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "US",
+      "playable_ver": "v0-107b3a77b75f"
+    },
+    {
+      "id": "pal_arinsal_andorra",
+      "winter_sports_id": "987243867",
+      "display_name": "Pal-Arinsal",
+      "short_name": "Pal-Arinsal",
+      "continent": "europe",
+      "region_label": "Europe",
+      "country": "Andorra",
+      "playable_ver": "v0-f11def8ddced"
+    },
+    {
+      "id": "hakuba_cortina_japan",
+      "winter_sports_id": "773558919",
+      "display_name": "Hakuba Cortina",
+      "short_name": "Hakuba Cortina",
+      "continent": "asia",
+      "region_label": "Asia",
+      "country": "Japan",
+      "playable_ver": null
+    },
+    {
+      "id": "cerro_perito_moreno_argentina",
+      "winter_sports_id": "934096931",
+      "display_name": "Cerro Perito Moreno",
+      "short_name": "Perito Moreno",
+      "continent": "south_america",
+      "region_label": "South America",
+      "country": "Argentina",
+      "playable_ver": "v0-913ffa98129f"
+    },
+    {
+      "id": "perisher_australia",
+      "winter_sports_id": "178133225",
+      "display_name": "Perisher",
+      "short_name": "Perisher",
+      "continent": "oceania",
+      "region_label": "Oceania",
+      "country": "Australia",
+      "playable_ver": "v0-235c8a0aa6be"
+    }
+  ]
+}

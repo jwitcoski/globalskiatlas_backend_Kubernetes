@@ -15,7 +15,7 @@ from game_export.terrain import export_homepage_terrain
 
 log = logging.getLogger("game_export")
 
-HOMEPAGE_OUT_ROOT = "homepage_scene"
+HOMEPAGE_OUT_ROOT = "clay_scenes"
 DEFAULT_MESH_RESOLUTION_M = 12.0
 MAX_MESH_BYTES = 1_048_576
 
@@ -93,7 +93,7 @@ def export_homepage_scene(
         if not force:
             glb = out / "terrain" / "terrain-mesh.glb"
             if glb.is_file():
-                log.info("Homepage scene already exists: %s", out)
+                log.info("Clay scene already exists: %s", out)
                 return out
         shutil.rmtree(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -144,13 +144,13 @@ def export_homepage_scene(
     )
     write_attribution(out)
     (out / "README.md").write_text(
-        "# Homepage hero scene\n\n"
-        "Decorative terrain mesh plus OSM piste/lift vectors for the site homepage. "
+        "# Clay 3D scene\n\n"
+        "Decorative terrain mesh plus OSM piste/lift vectors for the homepage hero and wiki 3D Map tab. "
         "Not a playable game scene — load the full `game_scenes` cake to ski.\n",
         encoding="utf-8",
     )
     log.info(
-        "Homepage scene %s: mesh=%s bytes tris=%s trails=%s lifts=%s trees=%s",
+        "Clay scene %s: mesh=%s bytes tris=%s trails=%s lifts=%s trees=%s",
         out,
         f"{mesh_bytes:,}",
         terrain["terrain_meta"]["mesh"]["triangle_count"],
