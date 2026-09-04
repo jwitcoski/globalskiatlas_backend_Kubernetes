@@ -1,0 +1,78 @@
+# Upload staged clay scene(s) under deploy_clay/ to the public clay_scenes prefix.
+# Uses the same AWS secrets as the pipeline deploy workflow.
+name: Upload clay scenes
+
+on:
+  push:
+    paths:
+      - "deploy_clay/**"
+      - ".github/workflows/upload-clay-scenes.yml"
+  workflow_dispatch:
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Upload deploy_clay scenes
+        env:
+          BUCKET: globalskiatlas-backend-k8s-output
+          PREFIX: clay_scenes
+        run: |
+          set -euo pipefail
+          if [[ ! -d deploy_clay ]]; then
+            echo "No deploy_clay/ directory"
+            exit 1
+          fi
+          shopt -s nullglob
+          uploaded=0
+          for scene in deploy_clay/*/; do
+            rid="$(basename "$scene")"
+            [[ "$rid" == .* ]] && continue
+            echo "Uploading $rid"
+            aws s3 sync "$scene" "s3://$BUCKET/$PREFIX/$rid/" \
+              --delete \
+              --cache-control "public, max-age=300" \
+              --content-type "application/octet-stream"
+            # Fix content-types for known extensions
+            while IFS= read -r -d '' f; do
+              rel="${f#${scene}}"
+              key="$PREFIX/$rid/$rel"
+              case "$f" in
+                *.json) ct="application/json; charset=utf-8" ;;
+                *.geojson) ct="application/geo+json" ;;
+                *.glb) ct="model/gltf-binary" ;;
+                *.md) ct="text/markdown; charset=utf-8" ;;
+                *) continue ;;
+              esac
+              aws s3 cp "$f" "s3://$BUCKET/$key" --content-type "$ct" --cache-control "public, max-age=300"
+            done < <(find "$scene" -type f \( -name '*.json' -o -name '*.geojson' -o -name '*.glb' -o -name '*.md' \) -print0)
+            uploaded=$((uploaded + 1))
+          done
+          if [[ -f deploy_clay/catalog.json ]]; then
+            aws s3 cp deploy_clay/catalog.json "s3://$BUCKET/$PREFIX/catalog.json" \
+              --content-type "application/json; charset=utf-8" \
+              --cache-control "public, max-age=60"
+          fi
+          echo "Uploaded $uploaded scene(s)"
+          test "$uploaded" -gt 0
+
+      - name: Invalidate CloudFront clay_scenes
+        env:
+          DIST_ID: E3BDMTLYF8G4VB
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "$DIST_ID" \
+            --paths \
+              "/clay_scenes/catalog.json" \
+              "/clay_scenes/killington_resort_united_states_of_america/*"

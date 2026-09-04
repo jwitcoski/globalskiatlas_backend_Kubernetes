@@ -1,0 +1,49 @@
+{
+  "scene_schema_version": "0.1.0-homepage",
+  "scene_kind": "homepage_hero",
+  "scene_id": "killington_resort_united_states_of_america",
+  "winter_sports_id": "1228774360",
+  "build_timestamp_utc": "2026-09-04T03:31:25Z",
+  "display_name": "Killington Resort",
+  "country": "United States of America",
+  "location": "Vermont",
+  "coordinate_system": {
+    "source_crs": "EPSG:4326",
+    "projected_crs": "EPSG:32618",
+    "origin_easting_m": 675422.0349412871,
+    "origin_northing_m": 4828388.647462899,
+    "origin_longitude": -72.8270000418769,
+    "origin_latitude": 43.58781981904106,
+    "units": "meters",
+    "game_axes": {
+      "x": "east_m",
+      "y": "elevation_m",
+      "z": "negative_north_m"
+    },
+    "local_origin": {
+      "easting_m": 675422.0349412871,
+      "northing_m": 4828388.647462899,
+      "longitude": -72.8270000418769,
+      "latitude": 43.58781981904106
+    }
+  },
+  "terrain": {
+    "mesh": "terrain/terrain-mesh.glb",
+    "mesh_metadata": "terrain/terrain-metadata.json",
+    "elevation_min_m": 321.64508056640625,
+    "elevation_max_m": 1287.45654296875,
+    "vertex_spacing_m": 21.9
+  },
+  "vectors": {
+    "piste_trails": "vectors/piste-trails.geojson",
+    "lifts": "vectors/lifts.geojson",
+    "forest": "vectors/forest.geojson",
+    "ski_area_buffer": "vectors/ski-area-buffer.geojson"
+  },
+  "attribution": {
+    "osm": "\u00a9 OpenStreetMap contributors",
+    "dem": "Mapzen Skadi / AWS Terrain Tiles",
+    "license_notes": "OSM data ODbL; DEM from Mapzen Skadi. See attribution/ATTRIBUTION.md"
+  },
+  "disclaimer": "Decorative homepage terrain derived from open data. Not an official resort map, trail map, navigation tool, or safety product."
+}

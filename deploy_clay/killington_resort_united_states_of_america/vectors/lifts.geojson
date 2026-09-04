@@ -1,0 +1,4134 @@
+{
+  "type": "FeatureCollection",
+  "coordinate_system": {
+    "kind": "local_game_meters",
+    "not_wgs84": true,
+    "axes": {
+      "geojson_x": "local_east_m",
+      "geojson_y": "local_north_m"
+    },
+    "game_axes": {
+      "x": "east_m",
+      "y": "elevation_m",
+      "z": "negative_north_m"
+    },
+    "local_origin": {
+      "easting_m": 675422.0349412871,
+      "northing_m": 4828388.647462899,
+      "longitude": -72.8270000418769,
+      "latitude": 43.58781981904106
+    },
+    "projected_crs": "EPSG:32618",
+    "note": "This is not RFC 7946 WGS84 GeoJSON. Convert X,Y to game X,Z via game_axes."
+  },
+  "attribution": "\u00a9 OpenStreetMap contributors (ODbL)",
+  "layer": "lifts",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              616.0531650900375,
+              1886.9055739250034
+            ],
+            [
+              612.2195514441701,
+              1889.5722759328783
+            ],
+            [
+              616.8160644967575,
+              1895.3723123567179
+            ],
+            [
+              620.0885178649332,
+              1892.546388702467
+            ],
+            [
+              624.3876191531308,
+              1888.1470093252137
+            ],
+            [
+              626.8576586575946,
+              1887.8895893236622
+            ],
+            [
+              628.9741480235243,
+              1886.3336492534727
+            ],
+            [
+              626.9828274284955,
+              1883.1249384423718
+            ],
+            [
+              622.0492662815377,
+              1882.16177846957
+            ],
+            [
+              616.2508524034638,
+              1886.1438956558704
+            ],
+            [
+              616.0531650900375,
+              1886.9055739250034
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:nan:nan",
+        "osm_type": null,
+        "osm_id": null,
+        "name": null,
+        "tags": {
+          "osm_way_id": "1436051079",
+          "other_tags": "\"aerialway\"=>\"yes\",\"network\"=>\"K-1 Express Gondola\",\"operator\"=>\"Killington Resort\",\"public_transport\"=>\"platform\",\"surface\"=>\"paved\"",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              1819.2542592663085,
+              3384.58338660188
+            ],
+            [
+              1815.2636452803854,
+              3387.7009164383635
+            ],
+            [
+              1819.2549164312659,
+              3393.408091749996
+            ],
+            [
+              1826.6976645771647,
+              3391.960131746717
+            ],
+            [
+              1828.2214435382048,
+              3387.165769321844
+            ],
+            [
+              1817.7596356373979,
+              3376.374889390543
+            ],
+            [
+              1814.6095281144371,
+              3379.15900501702
+            ],
+            [
+              1819.2542592663085,
+              3384.58338660188
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:nan:nan",
+        "osm_type": null,
+        "osm_id": null,
+        "name": null,
+        "tags": {
+          "osm_way_id": "1436473708",
+          "other_tags": "\"aerialway\"=>\"yes\",\"public_transport\"=>\"platform\"",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            4362.087679675664,
+            1071.2294519012794
+          ],
+          [
+            4318.487314668368,
+            1063.8917174031958
+          ],
+          [
+            4259.889380362118,
+            1054.0405075065792
+          ],
+          [
+            4161.64713895286,
+            1037.514850241132
+          ],
+          [
+            4048.0854796136264,
+            1018.4131861180067
+          ],
+          [
+            3982.6115400565322,
+            1007.4022873537615
+          ],
+          [
+            3889.458383442485,
+            991.7393248025328
+          ],
+          [
+            3777.334664979833,
+            972.8919631913304
+          ],
+          [
+            3652.504753331188,
+            951.9065448427573
+          ],
+          [
+            3544.4731486708624,
+            933.750407169573
+          ],
+          [
+            3451.6722603188828,
+            918.1474944520742
+          ],
+          [
+            3432.8707083355403,
+            914.9895085999742
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:nan:32959270",
+        "osm_type": null,
+        "osm_id": "32959270",
+        "name": "Sunrise Village Triple",
+        "tags": {
+          "name": "Sunrise Village Triple",
+          "aerialway": "chair_lift",
+          "z_order": "0.0",
+          "other_tags": "\"aerialway:occupancy\"=>\"3\"",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            5586.857842517784,
+            3119.979031302966
+          ],
+          [
+            5559.492774952319,
+            3120.195521209389
+          ],
+          [
+            5491.274107929901,
+            3120.73135830462
+          ],
+          [
+            5416.028488871409,
+            3121.3227115683258
+          ],
+          [
+            5359.497181871906,
+            3121.7752738753334
+          ],
+          [
+            5273.299342279439,
+            3122.4505656687543
+          ],
+          [
+            5148.646841081441,
+            3123.435158717446
+          ],
+          [
+            5119.06071784813,
+            3123.6713755764067
+          ],
+          [
+            5097.931065787445,
+            3123.846621562727
+          ],
+          [
+            5025.569240426761,
+            3124.420029022731
+          ],
+          [
+            4925.88293892832,
+            3125.2143793618307
+          ],
+          [
+            4910.60156306962,
+            3125.3253739597276
+          ],
+          [
+            4795.116690166411,
+            3126.252115818672
+          ],
+          [
+            4696.739074459299,
+            3127.0406150221825
+          ],
+          [
+            4632.018376535736,
+            3127.5569708384573
+          ],
+          [
+            4521.396399118239,
+            3128.4412932367995
+          ],
+          [
+            4414.6756456991425,
+            3129.2987935608253
+          ],
+          [
+            4352.85473651893,
+            3129.795655986294
+          ],
+          [
+            4269.92891290749,
+            3130.4604863896966
+          ],
+          [
+            4229.641017086338,
+            3130.7914537116885
+          ],
+          [
+            4161.8190285080345,
+            3131.340313287452
+          ],
+          [
+            4072.9325257305754,
+            3132.058958100155
+          ],
+          [
+            3979.1758183833444,
+            3132.815065528266
+          ],
+          [
+            3870.369410614716,
+            3130.1687781941146
+          ],
+          [
+            3769.2846901578596,
+            3130.776148586534
+          ],
+          [
+            3672.956785589573,
+            3131.367725281976
+          ],
+          [
+            3585.755655665649,
+            3131.893360812217
+          ],
+          [
+            3464.843476029462,
+            3132.6312598418444
+          ],
+          [
+            3348.470269859419,
+            3133.3479773113504
+          ],
+          [
+            3288.729185217642,
+            3133.710079261102
+          ],
+          [
+            3221.7676319108577,
+            3134.12467046082
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:nan:32959286",
+        "osm_type": null,
+        "osm_id": "32959286",
+        "name": "Skyeship Express Gondola Stage 1",
+        "tags": {
+          "name": "Skyeship Express Gondola Stage 1",
+          "aerialway": "gondola",
+          "z_order": "0.0",
+          "other_tags": "\"aerialway:bubble\"=>\"yes\",\"aerialway:capacity\"=>\"8\",\"aerialway:heating\"=>\"no\",\"oneway\"=>\"yes\"",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            3221.7676319108577,
+            3134.12467046082
+          ],
+          [
+            3141.839028333663,
+            3072.9876398183405
+          ],
+          [
+            3073.4081381554715,
+            3020.6382207004353
+          ],
+          [
+            3025.2676650491776,
+            2983.812112275511
+          ],
+          [
+            2979.991354053491,
+            2949.1854874622077
+          ],
+          [
+            2917.1056533911033,
+            2901.0866628671065
+          ],
+          [
+            2837.4567162405,
+            2840.1610942278057
+          ],
+          [
+            2757.9011096492177,
+            2779.316840185784
+          ],
+          [
+            2687.6358610410243,
+            2725.5781025597826
+          ],
+          [
+            2615.390982340905,
+            2670.3204781180248
+          ],
+          [
+            2547.347453109687,
+            2618.2872962132096
+          ],
+          [
+            2487.550492206705,
+            2572.5533385621384
+          ],
+          [
+            2436.2455938885687,
+            2533.313823590055
+          ],
+          [
+            2366.8619785532355,
+            2480.2467835070565
+          ],
+          [
+            2344.097624670365,
+            2462.849149644375
+          ],
+          [
+            2261.3199455939466,
+            2399.53627568949
+          ],
+          [
+            2218.743103831075,
+            2366.9762933580205
+          ],
+          [
+            2175.912312639761,
+            2334.2320473063737
+          ],
+          [
+            2125.292369070463,
+            2295.524536838755
+          ],
+          [
+            2095.624790342641,
+            2272.8323685377836
+          ],
+          [
+            2090.511096616974,
+            2268.929175419733
+          ],
+          [
+            2085.825251671369,
+            2265.337404595688
+          ],
+          [
+            2061.096534678829,
+            2246.4328183224425
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:nan:32959391",
+        "osm_type": null,
+        "osm_id": "32959391",
+        "name": "Skyeship Express Gondola Stage 2",
+        "tags": {
+          "name": "Skyeship Express Gondola Stage 2",
+          "aerialway": "gondola",
+          "z_order": "0.0",
+          "other_tags": "\"aerialway:capacity\"=>\"8\",\"oneway\"=>\"yes\"",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            1811.4840482482687,
+            3378.876250163652
+          ],
+          [
+            1768.7782047041692,
+            3331.2223293157294
+          ],
+          [
+            1705.6156829898246,
+            3251.607902028598
+          ],
+          [
+            1644.1543456523214,
+            3174.1730558797717
+          ],
+          [
+            1598.4223708071513,
+            3116.5709862932563
+          ],
+          [
+            1514.2480542978738,
+            3010.529603051953
+          ],
+          [
+            1464.52047624439,
+            2947.888363922946
+          ],
+          [
+            1399.3566802813439,
+            2865.8015446644276
+          ],
+          [
+            1336.9265554329613,
+            2787.1662865597755
+          ],
+          [
+            1233.071286464925,
+            2656.3475548606366
+          ],
+          [
+            1186.6447287207702,
+            2597.8635178888217
+          ],
+          [
+            1126.038736933493,
+            2521.5236723972484
+          ],
+          [
+            1073.0210501377005,
+            2454.7424401510507
+          ],
+          [
+            1035.1113863481442,
+            2406.997937674634
+          ],
+          [
+            1035.183804938686,
+            2404.554737392813
+          ],
+          [
+            975.3299777804641,
+            2328.9586963197216
+          ],
+          [
+            917.4600284403423,
+            2255.8717008326203
+          ],
+          [
+            864.09094581916,
+            2188.4718576297164
+          ],
+          [
+            794.3141474950826,
+            2100.3466678550467
+          ],
+          [
+            761.0390483386582,
+            2058.3273409400135
+          ],
+          [
+            714.6706042559817,
+            1999.7708151666448
+          ],
+          [
+            675.2135752597824,
+            1952.9326925845817
+          ],
+          [
+            666.1752242109505,
+            1942.214609128423
+          ],
+          [
+            652.5694639665307,
+            1925.819491523318
+          ],
+          [
+            626.0989813342458,
+            1893.4044691212475
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:nan:32959705",
+        "osm_type": null,
+        "osm_id": "32959705",
+        "name": "K-1 Express Gondola",
+        "tags": {
+          "name": "K-1 Express Gondola",
+          "aerialway": "gondola",
+          "z_order": "0.0",
+          "other_tags": "\"aerialway:capacity\"=>\"2800\",\"aerialway:duration\"=>\"7.167\",\"aerialway:occupancy\"=>\"8\",\"alt_name\"=>\"K1 Express Gondola\"",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            2107.548543898156,
+            4285.703849275596
+          ],
+          [
+            2085.5537074058084,
+            4284.576179399155
+          ],
+          [
+            2027.510480848141,
+            4281.615207958035
+          ],
+          [
+            1972.7323828365188,
+            4278.830150939524
+          ],
+          [
+            1899.9748686262174,
+            4275.113740023226
+          ],
+          [
+            1800.84420335514,
+            4270.055474394001
+          ],
+          [
+            1699.1735432746354,
+            4264.875927275978
+          ],
+          [
+            1652.3856408694992,
+            4262.493787476793
+          ],
+          [
+            1528.582799927215,
+            4256.187039302662
+          ],
+          [
+            1441.755619595875,
+            4251.759316733107
+          ],
+          [
+            1341.6167343766429,
+            4246.659017503262
+          ],
+          [
+            1208.1140532387653,
+            4239.86878357362
+          ],
+          [
+            1113.8809646404115,
+            4233.694006551057
+          ],
+          [
+            1041.6689878584584,
+            4230.101365602575
+          ],
+          [
+            909.4360597924097,
+            4223.528396018781
+          ],
+          [
+            856.4301389947068,
+            4220.888082581572
+          ],
+          [
+            796.2881582150003,
+            4217.904804258607
+          ],
+          [
+            691.1147014443995,
+            4212.670672986656
+          ],
+          [
+            607.2352043116698,
+            4208.509159354493
+          ],
+          [
+            511.8738975378219,
+            4203.780298423953
+          ],
+          [
+            486.314237139537,
+            4202.508675256744
+          ],
+          [
+            460.7545724204974,
+            4201.237149879336
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:nan:32959813",
+        "osm_type": null,
+        "osm_id": "32959813",
+        "name": "Ramshead Express Quad",
+        "tags": {
+          "name": "Ramshead Express Quad",
+          "aerialway": "chair_lift",
+          "z_order": "0.0",
+          "other_tags": "\"aerialway:capacity\"=>\"4\",\"aerialway:occupancy\"=>\"4\"",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            661.9667337877909,
+            2715.122271647677
+          ],
+          [
+            645.7473255726509,
+            2646.7555456496775
+          ],
+          [
+            624.8665812571999,
+            2558.7722890116274
+          ],
+          [
+            603.6369355435017,
+            2469.2906875358894
+          ],
+          [
+            582.9299161711242,
+            2382.023515421897
+          ],
+          [
+            576.9601304125972,
+            2356.8822478577495
+          ],
+          [
+            565.7999069502112,
+            2309.821063754149
+          ],
+          [
+            542.8588479011087,
+            2213.1707101939246
+          ],
+          [
+            528.8033385714516,
+            2153.941484104842
+          ],
+          [
+            513.5186370083829,
+            2089.534219865687
+          ],
+          [
+            508.25439866783563,
+            2067.33457971178
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:nan:32959881",
+        "osm_type": null,
+        "osm_id": "32959881",
+        "name": "North Ridge Quad",
+        "tags": {
+          "name": "North Ridge Quad",
+          "aerialway": "chair_lift",
+          "z_order": "0.0",
+          "other_tags": "\"aerialway:occupancy\"=>\"4\"",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            3492.0986530445516,
+            1742.231315035373
+          ],
+          [
+            3469.912872479763,
+            1750.9639986446127
+          ],
+          [
+            3454.999640997732,
+            1756.8455326659605
+          ],
+          [
+            3411.0608484946424,
+            1774.144923824817
+          ],
+          [
+            3368.591364477761,
+            1790.8725010044873
+          ],
+          [
+            3273.686826630379,
+            1828.2527908291668
+          ],
+          [
+            3206.494240544969,
+            1854.7251655720174
+          ],
+          [
+            3150.982698308071,
+            1876.5857966691256
+          ],
+          [
+            3066.3485614298843,
+            1909.930220933631
+          ],
+          [
+            3009.099388448987,
+            1932.4792390409857
+          ],
+          [
+            2950.1039695182117,
+            1955.7157872570679
+          ],
+          [
+            2909.685418930603,
+            1971.6449347604066
+          ],
+          [
+            2865.888270872063,
+            1988.8959407769144
+          ],
+          [
+            2811.652273436077,
+            2010.2597094103694
+          ],
+          [
+            2761.840250825393,
+            2029.885445309803
+          ],
+          [
+            2647.6565547722857,
+            2074.8750273538753
+          ],
+          [
+            2555.192646634765,
+            2111.307387933135
+          ],
+          [
+            2471.381237247144,
+            2144.3251911038533
+          ],
+          [
+            2415.034054100979,
+            2166.5251223975793
+          ],
+          [
+            2320.3854815773666,
+            2203.825084035285
+          ],
+          [
+            2245.872334435,
+            2233.1800193507224
+          ],
+          [
+            2178.3293749350123,
+            2259.7974452227354
+          ],
+          [
+            2167.3361547817476,
+            2264.129599140957
+          ],
+          [
+            2144.03571900737,
+            2273.3148491783068
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:nan:32959913",
+        "osm_type": null,
+        "osm_id": "32959913",
+        "name": "Skye Peak Express Quad",
+        "tags": {
+          "name": "Skye Peak Express Quad",
+          "aerialway": "chair_lift",
+          "z_order": "0.0",
+          "other_tags": "\"aerialway:occupancy\"=>\"4\"",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            2402.9428396177245,
+            4219.820530922152
+          ],
+          [
+            2406.240116295754,
+            4166.492829203606
+          ],
+          [
+            2408.9119631438516,
+            4123.340322708711
+          ],
+          [
+            2413.1903800560394,
+            4054.0452266363427
+          ],
+          [
+            2416.982449980569,
+            3992.7283918708563
+          ],
+          [
+            2422.5006345900474,
+            3903.504978945479
+          ],
+          [
+            2427.393697213731,
+            3824.445657934062
+          ],
+          [
+            2431.6101783314953,
+            3756.2714872807264
+          ],
+          [
+            2436.5353761297883,
+            3676.6128642158583
+          ],
+          [
+            2440.981001417502,
+            3604.677051884122
+          ],
+          [
+            2445.7782059069723,
+            3527.1045301845297
+          ],
+          [
+            2449.559750536573,
+            3465.887487847358
+          ],
+          [
+            2454.2254127511987,
+            3390.53434242215
+          ],
+          [
+            2458.3018071515253,
+            3324.601574796252
+          ],
+          [
+            2461.9559469383676,
+            3265.4484206000343
+          ],
+          [
+            2465.886518276646,
+            3201.96804577671
+          ],
+          [
+            2469.597459505894,
+            3141.893925221637
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:nan:33101830",
+        "osm_type": null,
+        "osm_id": "33101830",
+        "name": "Snowshed Express Quad",
+        "tags": {
+          "name": "Snowshed Express Quad",
+          "aerialway": "chair_lift",
+          "z_order": "0.0",
+          "other_tags": "\"aerialway:occupancy\"=>\"4\"",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            1724.6871113660745,
+            3673.2851800555363
+          ],
+          [
+            1651.048418686376,
+            3645.54185240902
+          ],
+          [
+            1558.0218715703813,
+            3610.496269946918
+          ],
+          [
+            1449.756160100922,
+            3569.714785325341
+          ],
+          [
+            1343.599733558949,
+            3529.7354382453486
+          ],
+          [
+            1229.167610040051,
+            3486.6276687588543
+          ],
+          [
+            1132.0514796271455,
+            3450.046665123664
+          ],
+          [
+            1013.8427816090407,
+            3405.5317119341344
+          ],
+          [
+            958.8434157759184,
+            3384.822422614321
+          ],
+          [
+            892.7624451213051,
+            3359.9319567177445
+          ],
+          [
+            817.7180557698011,
+            3331.6721467459574
+          ],
+          [
+            711.6746970997192,
+            3291.739545300603
+          ],
+          [
+            550.5085412046174,
+            3231.0551933273673
+          ],
+          [
+            491.1089906373527,
+            3208.6894518248737
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:nan:33280742",
+        "osm_type": null,
+        "osm_id": "33280742",
+        "name": "Snowdon Six",
+        "tags": {
+          "name": "Snowdon Six",
+          "aerialway": "chair_lift",
+          "z_order": "0.0",
+          "other_tags": "\"aerialway:bubble\"=>\"yes\",\"aerialway:occupancy\"=>\"6\"",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            3132.9574834910454,
+            3145.0496338102967
+          ],
+          [
+            3074.601359683904,
+            3104.961058416404
+          ],
+          [
+            3024.1028794582235,
+            3070.2838392350823
+          ],
+          [
+            2933.5330112156225,
+            3008.076877902262
+          ],
+          [
+            2872.716137716663,
+            2966.3019990622997
+          ],
+          [
+            2844.27797832957,
+            2946.7731422670186
+          ],
+          [
+            2738.406701809843,
+            2874.0700947688892
+          ],
+          [
+            2659.783042854746,
+            2820.0759800653905
+          ],
+          [
+            2582.2289614541223,
+            2766.8114790404215
+          ],
+          [
+            2500.042000419111,
+            2710.368489684537
+          ],
+          [
+            2474.4883996477583,
+            2692.829586511478
+          ],
+          [
+            2399.167922230088,
+            2641.1048794435337
+          ],
+          [
+            2357.6328729672823,
+            2612.58377398178
+          ],
+          [
+            2352.1367720057024,
+            2608.803580386564
+          ],
+          [
+            2329.675770564587,
+            2593.3812400531024
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:nan:96906470",
+        "osm_type": null,
+        "osm_id": "96906470",
+        "name": "Needle's Eye Express Quad",
+        "tags": {
+          "name": "Needle's Eye Express Quad",
+          "aerialway": "chair_lift",
+          "z_order": "0.0",
+          "other_tags": "\"aerialway:bubble\"=>\"no\",\"aerialway:heating\"=>\"no\",\"aerialway:occupancy\"=>\"4\"",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            1182.2786315442063,
+            2904.409924064763
+          ],
+          [
+            1170.136221882538,
+            2888.074356475845
+          ],
+          [
+            1145.196789949201,
+            2854.4969141678885
+          ],
+          [
+            1095.831022288301,
+            2788.0671786749735
+          ],
+          [
+            1051.3857051547384,
+            2728.247012884356
+          ],
+          [
+            1017.0234469736461,
+            2682.007446830161
+          ],
+          [
+            941.3253188731615,
+            2580.131756965071
+          ],
+          [
+            893.858696475043,
+            2516.254428241402
+          ],
+          [
+            843.9107561769197,
+            2449.0446671517566
+          ],
+          [
+            804.2966164579848,
+            2395.7330114794895
+          ],
+          [
+            756.8817433926743,
+            2331.9359759679064
+          ],
+          [
+            708.3429355185945,
+            2266.620500570163
+          ],
+          [
+            656.9716660832055,
+            2197.4966725977138
+          ],
+          [
+            582.6509394224267,
+            2097.4846203261986
+          ],
+          [
+            563.9065336830681,
+            2072.2634987942874
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:nan:143877545",
+        "osm_type": null,
+        "osm_id": "143877545",
+        "name": "Canyon Quad",
+        "tags": {
+          "name": "Canyon Quad",
+          "aerialway": "chair_lift",
+          "z_order": "0.0",
+          "other_tags": "\"aerialway:occupancy\"=>\"4\"",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            2632.9308253346244,
+            1652.4419115921482
+          ],
+          [
+            2644.922227032017,
+            1653.1495033092797
+          ],
+          [
+            2684.4851125321584,
+            1655.478919503279
+          ],
+          [
+            2745.4742939110147,
+            1659.0783393606544
+          ],
+          [
+            2817.624091017875,
+            1663.3418969418854
+          ],
+          [
+            2879.330933408113,
+            1666.9838554458693
+          ],
+          [
+            2948.134093776229,
+            1671.0486473040655
+          ],
+          [
+            3006.534671741305,
+            1674.4926451593637
+          ],
+          [
+            3064.7415120492224,
+            1677.9319946123287
+          ],
+          [
+            3132.826819244656,
+            1681.9573448002338
+          ],
+          [
+            3195.420708282036,
+            1685.6480887485668
+          ],
+          [
+            3260.0141162765212,
+            1689.4705298068002
+          ],
+          [
+            3319.8984190465417,
+            1693.0012864824384
+          ],
+          [
+            3376.8068320626626,
+            1696.3642721688375
+          ],
+          [
+            3405.1117124159355,
+            1698.041962579824
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:nan:143877547",
+        "osm_type": null,
+        "osm_id": "143877547",
+        "name": "Bear Mountain Quad",
+        "tags": {
+          "name": "Bear Mountain Quad",
+          "aerialway": "chair_lift",
+          "z_order": "0.0",
+          "other_tags": "\"aerialway:occupancy\"=>\"4\"",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            2312.3887574629625,
+            4205.813206154853
+          ],
+          [
+            2314.926947294385,
+            4175.583051052876
+          ],
+          [
+            2319.3312694855267,
+            4124.018557640724
+          ],
+          [
+            2325.9018182260916,
+            4055.32889223285
+          ],
+          [
+            2332.97600939346,
+            3983.4850335409865
+          ],
+          [
+            2340.93885284313,
+            3916.1882802983746
+          ],
+          [
+            2345.7863374963636,
+            3864.057628104463
+          ],
+          [
+            2352.054765824345,
+            3799.4611391080543
+          ],
+          [
+            2358.2160738559905,
+            3730.9940464422107
+          ],
+          [
+            2368.332185606123,
+            3636.735685426742
+          ],
+          [
+            2373.7754278948996,
+            3581.942331169732
+          ],
+          [
+            2378.9769987313775,
+            3525.608797205612
+          ],
+          [
+            2384.0237868723925,
+            3476.628806045279
+          ],
+          [
+            2388.607849079999,
+            3428.0477633820847
+          ],
+          [
+            2396.727586799301,
+            3362.778037680313
+          ],
+          [
+            2402.868549868348,
+            3306.9584893630818
+          ],
+          [
+            2407.818529283046,
+            3258.2871460830793
+          ],
+          [
+            2412.3316687504994,
+            3219.6848501795903
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:nan:203680469",
+        "osm_type": null,
+        "osm_id": "203680469",
+        "name": "Snowshed Double",
+        "tags": {
+          "name": "Snowshed Double",
+          "aerialway": "chair_lift",
+          "z_order": "0.0",
+          "other_tags": "\"aerialway:occupancy\"=>\"2\"",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            2263.452099508955,
+            4211.060863940977
+          ],
+          [
+            2261.963720264146,
+            4071.192714739591
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:nan:203680470",
+        "osm_type": null,
+        "osm_id": "203680470",
+        "name": "Learn To Snowboard Carpet",
+        "tags": {
+          "name": "Learn To Snowboard Carpet",
+          "aerialway": "magic_carpet",
+          "z_order": "0.0",
+          "other_tags": "\"aerialway:occupancy\"=>\"1\"",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            2065.9046832766617,
+            4310.084945918061
+          ],
+          [
+            2010.3627050758805,
+            4346.801603519358
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:nan:203680471",
+        "osm_type": null,
+        "osm_id": "203680471",
+        "name": "Snowplay Carpet II",
+        "tags": {
+          "name": "Snowplay Carpet II",
+          "aerialway": "magic_carpet",
+          "z_order": "0.0",
+          "other_tags": "\"aerialway:occupancy\"=>\"1\"",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            2091.3543996342923,
+            4322.196114757098
+          ],
+          [
+            2072.8480154158315,
+            4358.816064482555
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:nan:203680472",
+        "osm_type": null,
+        "osm_id": "203680472",
+        "name": "Snowplay Carpet I",
+        "tags": {
+          "name": "Snowplay Carpet I",
+          "aerialway": "magic_carpet",
+          "z_order": "0.0",
+          "other_tags": "\"aerialway:occupancy\"=>\"1\"",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            1953.500378064462,
+            3289.553764176555
+          ],
+          [
+            1949.6663632205455,
+            3245.5843917187303
+          ],
+          [
+            1944.8459896697896,
+            3190.3746590195224
+          ],
+          [
+            1938.9724779943936,
+            3123.0892395302653
+          ],
+          [
+            1936.716567758005,
+            3097.2778605204076
+          ],
+          [
+            1930.4102724150289,
+            3024.979612151161
+          ],
+          [
+            1921.4962243840564,
+            2922.759567046538
+          ],
+          [
+            1911.9293728059856,
+            2813.1535646105185
+          ],
+          [
+            1905.9554650784703,
+            2744.7430635653436
+          ],
+          [
+            1897.1013267231174,
+            2643.269381340593
+          ],
+          [
+            1888.5946673956933,
+            2545.7393686687574
+          ],
+          [
+            1881.2756104541477,
+            2461.9112940067425
+          ],
+          [
+            1875.1962118474767,
+            2392.2644304148853
+          ],
+          [
+            1865.7523989158217,
+            2284.0289842812344
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:nan:203680474",
+        "osm_type": null,
+        "osm_id": "203680474",
+        "name": "Superstar Express Six",
+        "tags": {
+          "name": "Superstar Express Six",
+          "aerialway": "chair_lift",
+          "z_order": "0.0",
+          "other_tags": "\"aerialway:occupancy\"=>\"6\"",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            1777.4779616779415,
+            3393.669824737124
+          ],
+          [
+            1744.2602368177613,
+            3386.6005367795005
+          ],
+          [
+            1699.9376633629436,
+            3377.170523283072
+          ],
+          [
+            1668.6628030848224,
+            3370.519762184471
+          ],
+          [
+            1623.8985961253056,
+            3360.989673455246
+          ],
+          [
+            1518.093725628336,
+            3338.4773872001097
+          ],
+          [
+            1402.6606371848611,
+            3313.923255515285
+          ],
+          [
+            1363.5966655968223,
+            3305.612382066436
+          ],
+          [
+            1322.0835562552093,
+            3296.781437941827
+          ],
+          [
+            1270.453108142945,
+            3285.7944672135636
+          ],
+          [
+            1170.6761924087768,
+            3264.580441813916
+          ],
+          [
+            1161.3216470358893,
+            3262.58891415596
+          ],
+          [
+            1075.3877119226381,
+            3244.308643773198
+          ],
+          [
+            1061.544418038684,
+            3241.365427725017
+          ],
+          [
+            977.4568439153954,
+            3223.47962491028
+          ],
+          [
+            895.7214496362722,
+            3206.101378021762
+          ],
+          [
+            796.2078600308159,
+            3184.9333267062902
+          ],
+          [
+            727.0544700900791,
+            3170.2332598995417
+          ],
+          [
+            679.6540595572442,
+            3160.1512788282707
+          ],
+          [
+            617.7030068256427,
+            3146.9865166051313
+          ],
+          [
+            545.369262690423,
+            3131.6046283263713
+          ],
+          [
+            526.5952531944495,
+            3127.6105520427227
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:nan:203680475",
+        "osm_type": null,
+        "osm_id": "203680475",
+        "name": "Snowdon Triple",
+        "tags": {
+          "name": "Snowdon Triple",
+          "aerialway": "chair_lift",
+          "z_order": "0.0",
+          "other_tags": "\"aerialway:bubble\"=>\"no\",\"aerialway:heating\"=>\"no\",\"aerialway:occupancy\"=>\"3\"",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            3176.0240854971344,
+            3187.3651994932443
+          ],
+          [
+            3134.538153295871,
+            3182.6915548993275
+          ],
+          [
+            3010.0726171809947,
+            3168.649744384922
+          ],
+          [
+            2960.930061530904,
+            3163.1175005678087
+          ],
+          [
+            2909.557570802397,
+            3157.3261991981417
+          ],
+          [
+            2760.2000780540984,
+            3141.3149800179526
+          ],
+          [
+            2680.7740642189747,
+            3132.5119997719303
+          ],
+          [
+            2630.1633734971983,
+            3126.9098319029436
+          ],
+          [
+            2528.821056523011,
+            3115.6923284372315
+          ],
+          [
+            2510.1175838870695,
+            3113.628398817964
+          ],
+          [
+            2498.797463198891,
+            3112.371902554296
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:nan:203680476",
+        "osm_type": null,
+        "osm_id": "203680476",
+        "name": "Northbrook Quad",
+        "tags": {
+          "name": "Northbrook Quad",
+          "aerialway": "chair_lift",
+          "z_order": "0.0",
+          "other_tags": "\"aerialway:occupancy\"=>\"4\"",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            2066.898797683767,
+            1477.2165344916284
+          ],
+          [
+            2007.6753310239874,
+            1503.5784342801198
+          ],
+          [
+            1967.5612751696026,
+            1521.4329685634002
+          ],
+          [
+            1911.0275494202506,
+            1546.5998530946672
+          ],
+          [
+            1826.983918655431,
+            1584.0098384665325
+          ],
+          [
+            1720.694590208237,
+            1631.3245866028592
+          ],
+          [
+            1641.2298861361342,
+            1666.7016666540876
+          ],
+          [
+            1576.5994320177706,
+            1695.4805983537808
+          ],
+          [
+            1485.710908798501,
+            1735.9481022078544
+          ],
+          [
+            1409.1664461322362,
+            1770.0267312554643
+          ],
+          [
+            1320.3151589974295,
+            1809.5831928802654
+          ],
+          [
+            1204.7414469678188,
+            1861.0398437911645
+          ],
+          [
+            1152.8391049505444,
+            1884.1565100681037
+          ],
+          [
+            1090.0520477961982,
+            1912.1104607535526
+          ],
+          [
+            1020.3598220354179,
+            1943.150707992725
+          ],
+          [
+            986.8706511920318,
+            1958.0621925080195
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:nan:749970317",
+        "osm_type": null,
+        "osm_id": "749970317",
+        "name": "South Ridge Quad",
+        "tags": {
+          "name": "South Ridge Quad",
+          "aerialway": "chair_lift",
+          "z_order": "0.0",
+          "other_tags": "\"aerialway:occupancy\"=>\"4\"",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            935.2301132860593,
+            4485.045743078925
+          ],
+          [
+            429.5606161664473,
+            4352.414451311342
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:nan:751412809",
+        "osm_type": null,
+        "osm_id": "751412809",
+        "name": "Alpine Training Venue Poma",
+        "tags": {
+          "name": "Alpine Training Venue Poma",
+          "aerialway": "platter",
+          "z_order": "0.0",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            1811.4840482482687,
+            3378.876250163652
+          ],
+          [
+            1821.1779986568727,
+            3389.3911747848615
+          ],
+          [
+            1822.3649428776698,
+            3391.2230856064707
+          ],
+          [
+            1822.6469075338682,
+            3394.9093524394557
+          ],
+          [
+            1821.4439390237676,
+            3397.344876688905
+          ],
+          [
+            1814.7939031729475,
+            3408.505413814448
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:nan:1436473709",
+        "osm_type": null,
+        "osm_id": "1436473709",
+        "name": null,
+        "tags": {
+          "aerialway": "gondola",
+          "z_order": "0.0",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            4362.087679675664,
+            1071.2294519012794
+          ],
+          [
+            4318.487314668368,
+            1063.8917174031958
+          ],
+          [
+            4259.889380362118,
+            1054.0405075065792
+          ],
+          [
+            4161.64713895286,
+            1037.514850241132
+          ],
+          [
+            4048.0854796136264,
+            1018.4131861180067
+          ],
+          [
+            3982.6115400565322,
+            1007.4022873537615
+          ],
+          [
+            3889.458383442485,
+            991.7393248025328
+          ],
+          [
+            3777.334664979833,
+            972.8919631913304
+          ],
+          [
+            3652.504753331188,
+            951.9065448427573
+          ],
+          [
+            3544.4731486708624,
+            933.750407169573
+          ],
+          [
+            3451.6722603188828,
+            918.1474944520742
+          ],
+          [
+            3432.8707083355403,
+            914.9895085999742
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:way:32959270",
+        "osm_type": "way",
+        "osm_id": "32959270",
+        "name": "Sunrise Village Triple",
+        "tags": {
+          "name": "Sunrise Village Triple",
+          "aerialway": "chair_lift",
+          "z_order": "0",
+          "aerialway:occupancy": "3",
+          "winter_sports_id": "1228774360",
+          "winter_sports_name": "Killington Resort",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": "chair_lift"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            5586.857842517784,
+            3119.979031302966
+          ],
+          [
+            5559.492774952319,
+            3120.195521209389
+          ],
+          [
+            5491.274107929901,
+            3120.73135830462
+          ],
+          [
+            5416.028488871409,
+            3121.3227115683258
+          ],
+          [
+            5359.497181871906,
+            3121.7752738753334
+          ],
+          [
+            5273.299342279439,
+            3122.4505656687543
+          ],
+          [
+            5148.646841081441,
+            3123.435158717446
+          ],
+          [
+            5119.06071784813,
+            3123.6713755764067
+          ],
+          [
+            5097.931065787445,
+            3123.846621562727
+          ],
+          [
+            5025.569240426761,
+            3124.420029022731
+          ],
+          [
+            4925.88293892832,
+            3125.2143793618307
+          ],
+          [
+            4910.60156306962,
+            3125.3253739597276
+          ],
+          [
+            4795.116690166411,
+            3126.252115818672
+          ],
+          [
+            4696.739074459299,
+            3127.0406150221825
+          ],
+          [
+            4632.018376535736,
+            3127.5569708384573
+          ],
+          [
+            4521.396399118239,
+            3128.4412932367995
+          ],
+          [
+            4414.6756456991425,
+            3129.2987935608253
+          ],
+          [
+            4352.85473651893,
+            3129.795655986294
+          ],
+          [
+            4269.92891290749,
+            3130.4604863896966
+          ],
+          [
+            4229.641017086338,
+            3130.7914537116885
+          ],
+          [
+            4161.8190285080345,
+            3131.340313287452
+          ],
+          [
+            4072.9325257305754,
+            3132.058958100155
+          ],
+          [
+            3979.1758183833444,
+            3132.815065528266
+          ],
+          [
+            3870.369410614716,
+            3130.1687781941146
+          ],
+          [
+            3769.2846901578596,
+            3130.776148586534
+          ],
+          [
+            3672.956785589573,
+            3131.367725281976
+          ],
+          [
+            3585.755655665649,
+            3131.893360812217
+          ],
+          [
+            3464.843476029462,
+            3132.6312598418444
+          ],
+          [
+            3348.470269859419,
+            3133.3479773113504
+          ],
+          [
+            3288.729185217642,
+            3133.710079261102
+          ],
+          [
+            3221.7676319108577,
+            3134.12467046082
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:way:32959286",
+        "osm_type": "way",
+        "osm_id": "32959286",
+        "name": "Skyeship Express Gondola Stage 1",
+        "tags": {
+          "name": "Skyeship Express Gondola Stage 1",
+          "aerialway": "gondola",
+          "z_order": "0",
+          "aerialway:bubble": "yes",
+          "aerialway:capacity": "8",
+          "aerialway:heating": "no",
+          "oneway": "yes",
+          "winter_sports_id": "1228774360",
+          "winter_sports_name": "Killington Resort",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": "gondola"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            3221.7676319108577,
+            3134.12467046082
+          ],
+          [
+            3141.839028333663,
+            3072.9876398183405
+          ],
+          [
+            3073.4081381554715,
+            3020.6382207004353
+          ],
+          [
+            3025.2676650491776,
+            2983.812112275511
+          ],
+          [
+            2979.991354053491,
+            2949.1854874622077
+          ],
+          [
+            2917.1056533911033,
+            2901.0866628671065
+          ],
+          [
+            2837.4567162405,
+            2840.1610942278057
+          ],
+          [
+            2757.9011096492177,
+            2779.316840185784
+          ],
+          [
+            2687.6358610410243,
+            2725.5781025597826
+          ],
+          [
+            2615.390982340905,
+            2670.3204781180248
+          ],
+          [
+            2547.347453109687,
+            2618.2872962132096
+          ],
+          [
+            2487.550492206705,
+            2572.5533385621384
+          ],
+          [
+            2436.2455938885687,
+            2533.313823590055
+          ],
+          [
+            2366.8619785532355,
+            2480.2467835070565
+          ],
+          [
+            2344.097624670365,
+            2462.849149644375
+          ],
+          [
+            2261.3199455939466,
+            2399.53627568949
+          ],
+          [
+            2218.743103831075,
+            2366.9762933580205
+          ],
+          [
+            2175.912312639761,
+            2334.2320473063737
+          ],
+          [
+            2125.292369070463,
+            2295.524536838755
+          ],
+          [
+            2095.624790342641,
+            2272.8323685377836
+          ],
+          [
+            2090.511096616974,
+            2268.929175419733
+          ],
+          [
+            2085.825251671369,
+            2265.337404595688
+          ],
+          [
+            2061.096534678829,
+            2246.4328183224425
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:way:32959391",
+        "osm_type": "way",
+        "osm_id": "32959391",
+        "name": "Skyeship Express Gondola Stage 2",
+        "tags": {
+          "name": "Skyeship Express Gondola Stage 2",
+          "aerialway": "gondola",
+          "z_order": "0",
+          "aerialway:capacity": "8",
+          "oneway": "yes",
+          "winter_sports_id": "1228774360",
+          "winter_sports_name": "Killington Resort",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": "gondola"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            1811.4840482482687,
+            3378.876250163652
+          ],
+          [
+            1768.7782047041692,
+            3331.2223293157294
+          ],
+          [
+            1705.6156829898246,
+            3251.607902028598
+          ],
+          [
+            1644.1543456523214,
+            3174.1730558797717
+          ],
+          [
+            1598.4223708071513,
+            3116.5709862932563
+          ],
+          [
+            1514.2480542978738,
+            3010.529603051953
+          ],
+          [
+            1464.52047624439,
+            2947.888363922946
+          ],
+          [
+            1399.3566802813439,
+            2865.8015446644276
+          ],
+          [
+            1336.9265554329613,
+            2787.1662865597755
+          ],
+          [
+            1233.071286464925,
+            2656.3475548606366
+          ],
+          [
+            1186.6447287207702,
+            2597.8635178888217
+          ],
+          [
+            1126.038736933493,
+            2521.5236723972484
+          ],
+          [
+            1073.0210501377005,
+            2454.7424401510507
+          ],
+          [
+            1035.1113863481442,
+            2406.997937674634
+          ],
+          [
+            1035.183804938686,
+            2404.554737392813
+          ],
+          [
+            975.3299777804641,
+            2328.9586963197216
+          ],
+          [
+            917.4600284403423,
+            2255.8717008326203
+          ],
+          [
+            864.09094581916,
+            2188.4718576297164
+          ],
+          [
+            794.3141474950826,
+            2100.3466678550467
+          ],
+          [
+            761.0390483386582,
+            2058.3273409400135
+          ],
+          [
+            714.6706042559817,
+            1999.7708151666448
+          ],
+          [
+            675.2135752597824,
+            1952.9326925845817
+          ],
+          [
+            666.1752242109505,
+            1942.214609128423
+          ],
+          [
+            652.5694639665307,
+            1925.819491523318
+          ],
+          [
+            626.0989813342458,
+            1893.4044691212475
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:way:32959705",
+        "osm_type": "way",
+        "osm_id": "32959705",
+        "name": "K-1 Express Gondola",
+        "tags": {
+          "name": "K-1 Express Gondola",
+          "aerialway": "gondola",
+          "z_order": "0",
+          "aerialway:capacity": "2800",
+          "aerialway:duration": "7.167",
+          "aerialway:occupancy": "8",
+          "alt_name": "K1 Express Gondola",
+          "winter_sports_id": "1228774360",
+          "winter_sports_name": "Killington Resort",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": "gondola"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            2107.548543898156,
+            4285.703849275596
+          ],
+          [
+            2085.5537074058084,
+            4284.576179399155
+          ],
+          [
+            2027.510480848141,
+            4281.615207958035
+          ],
+          [
+            1972.7323828365188,
+            4278.830150939524
+          ],
+          [
+            1899.9748686262174,
+            4275.113740023226
+          ],
+          [
+            1800.84420335514,
+            4270.055474394001
+          ],
+          [
+            1699.1735432746354,
+            4264.875927275978
+          ],
+          [
+            1652.3856408694992,
+            4262.493787476793
+          ],
+          [
+            1528.582799927215,
+            4256.187039302662
+          ],
+          [
+            1441.755619595875,
+            4251.759316733107
+          ],
+          [
+            1341.6167343766429,
+            4246.659017503262
+          ],
+          [
+            1208.1140532387653,
+            4239.86878357362
+          ],
+          [
+            1113.8809646404115,
+            4233.694006551057
+          ],
+          [
+            1041.6689878584584,
+            4230.101365602575
+          ],
+          [
+            909.4360597924097,
+            4223.528396018781
+          ],
+          [
+            856.4301389947068,
+            4220.888082581572
+          ],
+          [
+            796.2881582150003,
+            4217.904804258607
+          ],
+          [
+            691.1147014443995,
+            4212.670672986656
+          ],
+          [
+            607.2352043116698,
+            4208.509159354493
+          ],
+          [
+            511.8738975378219,
+            4203.780298423953
+          ],
+          [
+            486.314237139537,
+            4202.508675256744
+          ],
+          [
+            460.7545724204974,
+            4201.237149879336
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:way:32959813",
+        "osm_type": "way",
+        "osm_id": "32959813",
+        "name": "Ramshead Express Quad",
+        "tags": {
+          "name": "Ramshead Express Quad",
+          "aerialway": "chair_lift",
+          "z_order": "0",
+          "aerialway:capacity": "4",
+          "aerialway:occupancy": "4",
+          "winter_sports_id": "1228774360",
+          "winter_sports_name": "Killington Resort",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": "chair_lift"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            661.9667337877909,
+            2715.122271647677
+          ],
+          [
+            645.7473255726509,
+            2646.7555456496775
+          ],
+          [
+            624.8665812571999,
+            2558.7722890116274
+          ],
+          [
+            603.6369355435017,
+            2469.2906875358894
+          ],
+          [
+            582.9299161711242,
+            2382.023515421897
+          ],
+          [
+            576.9601304125972,
+            2356.8822478577495
+          ],
+          [
+            565.7999069502112,
+            2309.821063754149
+          ],
+          [
+            542.8588479011087,
+            2213.1707101939246
+          ],
+          [
+            528.8033385714516,
+            2153.941484104842
+          ],
+          [
+            513.5186370083829,
+            2089.534219865687
+          ],
+          [
+            508.25439866783563,
+            2067.33457971178
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:way:32959881",
+        "osm_type": "way",
+        "osm_id": "32959881",
+        "name": "North Ridge Quad",
+        "tags": {
+          "name": "North Ridge Quad",
+          "aerialway": "chair_lift",
+          "z_order": "0",
+          "aerialway:occupancy": "4",
+          "winter_sports_id": "1228774360",
+          "winter_sports_name": "Killington Resort",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": "chair_lift"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            3492.0986530445516,
+            1742.231315035373
+          ],
+          [
+            3469.912872479763,
+            1750.9639986446127
+          ],
+          [
+            3454.999640997732,
+            1756.8455326659605
+          ],
+          [
+            3411.0608484946424,
+            1774.144923824817
+          ],
+          [
+            3368.591364477761,
+            1790.8725010044873
+          ],
+          [
+            3273.686826630379,
+            1828.2527908291668
+          ],
+          [
+            3206.494240544969,
+            1854.7251655720174
+          ],
+          [
+            3150.982698308071,
+            1876.5857966691256
+          ],
+          [
+            3066.3485614298843,
+            1909.930220933631
+          ],
+          [
+            3009.099388448987,
+            1932.4792390409857
+          ],
+          [
+            2950.1039695182117,
+            1955.7157872570679
+          ],
+          [
+            2909.685418930603,
+            1971.6449347604066
+          ],
+          [
+            2865.888270872063,
+            1988.8959407769144
+          ],
+          [
+            2811.652273436077,
+            2010.2597094103694
+          ],
+          [
+            2761.840250825393,
+            2029.885445309803
+          ],
+          [
+            2647.6565547722857,
+            2074.8750273538753
+          ],
+          [
+            2555.192646634765,
+            2111.307387933135
+          ],
+          [
+            2471.381237247144,
+            2144.3251911038533
+          ],
+          [
+            2415.034054100979,
+            2166.5251223975793
+          ],
+          [
+            2320.3854815773666,
+            2203.825084035285
+          ],
+          [
+            2245.872334435,
+            2233.1800193507224
+          ],
+          [
+            2178.3293749350123,
+            2259.7974452227354
+          ],
+          [
+            2167.3361547817476,
+            2264.129599140957
+          ],
+          [
+            2144.03571900737,
+            2273.3148491783068
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:way:32959913",
+        "osm_type": "way",
+        "osm_id": "32959913",
+        "name": "Skye Peak Express Quad",
+        "tags": {
+          "name": "Skye Peak Express Quad",
+          "aerialway": "chair_lift",
+          "z_order": "0",
+          "aerialway:occupancy": "4",
+          "winter_sports_id": "1228774360",
+          "winter_sports_name": "Killington Resort",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": "chair_lift"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            2402.9428396177245,
+            4219.820530922152
+          ],
+          [
+            2406.240116295754,
+            4166.492829203606
+          ],
+          [
+            2408.9119631438516,
+            4123.340322708711
+          ],
+          [
+            2413.1903800560394,
+            4054.0452266363427
+          ],
+          [
+            2416.982449980569,
+            3992.7283918708563
+          ],
+          [
+            2422.5006345900474,
+            3903.504978945479
+          ],
+          [
+            2427.393697213731,
+            3824.445657934062
+          ],
+          [
+            2431.6101783314953,
+            3756.2714872807264
+          ],
+          [
+            2436.5353761297883,
+            3676.6128642158583
+          ],
+          [
+            2440.981001417502,
+            3604.677051884122
+          ],
+          [
+            2445.7782059069723,
+            3527.1045301845297
+          ],
+          [
+            2449.559750536573,
+            3465.887487847358
+          ],
+          [
+            2454.2254127511987,
+            3390.53434242215
+          ],
+          [
+            2458.3018071515253,
+            3324.601574796252
+          ],
+          [
+            2461.9559469383676,
+            3265.4484206000343
+          ],
+          [
+            2465.886518276646,
+            3201.96804577671
+          ],
+          [
+            2469.597459505894,
+            3141.893925221637
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:way:33101830",
+        "osm_type": "way",
+        "osm_id": "33101830",
+        "name": "Snowshed Express Quad",
+        "tags": {
+          "name": "Snowshed Express Quad",
+          "aerialway": "chair_lift",
+          "z_order": "0",
+          "aerialway:occupancy": "4",
+          "winter_sports_id": "1228774360",
+          "winter_sports_name": "Killington Resort",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": "chair_lift"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            1724.6871113660745,
+            3673.2851800555363
+          ],
+          [
+            1651.048418686376,
+            3645.54185240902
+          ],
+          [
+            1558.0218715703813,
+            3610.496269946918
+          ],
+          [
+            1449.756160100922,
+            3569.714785325341
+          ],
+          [
+            1343.599733558949,
+            3529.7354382453486
+          ],
+          [
+            1229.167610040051,
+            3486.6276687588543
+          ],
+          [
+            1132.0514796271455,
+            3450.046665123664
+          ],
+          [
+            1013.8427816090407,
+            3405.5317119341344
+          ],
+          [
+            958.8434157759184,
+            3384.822422614321
+          ],
+          [
+            892.7624451213051,
+            3359.9319567177445
+          ],
+          [
+            817.7180557698011,
+            3331.6721467459574
+          ],
+          [
+            711.6746970997192,
+            3291.739545300603
+          ],
+          [
+            550.5085412046174,
+            3231.0551933273673
+          ],
+          [
+            491.1089906373527,
+            3208.6894518248737
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:way:33280742",
+        "osm_type": "way",
+        "osm_id": "33280742",
+        "name": "Snowdon Six",
+        "tags": {
+          "name": "Snowdon Six",
+          "aerialway": "chair_lift",
+          "z_order": "0",
+          "aerialway:bubble": "yes",
+          "aerialway:occupancy": "6",
+          "winter_sports_id": "1228774360",
+          "winter_sports_name": "Killington Resort",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": "chair_lift"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            3132.9574834910454,
+            3145.0496338102967
+          ],
+          [
+            3074.601359683904,
+            3104.961058416404
+          ],
+          [
+            3024.1028794582235,
+            3070.2838392350823
+          ],
+          [
+            2933.5330112156225,
+            3008.076877902262
+          ],
+          [
+            2872.716137716663,
+            2966.3019990622997
+          ],
+          [
+            2844.27797832957,
+            2946.7731422670186
+          ],
+          [
+            2738.406701809843,
+            2874.0700947688892
+          ],
+          [
+            2659.783042854746,
+            2820.0759800653905
+          ],
+          [
+            2582.2289614541223,
+            2766.8114790404215
+          ],
+          [
+            2500.042000419111,
+            2710.368489684537
+          ],
+          [
+            2474.4883996477583,
+            2692.829586511478
+          ],
+          [
+            2399.167922230088,
+            2641.1048794435337
+          ],
+          [
+            2357.6328729672823,
+            2612.58377398178
+          ],
+          [
+            2352.1367720057024,
+            2608.803580386564
+          ],
+          [
+            2329.675770564587,
+            2593.3812400531024
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:way:96906470",
+        "osm_type": "way",
+        "osm_id": "96906470",
+        "name": "Needle's Eye Express Quad",
+        "tags": {
+          "name": "Needle's Eye Express Quad",
+          "aerialway": "chair_lift",
+          "z_order": "0",
+          "aerialway:bubble": "no",
+          "aerialway:heating": "no",
+          "aerialway:occupancy": "4",
+          "winter_sports_id": "1228774360",
+          "winter_sports_name": "Killington Resort",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": "chair_lift"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            1182.2786315442063,
+            2904.409924064763
+          ],
+          [
+            1170.136221882538,
+            2888.074356475845
+          ],
+          [
+            1145.196789949201,
+            2854.4969141678885
+          ],
+          [
+            1095.831022288301,
+            2788.0671786749735
+          ],
+          [
+            1051.3857051547384,
+            2728.247012884356
+          ],
+          [
+            1017.0234469736461,
+            2682.007446830161
+          ],
+          [
+            941.3253188731615,
+            2580.131756965071
+          ],
+          [
+            893.858696475043,
+            2516.254428241402
+          ],
+          [
+            843.9107561769197,
+            2449.0446671517566
+          ],
+          [
+            804.2966164579848,
+            2395.7330114794895
+          ],
+          [
+            756.8817433926743,
+            2331.9359759679064
+          ],
+          [
+            708.3429355185945,
+            2266.620500570163
+          ],
+          [
+            656.9716660832055,
+            2197.4966725977138
+          ],
+          [
+            582.6509394224267,
+            2097.4846203261986
+          ],
+          [
+            563.9065336830681,
+            2072.2634987942874
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:way:143877545",
+        "osm_type": "way",
+        "osm_id": "143877545",
+        "name": "Canyon Quad",
+        "tags": {
+          "name": "Canyon Quad",
+          "aerialway": "chair_lift",
+          "z_order": "0",
+          "aerialway:occupancy": "4",
+          "winter_sports_id": "1228774360",
+          "winter_sports_name": "Killington Resort",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": "chair_lift"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            2632.9308253346244,
+            1652.4419115921482
+          ],
+          [
+            2644.922227032017,
+            1653.1495033092797
+          ],
+          [
+            2684.4851125321584,
+            1655.478919503279
+          ],
+          [
+            2745.4742939110147,
+            1659.0783393606544
+          ],
+          [
+            2817.624091017875,
+            1663.3418969418854
+          ],
+          [
+            2879.330933408113,
+            1666.9838554458693
+          ],
+          [
+            2948.134093776229,
+            1671.0486473040655
+          ],
+          [
+            3006.534671741305,
+            1674.4926451593637
+          ],
+          [
+            3064.7415120492224,
+            1677.9319946123287
+          ],
+          [
+            3132.826819244656,
+            1681.9573448002338
+          ],
+          [
+            3195.420708282036,
+            1685.6480887485668
+          ],
+          [
+            3260.0141162765212,
+            1689.4705298068002
+          ],
+          [
+            3319.8984190465417,
+            1693.0012864824384
+          ],
+          [
+            3376.8068320626626,
+            1696.3642721688375
+          ],
+          [
+            3405.1117124159355,
+            1698.041962579824
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:way:143877547",
+        "osm_type": "way",
+        "osm_id": "143877547",
+        "name": "Bear Mountain Quad",
+        "tags": {
+          "name": "Bear Mountain Quad",
+          "aerialway": "chair_lift",
+          "z_order": "0",
+          "aerialway:occupancy": "4",
+          "winter_sports_id": "1228774360",
+          "winter_sports_name": "Killington Resort",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": "chair_lift"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            2312.3887574629625,
+            4205.813206154853
+          ],
+          [
+            2314.926947294385,
+            4175.583051052876
+          ],
+          [
+            2319.3312694855267,
+            4124.018557640724
+          ],
+          [
+            2325.9018182260916,
+            4055.32889223285
+          ],
+          [
+            2332.97600939346,
+            3983.4850335409865
+          ],
+          [
+            2340.93885284313,
+            3916.1882802983746
+          ],
+          [
+            2345.7863374963636,
+            3864.057628104463
+          ],
+          [
+            2352.054765824345,
+            3799.4611391080543
+          ],
+          [
+            2358.2160738559905,
+            3730.9940464422107
+          ],
+          [
+            2368.332185606123,
+            3636.735685426742
+          ],
+          [
+            2373.7754278948996,
+            3581.942331169732
+          ],
+          [
+            2378.9769987313775,
+            3525.608797205612
+          ],
+          [
+            2384.0237868723925,
+            3476.628806045279
+          ],
+          [
+            2388.607849079999,
+            3428.0477633820847
+          ],
+          [
+            2396.727586799301,
+            3362.778037680313
+          ],
+          [
+            2402.868549868348,
+            3306.9584893630818
+          ],
+          [
+            2407.818529283046,
+            3258.2871460830793
+          ],
+          [
+            2412.3316687504994,
+            3219.6848501795903
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:way:203680469",
+        "osm_type": "way",
+        "osm_id": "203680469",
+        "name": "Snowshed Double",
+        "tags": {
+          "name": "Snowshed Double",
+          "aerialway": "chair_lift",
+          "z_order": "0",
+          "aerialway:occupancy": "2",
+          "winter_sports_id": "1228774360",
+          "winter_sports_name": "Killington Resort",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": "chair_lift"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            2263.452099508955,
+            4211.060863940977
+          ],
+          [
+            2261.963720264146,
+            4071.192714739591
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:way:203680470",
+        "osm_type": "way",
+        "osm_id": "203680470",
+        "name": "Learn To Snowboard Carpet",
+        "tags": {
+          "name": "Learn To Snowboard Carpet",
+          "aerialway": "magic_carpet",
+          "z_order": "0",
+          "aerialway:occupancy": "1",
+          "winter_sports_id": "1228774360",
+          "winter_sports_name": "Killington Resort",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": "magic_carpet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            2065.9046832766617,
+            4310.084945918061
+          ],
+          [
+            2010.3627050758805,
+            4346.801603519358
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:way:203680471",
+        "osm_type": "way",
+        "osm_id": "203680471",
+        "name": "Snowplay Carpet II",
+        "tags": {
+          "name": "Snowplay Carpet II",
+          "aerialway": "magic_carpet",
+          "z_order": "0",
+          "aerialway:occupancy": "1",
+          "winter_sports_id": "1228774360",
+          "winter_sports_name": "Killington Resort",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": "magic_carpet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            2091.3543996342923,
+            4322.196114757098
+          ],
+          [
+            2072.8480154158315,
+            4358.816064482555
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:way:203680472",
+        "osm_type": "way",
+        "osm_id": "203680472",
+        "name": "Snowplay Carpet I",
+        "tags": {
+          "name": "Snowplay Carpet I",
+          "aerialway": "magic_carpet",
+          "z_order": "0",
+          "aerialway:occupancy": "1",
+          "winter_sports_id": "1228774360",
+          "winter_sports_name": "Killington Resort",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": "magic_carpet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            1953.500378064462,
+            3289.553764176555
+          ],
+          [
+            1949.6663632205455,
+            3245.5843917187303
+          ],
+          [
+            1944.8459896697896,
+            3190.3746590195224
+          ],
+          [
+            1938.9724779943936,
+            3123.0892395302653
+          ],
+          [
+            1936.716567758005,
+            3097.2778605204076
+          ],
+          [
+            1930.4102724150289,
+            3024.979612151161
+          ],
+          [
+            1921.4962243840564,
+            2922.759567046538
+          ],
+          [
+            1911.9293728059856,
+            2813.1535646105185
+          ],
+          [
+            1905.9554650784703,
+            2744.7430635653436
+          ],
+          [
+            1897.1013267231174,
+            2643.269381340593
+          ],
+          [
+            1888.5946673956933,
+            2545.7393686687574
+          ],
+          [
+            1881.2756104541477,
+            2461.9112940067425
+          ],
+          [
+            1875.1962118474767,
+            2392.2644304148853
+          ],
+          [
+            1865.7523989158217,
+            2284.0289842812344
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:way:203680474",
+        "osm_type": "way",
+        "osm_id": "203680474",
+        "name": "Superstar Express Six",
+        "tags": {
+          "name": "Superstar Express Six",
+          "aerialway": "chair_lift",
+          "z_order": "0",
+          "aerialway:occupancy": "6",
+          "winter_sports_id": "1228774360",
+          "winter_sports_name": "Killington Resort",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": "chair_lift"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            1777.4779616779415,
+            3393.669824737124
+          ],
+          [
+            1744.2602368177613,
+            3386.6005367795005
+          ],
+          [
+            1699.9376633629436,
+            3377.170523283072
+          ],
+          [
+            1668.6628030848224,
+            3370.519762184471
+          ],
+          [
+            1623.8985961253056,
+            3360.989673455246
+          ],
+          [
+            1518.093725628336,
+            3338.4773872001097
+          ],
+          [
+            1402.6606371848611,
+            3313.923255515285
+          ],
+          [
+            1363.5966655968223,
+            3305.612382066436
+          ],
+          [
+            1322.0835562552093,
+            3296.781437941827
+          ],
+          [
+            1270.453108142945,
+            3285.7944672135636
+          ],
+          [
+            1170.6761924087768,
+            3264.580441813916
+          ],
+          [
+            1161.3216470358893,
+            3262.58891415596
+          ],
+          [
+            1075.3877119226381,
+            3244.308643773198
+          ],
+          [
+            1061.544418038684,
+            3241.365427725017
+          ],
+          [
+            977.4568439153954,
+            3223.47962491028
+          ],
+          [
+            895.7214496362722,
+            3206.101378021762
+          ],
+          [
+            796.2078600308159,
+            3184.9333267062902
+          ],
+          [
+            727.0544700900791,
+            3170.2332598995417
+          ],
+          [
+            679.6540595572442,
+            3160.1512788282707
+          ],
+          [
+            617.7030068256427,
+            3146.9865166051313
+          ],
+          [
+            545.369262690423,
+            3131.6046283263713
+          ],
+          [
+            526.5952531944495,
+            3127.6105520427227
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:way:203680475",
+        "osm_type": "way",
+        "osm_id": "203680475",
+        "name": "Snowdon Triple",
+        "tags": {
+          "name": "Snowdon Triple",
+          "aerialway": "chair_lift",
+          "z_order": "0",
+          "aerialway:bubble": "no",
+          "aerialway:heating": "no",
+          "aerialway:occupancy": "3",
+          "winter_sports_id": "1228774360",
+          "winter_sports_name": "Killington Resort",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": "chair_lift"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            3176.0240854971344,
+            3187.3651994932443
+          ],
+          [
+            3134.538153295871,
+            3182.6915548993275
+          ],
+          [
+            3010.0726171809947,
+            3168.649744384922
+          ],
+          [
+            2960.930061530904,
+            3163.1175005678087
+          ],
+          [
+            2909.557570802397,
+            3157.3261991981417
+          ],
+          [
+            2760.2000780540984,
+            3141.3149800179526
+          ],
+          [
+            2680.7740642189747,
+            3132.5119997719303
+          ],
+          [
+            2630.1633734971983,
+            3126.9098319029436
+          ],
+          [
+            2528.821056523011,
+            3115.6923284372315
+          ],
+          [
+            2510.1175838870695,
+            3113.628398817964
+          ],
+          [
+            2498.797463198891,
+            3112.371902554296
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:way:203680476",
+        "osm_type": "way",
+        "osm_id": "203680476",
+        "name": "Northbrook Quad",
+        "tags": {
+          "name": "Northbrook Quad",
+          "aerialway": "chair_lift",
+          "z_order": "0",
+          "aerialway:occupancy": "4",
+          "winter_sports_id": "1228774360",
+          "winter_sports_name": "Killington Resort",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": "chair_lift"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            2066.898797683767,
+            1477.2165344916284
+          ],
+          [
+            2007.6753310239874,
+            1503.5784342801198
+          ],
+          [
+            1967.5612751696026,
+            1521.4329685634002
+          ],
+          [
+            1911.0275494202506,
+            1546.5998530946672
+          ],
+          [
+            1826.983918655431,
+            1584.0098384665325
+          ],
+          [
+            1720.694590208237,
+            1631.3245866028592
+          ],
+          [
+            1641.2298861361342,
+            1666.7016666540876
+          ],
+          [
+            1576.5994320177706,
+            1695.4805983537808
+          ],
+          [
+            1485.710908798501,
+            1735.9481022078544
+          ],
+          [
+            1409.1664461322362,
+            1770.0267312554643
+          ],
+          [
+            1320.3151589974295,
+            1809.5831928802654
+          ],
+          [
+            1204.7414469678188,
+            1861.0398437911645
+          ],
+          [
+            1152.8391049505444,
+            1884.1565100681037
+          ],
+          [
+            1090.0520477961982,
+            1912.1104607535526
+          ],
+          [
+            1020.3598220354179,
+            1943.150707992725
+          ],
+          [
+            986.8706511920318,
+            1958.0621925080195
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:way:749970317",
+        "osm_type": "way",
+        "osm_id": "749970317",
+        "name": "South Ridge Quad",
+        "tags": {
+          "name": "South Ridge Quad",
+          "aerialway": "chair_lift",
+          "z_order": "0",
+          "aerialway:occupancy": "4",
+          "winter_sports_id": "1228774360",
+          "winter_sports_name": "Killington Resort",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": "chair_lift"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            935.2301132860593,
+            4485.045743078925
+          ],
+          [
+            429.5606161664473,
+            4352.414451311342
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:way:751412809",
+        "osm_type": "way",
+        "osm_id": "751412809",
+        "name": "Alpine Training Venue Poma",
+        "tags": {
+          "name": "Alpine Training Venue Poma",
+          "aerialway": "platter",
+          "z_order": "0",
+          "winter_sports_id": "1228774360",
+          "winter_sports_name": "Killington Resort",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": "platter"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            1811.4840482482687,
+            3378.876250163652
+          ],
+          [
+            1821.1779986568727,
+            3389.3911747848615
+          ],
+          [
+            1822.3649428776698,
+            3391.2230856064707
+          ],
+          [
+            1822.6469075338682,
+            3394.9093524394557
+          ],
+          [
+            1821.4439390237676,
+            3397.344876688905
+          ],
+          [
+            1814.7939031729475,
+            3408.505413814448
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:way:1436473709",
+        "osm_type": "way",
+        "osm_id": "1436473709",
+        "name": null,
+        "tags": {
+          "aerialway": "gondola",
+          "z_order": "0",
+          "winter_sports_id": "1228774360",
+          "winter_sports_name": "Killington Resort",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": "gondola"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              612.2195514441701,
+              1889.5722759328783
+            ],
+            [
+              616.8160644967575,
+              1895.3723123567179
+            ],
+            [
+              620.0885178649332,
+              1892.546388702467
+            ],
+            [
+              624.3876191531308,
+              1888.1470093252137
+            ],
+            [
+              626.8576586575946,
+              1887.8895893236622
+            ],
+            [
+              628.9741480235243,
+              1886.3336492534727
+            ],
+            [
+              626.9828274284955,
+              1883.1249384423718
+            ],
+            [
+              622.0492662815377,
+              1882.16177846957
+            ],
+            [
+              616.2508524034638,
+              1886.1438956558704
+            ],
+            [
+              616.0531650900375,
+              1886.9055739250034
+            ],
+            [
+              612.2195514441701,
+              1889.5722759328783
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:way:1436051079",
+        "osm_type": "way",
+        "osm_id": "1436051079",
+        "name": null,
+        "tags": {
+          "aerialway": "yes",
+          "network": "K-1 Express Gondola",
+          "operator": "Killington Resort",
+          "public_transport": "platform",
+          "surface": "paved",
+          "winter_sports_id": "1228774360",
+          "winter_sports_name": "Killington Resort",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": "yes"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              1815.2636452803854,
+              3387.7009164383635
+            ],
+            [
+              1819.2549164312659,
+              3393.408091749996
+            ],
+            [
+              1826.6976645771647,
+              3391.960131746717
+            ],
+            [
+              1828.2214435382048,
+              3387.165769321844
+            ],
+            [
+              1817.7596356373979,
+              3376.374889390543
+            ],
+            [
+              1814.6095281144371,
+              3379.15900501702
+            ],
+            [
+              1819.2542592663085,
+              3384.58338660188
+            ],
+            [
+              1815.2636452803854,
+              3387.7009164383635
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "id": "lifts:way:1436473708",
+        "osm_type": "way",
+        "osm_id": "1436473708",
+        "name": null,
+        "tags": {
+          "aerialway": "yes",
+          "public_transport": "platform",
+          "winter_sports_id": "1228774360",
+          "winter_sports_name": "Killington Resort",
+          "State": "Vermont",
+          "Country": "United States of America",
+          "Ski Area": "Killington Resort",
+          "region": "north-america/us/vermont"
+        },
+        "source": "OpenStreetMap",
+        "source_confidence": "osm_as_mapped",
+        "coordinate_space": "local_east_m, local_north_m",
+        "aerialway": "yes"
+      }
+    }
+  ]
+}
