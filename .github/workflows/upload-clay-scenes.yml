@@ -1,5 +1,5 @@
 # Upload staged clay scene(s) under deploy_clay/ to the public clay_scenes prefix.
-# Uses the same AWS secrets as the pipeline deploy workflow.
+# Uses PutObject only (github-actions IAM user has no s3:ListBucket).
 name: Upload clay scenes
 
 on:
@@ -34,40 +34,50 @@ jobs:
             echo "No deploy_clay/ directory"
             exit 1
           fi
-          shopt -s nullglob
           uploaded=0
-          for scene in deploy_clay/*/; do
+          while IFS= read -r -d '' scene; do
             rid="$(basename "$scene")"
-            [[ "$rid" == .* ]] && continue
             echo "Uploading $rid"
-            aws s3 sync "$scene" "s3://$BUCKET/$PREFIX/$rid/" \
-              --delete \
-              --cache-control "public, max-age=300" \
-              --content-type "application/octet-stream"
-            # Fix content-types for known extensions
             while IFS= read -r -d '' f; do
-              rel="${f#${scene}}"
+              rel="${f#${scene}/}"
               key="$PREFIX/$rid/$rel"
               case "$f" in
                 *.json) ct="application/json; charset=utf-8" ;;
                 *.geojson) ct="application/geo+json" ;;
                 *.glb) ct="model/gltf-binary" ;;
                 *.md) ct="text/markdown; charset=utf-8" ;;
-                *) continue ;;
+                *.bin) ct="application/octet-stream" ;;
+                *) ct="application/octet-stream" ;;
               esac
-              aws s3 cp "$f" "s3://$BUCKET/$key" --content-type "$ct" --cache-control "public, max-age=300"
-            done < <(find "$scene" -type f \( -name '*.json' -o -name '*.geojson' -o -name '*.glb' -o -name '*.md' \) -print0)
+              echo "  -> s3://$BUCKET/$key"
+              aws s3api put-object \
+                --bucket "$BUCKET" \
+                --key "$key" \
+                --body "$f" \
+                --content-type "$ct" \
+                --cache-control "public, max-age=300" \
+                --server-side-encryption AES256 \
+                >/dev/null
+            done < <(find "$scene" -type f -print0)
             uploaded=$((uploaded + 1))
-          done
+          done < <(find deploy_clay -mindepth 1 -maxdepth 1 -type d -print0)
+
           if [[ -f deploy_clay/catalog.json ]]; then
-            aws s3 cp deploy_clay/catalog.json "s3://$BUCKET/$PREFIX/catalog.json" \
+            echo "Uploading catalog.json"
+            aws s3api put-object \
+              --bucket "$BUCKET" \
+              --key "$PREFIX/catalog.json" \
+              --body deploy_clay/catalog.json \
               --content-type "application/json; charset=utf-8" \
-              --cache-control "public, max-age=60"
+              --cache-control "public, max-age=60" \
+              --server-side-encryption AES256 \
+              >/dev/null
           fi
           echo "Uploaded $uploaded scene(s)"
           test "$uploaded" -gt 0
 
       - name: Invalidate CloudFront clay_scenes
+        continue-on-error: true
         env:
           DIST_ID: E3BDMTLYF8G4VB
         run: |
@@ -75,4 +85,5 @@ jobs:
             --distribution-id "$DIST_ID" \
             --paths \
               "/clay_scenes/catalog.json" \
-              "/clay_scenes/killington_resort_united_states_of_america/*"
+              "/clay_scenes/killington_resort_united_states_of_america/*" \
+            || echo "CloudFront invalidation skipped (IAM may lack cloudfront:CreateInvalidation)"
