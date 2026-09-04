@@ -50,6 +50,7 @@ def write_homepage_manifest(
             "piste_trails": "vectors/piste-trails.geojson",
             "lifts": "vectors/lifts.geojson",
             "tree_points": "vectors/tree-points.geojson",
+            "ski_area_buffer": "vectors/ski-area-buffer.geojson",
         },
         "attribution": {
             "osm": "© OpenStreetMap contributors",

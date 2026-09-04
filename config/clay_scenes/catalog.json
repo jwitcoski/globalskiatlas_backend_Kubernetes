@@ -1,11 +1,11 @@
 {
   "schema_version": "1.0",
-  "description": "Clay 3D resort scenes for homepage hero and wiki 3D Map tab. Join key: winter_sports_id → id (folder clay_scenes/{id}/). Do not use wiki pageId.",
+  "description": "Clay 3D resort scenes for homepage hero and wiki 3D Map tab. Join key: winter_sports_id \u2192 id (folder clay_scenes/{id}/). Do not use wiki pageId.",
   "path_contract": {
     "asset_root": "clay_scenes/{resort_id}/",
     "catalog": "clay_scenes/catalog.json",
     "wiki_join_key": "winter_sports_id",
-    "scale_note": "At ~2k–4k resorts, prefer /clay_scenes/by-ws/{winter_sports_id}.json instead of loading the full catalog on every page."
+    "scale_note": "At ~2k\u20134k resorts, prefer /clay_scenes/by-ws/{winter_sports_id}.json instead of loading the full catalog on every page."
   },
   "resorts": [
     {
@@ -57,6 +57,1236 @@
       "region_label": "Oceania",
       "country": "Australia",
       "playable_ver": "v0-235c8a0aa6be"
+    },
+    {
+      "id": "ordino_arcal_s_andorra",
+      "winter_sports_id": "987242424",
+      "display_name": "Ordino-Arcal\u00eds",
+      "short_name": "Ordino-Arcal\u00eds",
+      "continent": "europe",
+      "region_label": "Europe",
+      "country": "Andorra",
+      "playable_ver": null
+    },
+    {
+      "id": "armenia",
+      "winter_sports_id": "664735488",
+      "display_name": "\u053e\u0561\u0572\u056f\u0561\u0571\u0578\u0580 \u056c\u0565\u057c\u0576\u0561\u0564\u0561\u0570\u0578\u0582\u056f\u0561\u0575\u056b\u0576 \u0561\u057c\u0578\u0572\u057b\u0561\u0580\u0561\u0576",
+      "short_name": "\u053e\u0561\u0572\u056f\u0561\u0571\u0578\u0580 \u056c\u0565\u057c\u0576\u0561\u0564\u0561\u0570\u0578\u0582\u056f\u0561\u0575\u056b\u0576",
+      "continent": "asia",
+      "region_label": "Asia",
+      "country": "Armenia",
+      "playable_ver": null
+    },
+    {
+      "id": "val_de_wanne_ski_alpin_belgium",
+      "winter_sports_id": "337141679",
+      "display_name": "Val de Wanne (ski alpin)",
+      "short_name": "Val de Wanne (ski alpin)",
+      "continent": "europe",
+      "region_label": "Europe",
+      "country": "Belgium",
+      "playable_ver": null
+    },
+    {
+      "id": "germund_alpin_aland",
+      "winter_sports_id": "1158451537",
+      "display_name": "Germund\u00f6 Alpin",
+      "short_name": "Germund\u00f6 Alpin",
+      "continent": "europe",
+      "region_label": "Europe",
+      "country": "Aland",
+      "playable_ver": null
+    },
+    {
+      "id": "ski_alpin_ovifat_belgium",
+      "winter_sports_id": "1135987034",
+      "display_name": "Ski Alpin Ovifat",
+      "short_name": "Ski Alpin Ovifat",
+      "continent": "europe",
+      "region_label": "Europe",
+      "country": "Belgium",
+      "playable_ver": null
+    },
+    {
+      "id": "cerro_catedral_argentina",
+      "winter_sports_id": "28707473",
+      "display_name": "Cerro Catedral",
+      "short_name": "Cerro Catedral",
+      "continent": "south_america",
+      "region_label": "South America",
+      "country": "Argentina",
+      "playable_ver": null
+    },
+    {
+      "id": "los_penitentes_argentina",
+      "winter_sports_id": "934291345",
+      "display_name": "Los Penitentes",
+      "short_name": "Los Penitentes",
+      "continent": "south_america",
+      "region_label": "South America",
+      "country": "Argentina",
+      "playable_ver": null
+    },
+    {
+      "id": "mount_mawson_australia",
+      "winter_sports_id": "1388318072",
+      "display_name": "Mount Mawson",
+      "short_name": "Mount Mawson",
+      "continent": "oceania",
+      "region_label": "Oceania",
+      "country": "Australia",
+      "playable_ver": null
+    },
+    {
+      "id": "f_ssener_j_chle_gr_n_austria",
+      "winter_sports_id": "539446463",
+      "display_name": "F\u00fcssener J\u00f6chle-Gr\u00e4n",
+      "short_name": "F\u00fcssener J\u00f6chle-Gr\u00e4n",
+      "continent": "europe",
+      "region_label": "Europe",
+      "country": "Austria",
+      "playable_ver": null
+    },
+    {
+      "id": "sonnenberglift_in_gries_austria",
+      "winter_sports_id": "665199719",
+      "display_name": "Sonnenberglift in Gries",
+      "short_name": "Sonnenberglift in Gries",
+      "continent": "europe",
+      "region_label": "Europe",
+      "country": "Austria",
+      "playable_ver": null
+    },
+    {
+      "id": "gunstock_recreation_area_united_states_of_americ",
+      "winter_sports_id": "47798396",
+      "display_name": "Gunstock Recreation Area",
+      "short_name": "Gunstock Recreation Area",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "wildcat_mountain_united_states_of_america",
+      "winter_sports_id": "251260219",
+      "display_name": "Wildcat Mountain",
+      "short_name": "Wildcat Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "whaleback_mountain_united_states_of_america",
+      "winter_sports_id": "252782489",
+      "display_name": "Whaleback Mountain",
+      "short_name": "Whaleback Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "ragged_mountain_resort_united_states_of_america",
+      "winter_sports_id": "255716854",
+      "display_name": "Ragged Mountain Resort",
+      "short_name": "Ragged Mountain Resort",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "attitash_mountain_resort_united_states_of_americ",
+      "winter_sports_id": "256024127",
+      "display_name": "Attitash Mountain Resort",
+      "short_name": "Attitash Mountain Resort",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "cranmore_mountain_resort_united_states_of_americ",
+      "winter_sports_id": "334089267",
+      "display_name": "Cranmore Mountain Resort",
+      "short_name": "Cranmore Mountain Resort",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "loon_mountain_resort_united_states_of_america",
+      "winter_sports_id": "334246239",
+      "display_name": "Loon Mountain Resort",
+      "short_name": "Loon Mountain Resort",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "cannon_mountain_united_states_of_america",
+      "winter_sports_id": "334259037",
+      "display_name": "Cannon Mountain",
+      "short_name": "Cannon Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "bretton_woods_ski_area_united_states_of_america",
+      "winter_sports_id": "334259249",
+      "display_name": "Bretton Woods Ski Area",
+      "short_name": "Bretton Woods",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "waterville_valley_resort_nordic_united_states_of",
+      "winter_sports_id": "334259462",
+      "display_name": "Waterville Valley Resort Nordic",
+      "short_name": "Waterville Valley",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "mcintyre_ski_area_united_states_of_america",
+      "winter_sports_id": "361561697",
+      "display_name": "McIntyre Ski Area",
+      "short_name": "McIntyre",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "granite_gorge_ski_area_united_states_of_america",
+      "winter_sports_id": "450395267",
+      "display_name": "Granite Gorge Ski Area",
+      "short_name": "Granite Gorge",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "pats_peak_united_states_of_america",
+      "winter_sports_id": "662615625",
+      "display_name": "Pats Peak",
+      "short_name": "Pats Peak",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "kanc_recreation_area_united_states_of_america",
+      "winter_sports_id": "759661881",
+      "display_name": "Kanc Recreation Area",
+      "short_name": "Kanc Recreation Area",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "mount_prospect_ski_tow_united_states_of_america",
+      "winter_sports_id": "957400619",
+      "display_name": "Mount Prospect Ski Tow",
+      "short_name": "Mount Prospect Ski Tow",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "abenaki_ski_area_united_states_of_america",
+      "winter_sports_id": "1038072653",
+      "display_name": "Abenaki Ski Area",
+      "short_name": "Abenaki",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "storrs_hill_ski_area_united_states_of_america",
+      "winter_sports_id": "1090626629",
+      "display_name": "Storrs Hill Ski Area",
+      "short_name": "Storrs Hill",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "ski_eldorado_secteur_st_paul_canada",
+      "winter_sports_id": "1138454880",
+      "display_name": "Ski Eldorado - Secteur St-Paul",
+      "short_name": "Ski Eldorado",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "Canada",
+      "playable_ver": null
+    },
+    {
+      "id": "the_pike_glades_united_states_of_america",
+      "winter_sports_id": "1151991843",
+      "display_name": "The Pike Glades",
+      "short_name": "The Pike Glades",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "black_mountain_united_states_of_america",
+      "winter_sports_id": "1154306823",
+      "display_name": "Black Mountain",
+      "short_name": "Black Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "red_hill_outing_club_united_states_of_america",
+      "winter_sports_id": "1219900523",
+      "display_name": "Red Hill Outing Club",
+      "short_name": "Red Hill Outing Club",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "tenney_mountain_resort_united_states_of_america",
+      "winter_sports_id": "1230198090",
+      "display_name": "Tenney Mountain Resort",
+      "short_name": "Tenney Mountain Resort",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "mount_sunapee_united_states_of_america",
+      "winter_sports_id": "1230199887",
+      "display_name": "Mount Sunapee",
+      "short_name": "Mount Sunapee",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "ossipee_mountain_ski_area_closed_united_states_o",
+      "winter_sports_id": "1299638537",
+      "display_name": "Ossipee Mountain Ski Area (Closed)",
+      "short_name": "Ossipee Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "tuckerman_ravine_united_states_of_america",
+      "winter_sports_id": "1361274255",
+      "display_name": "Tuckerman Ravine",
+      "short_name": "Tuckerman Ravine",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "campton_mountain_united_states_of_america",
+      "winter_sports_id": "1362711736",
+      "display_name": "Campton Mountain",
+      "short_name": "Campton Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "waterville_valley_resort_united_states_of_americ",
+      "winter_sports_id": "1362922705",
+      "display_name": "Waterville Valley Resort",
+      "short_name": "Waterville Valley Resort",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "veterans_memorial_ski_area_united_states_of_amer",
+      "winter_sports_id": "1363084977",
+      "display_name": "Veterans Memorial Ski Area",
+      "short_name": "Veterans Memorial",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "king_pine_united_states_of_america",
+      "winter_sports_id": "1363577242",
+      "display_name": "King Pine",
+      "short_name": "King Pine",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "arrowhead_recreation_area_united_states_of_ameri",
+      "winter_sports_id": "1366702103",
+      "display_name": "Arrowhead Recreation Area",
+      "short_name": "Arrowhead Recreation",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "temple_mountain_ski_area_united_states_of_americ",
+      "winter_sports_id": "1462996862",
+      "display_name": "Temple Mountain Ski Area",
+      "short_name": "Temple Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "holiday_valley_united_states_of_america",
+      "winter_sports_id": "136858703",
+      "display_name": "Holiday Valley",
+      "short_name": "Holiday Valley",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "west_mountain_ski_resort_united_states_of_americ",
+      "winter_sports_id": "256455529",
+      "display_name": "West Mountain Ski Resort",
+      "short_name": "West Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "bristol_mountain_ski_resort_united_states_of_ame",
+      "winter_sports_id": "320434895",
+      "display_name": "Bristol Mountain Ski Resort",
+      "short_name": "Bristol Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "big_bear_ski_resort_united_states_of_america",
+      "winter_sports_id": "392376125",
+      "display_name": "Big Bear Ski Resort",
+      "short_name": "Big Bear",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "whiteface_mountain_ski_center_united_states_of_a",
+      "winter_sports_id": "428125408",
+      "display_name": "Whiteface Mountain Ski Center",
+      "short_name": "Whiteface Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "plattekill_mountain_ski_area_united_states_of_am",
+      "winter_sports_id": "457771644",
+      "display_name": "Plattekill Mountain Ski Area",
+      "short_name": "Plattekill Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "dry_hill_ski_area_united_states_of_america",
+      "winter_sports_id": "679909874",
+      "display_name": "Dry Hill Ski Area",
+      "short_name": "Dry Hill",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "holimont_united_states_of_america",
+      "winter_sports_id": "691516993",
+      "display_name": "Holimont",
+      "short_name": "Holimont",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "titus_mountain_united_states_of_america",
+      "winter_sports_id": "691518491",
+      "display_name": "Titus Mountain",
+      "short_name": "Titus Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "labrador_mountain_united_states_of_america",
+      "winter_sports_id": "691521199",
+      "display_name": "Labrador Mountain",
+      "short_name": "Labrador Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "song_mountain_resort_united_states_of_america",
+      "winter_sports_id": "691521200",
+      "display_name": "Song Mountain Resort",
+      "short_name": "Song Mountain Resort",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "greek_peak_mountain_resort_united_states_of_amer",
+      "winter_sports_id": "691521201",
+      "display_name": "Greek Peak Mountain Resort",
+      "short_name": "Greek Peak",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "brantling_ski_slopes_united_states_of_america",
+      "winter_sports_id": "910275239",
+      "display_name": "Brantling Ski Slopes",
+      "short_name": "Brantling Ski Slopes",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "mount_peter_united_states_of_america",
+      "winter_sports_id": "910582532",
+      "display_name": "Mount Peter",
+      "short_name": "Mount Peter",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "peek_n_peak_ski_area_united_states_of_america",
+      "winter_sports_id": "1024235364",
+      "display_name": "Peek'n Peak Ski Area",
+      "short_name": "Peek'n Peak",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "buffalo_ski_club_united_states_of_america",
+      "winter_sports_id": "1026073030",
+      "display_name": "Buffalo Ski Club",
+      "short_name": "Buffalo Ski Club",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "kissing_bridge_united_states_of_america",
+      "winter_sports_id": "1026091819",
+      "display_name": "Kissing Bridge",
+      "short_name": "Kissing Bridge",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "newcomb_ski_slope_united_states_of_america",
+      "winter_sports_id": "1085254496",
+      "display_name": "Newcomb Ski Slope",
+      "short_name": "Newcomb Ski Slope",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "mccauley_mountain_ski_area_united_states_of_amer",
+      "winter_sports_id": "1085935982",
+      "display_name": "McCauley Mountain Ski Area",
+      "short_name": "McCauley Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "catamount_mountain_resort_united_states_of_ameri",
+      "winter_sports_id": "1176086204",
+      "display_name": "Catamount Mountain Resort",
+      "short_name": "Catamount Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "victor_constant_ski_area_united_states_of_americ",
+      "winter_sports_id": "1214590684",
+      "display_name": "Victor Constant Ski Area",
+      "short_name": "Victor Constant",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "villa_roma_ski_area_united_states_of_america",
+      "winter_sports_id": "1222878706",
+      "display_name": "Villa Roma Ski Area",
+      "short_name": "Villa Roma",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "gore_mountain_united_states_of_america",
+      "winter_sports_id": "1238042221",
+      "display_name": "Gore Mountain",
+      "short_name": "Gore Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "hunt_hollow_ski_club_united_states_of_america",
+      "winter_sports_id": "1303060558",
+      "display_name": "Hunt Hollow Ski Club",
+      "short_name": "Hunt Hollow Ski Club",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "willard_mountain_united_states_of_america",
+      "winter_sports_id": "1366775255",
+      "display_name": "Willard Mountain",
+      "short_name": "Willard Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "maple_ski_ridge_united_states_of_america",
+      "winter_sports_id": "1367181096",
+      "display_name": "Maple Ski Ridge",
+      "short_name": "Maple Ski Ridge",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "woods_valley_united_states_of_america",
+      "winter_sports_id": "1420235319",
+      "display_name": "Woods Valley",
+      "short_name": "Woods Valley",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "mount_pisgah_ski_center_united_states_of_america",
+      "winter_sports_id": "1464128439",
+      "display_name": "Mount Pisgah Ski Center",
+      "short_name": "Mount Pisgah",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "tussey_mountain_united_states_of_america",
+      "winter_sports_id": "48782596",
+      "display_name": "Tussey Mountain",
+      "short_name": "Tussey Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "camelback_mountain_resort_united_states_of_ameri",
+      "winter_sports_id": "52067284",
+      "display_name": "Camelback Mountain Resort",
+      "short_name": "Camelback Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "seven_springs_mountain_resort_united_states_of_a",
+      "winter_sports_id": "256580493",
+      "display_name": "Seven Springs Mountain Resort",
+      "short_name": "Seven Springs",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "bear_creek_mountain_resort_ski_slopes_united_sta",
+      "winter_sports_id": "281594168",
+      "display_name": "Bear Creek Mountain Resort Ski Slopes",
+      "short_name": "Bear Creek",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "boyce_park_ski_area_united_states_of_america",
+      "winter_sports_id": "360578768",
+      "display_name": "Boyce Park Ski Area",
+      "short_name": "Boyce Park",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "jack_frost_mountain_resort_united_states_of_amer",
+      "winter_sports_id": "390163427",
+      "display_name": "Jack Frost Mountain Resort",
+      "short_name": "Jack Frost",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "big_boulder_ski_resort_area_united_states_of_ame",
+      "winter_sports_id": "390166745",
+      "display_name": "Big Boulder Ski Resort Area",
+      "short_name": "Big Boulder",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "eagle_rock_ski_resort_united_states_of_america",
+      "winter_sports_id": "390167295",
+      "display_name": "Eagle Rock Ski Resort",
+      "short_name": "Eagle Rock",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "liberty_mountain_resort_united_states_of_america",
+      "winter_sports_id": "390274626",
+      "display_name": "Liberty Mountain Resort",
+      "short_name": "Liberty Mountain Resort",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "blue_mountain_resort_united_states_of_america",
+      "winter_sports_id": "390536570",
+      "display_name": "Blue Mountain Resort",
+      "short_name": "Blue Mountain Resort",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "roundtop_mountain_resort_united_states_of_americ",
+      "winter_sports_id": "390539624",
+      "display_name": "Roundtop Mountain Resort",
+      "short_name": "Roundtop Mountain Resort",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "hidden_valley_resort_united_states_of_america",
+      "winter_sports_id": "398100052",
+      "display_name": "Hidden Valley Resort",
+      "short_name": "Hidden Valley Resort",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "elk_mountain_ski_resort_united_states_of_america",
+      "winter_sports_id": "422321232",
+      "display_name": "Elk Mountain Ski Resort",
+      "short_name": "Elk Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "mount_pleasant_of_edinboro_united_states_of_amer",
+      "winter_sports_id": "860101380",
+      "display_name": "Mount Pleasant of Edinboro",
+      "short_name": "Mount Pleasant",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "whitetail_resort_united_states_of_america",
+      "winter_sports_id": "893138900",
+      "display_name": "Whitetail Resort",
+      "short_name": "Whitetail Resort",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "laurel_mountain_ski_resort_united_states_of_amer",
+      "winter_sports_id": "1026204281",
+      "display_name": "Laurel Mountain Ski Resort",
+      "short_name": "Laurel Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "locust_lake_village_ski_hill_united_states_of_am",
+      "winter_sports_id": "1220179031",
+      "display_name": "Locust Lake Village Ski Hill",
+      "short_name": "Locust Lake",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "mystic_mountain_ski_area_united_states_of_americ",
+      "winter_sports_id": "1220411616",
+      "display_name": "Mystic Mountain Ski Area",
+      "short_name": "Mystic Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "the_hideout_united_states_of_america",
+      "winter_sports_id": "1220415879",
+      "display_name": "The Hideout",
+      "short_name": "The Hideout",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "skytop_s_ski_hill_united_states_of_america",
+      "winter_sports_id": "1220561371",
+      "display_name": "Skytop\u2019s Ski Hill",
+      "short_name": "Skytop\u2019s Ski Hill",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "saw_creek_estates_ski_area_united_states_of_amer",
+      "winter_sports_id": "1220661212",
+      "display_name": "Saw Creek Estates Ski Area",
+      "short_name": "Saw Creek Estates",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "pocono_ranch_lands_ski_mountain_united_states_of",
+      "winter_sports_id": "1220663798",
+      "display_name": "Pocono Ranch Lands Ski Mountain",
+      "short_name": "Pocono Ranch",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "blue_knob_united_states_of_america",
+      "winter_sports_id": "1221894855",
+      "display_name": "Blue Knob",
+      "short_name": "Blue Knob",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "shawnee_mountain_united_states_of_america",
+      "winter_sports_id": "1223350355",
+      "display_name": "Shawnee Mountain",
+      "short_name": "Shawnee Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "spring_mountain_ski_area_united_states_of_americ",
+      "winter_sports_id": "1223977161",
+      "display_name": "Spring Mountain Ski Area",
+      "short_name": "Spring Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "ski_sawmill_family_resort_united_states_of_ameri",
+      "winter_sports_id": "1235201198",
+      "display_name": "Ski Sawmill Family Resort",
+      "short_name": "Ski Sawmill",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "middlebury_college_snow_bowl_united_states_of_am",
+      "winter_sports_id": "32644222",
+      "display_name": "Middlebury College Snow Bowl",
+      "short_name": "Middlebury College",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "magic_mountain_ski_area_united_states_of_america",
+      "winter_sports_id": "452295412",
+      "display_name": "Magic Mountain Ski Area",
+      "short_name": "Magic Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "cochran_s_ski_area_united_states_of_america",
+      "winter_sports_id": "492412302",
+      "display_name": "Cochran's Ski Area",
+      "short_name": "Cochran's",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "stowe_mountain_resort_united_states_of_america",
+      "winter_sports_id": "620836496",
+      "display_name": "Stowe Mountain Resort",
+      "short_name": "Stowe Mountain Resort",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "lyndon_outing_club_united_states_of_america",
+      "winter_sports_id": "759623390",
+      "display_name": "Lyndon Outing Club",
+      "short_name": "Lyndon Outing Club",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "hard_ack_ski_area_united_states_of_america",
+      "winter_sports_id": "759625771",
+      "display_name": "Hard'Ack Ski Area",
+      "short_name": "Hard'Ack",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "northeast_slopes_united_states_of_america",
+      "winter_sports_id": "759657892",
+      "display_name": "Northeast Slopes",
+      "short_name": "Northeast Slopes",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "mount_snow_united_states_of_america",
+      "winter_sports_id": "860260235",
+      "display_name": "Mount Snow",
+      "short_name": "Mount Snow",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "bolton_valley_resort_united_states_of_america",
+      "winter_sports_id": "905237707",
+      "display_name": "Bolton Valley Resort",
+      "short_name": "Bolton Valley Resort",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "saskadena_six_united_states_of_america",
+      "winter_sports_id": "1079343060",
+      "display_name": "Saskadena Six",
+      "short_name": "Saskadena Six",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "ski_quechee_united_states_of_america",
+      "winter_sports_id": "1090312348",
+      "display_name": "Ski Quechee",
+      "short_name": "Ski Quechee",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "twin_farms_ski_hill_united_states_of_america",
+      "winter_sports_id": "1091013834",
+      "display_name": "Twin Farms Ski Hill",
+      "short_name": "Twin Farms Ski Hill",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "timber_ridge_united_states_of_america",
+      "winter_sports_id": "1092381874",
+      "display_name": "Timber Ridge",
+      "short_name": "Timber Ridge",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "mad_river_glen_united_states_of_america",
+      "winter_sports_id": "1094318196",
+      "display_name": "Mad River Glen",
+      "short_name": "Mad River Glen",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "jay_peak_resort_united_states_of_america",
+      "winter_sports_id": "1094522661",
+      "display_name": "Jay Peak Resort",
+      "short_name": "Jay Peak Resort",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "burke_mountain_resort_united_states_of_america",
+      "winter_sports_id": "1094524069",
+      "display_name": "Burke Mountain Resort",
+      "short_name": "Burke Mountain Resort",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "sugarbush_resort_united_states_of_america",
+      "winter_sports_id": "1094579154",
+      "display_name": "Sugarbush Resort",
+      "short_name": "Sugarbush Resort",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "pico_mountain_resort_united_states_of_america",
+      "winter_sports_id": "1094586461",
+      "display_name": "Pico Mountain Resort",
+      "short_name": "Pico Mountain Resort",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "bromley_mountain_ski_resort_united_states_of_ame",
+      "winter_sports_id": "1096045891",
+      "display_name": "Bromley Mountain Ski Resort",
+      "short_name": "Bromley Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "harrington_hill_united_states_of_america",
+      "winter_sports_id": "1105825771",
+      "display_name": "Harrington Hill",
+      "short_name": "Harrington Hill",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "the_hermitage_club_at_haystack_mountain_united_s",
+      "winter_sports_id": "1107767240",
+      "display_name": "The Hermitage Club at Haystack Mountain",
+      "short_name": "The Hermitage",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "smugglers_notch_resort_united_states_of_america",
+      "winter_sports_id": "1228354294",
+      "display_name": "Smugglers' Notch Resort",
+      "short_name": "Smugglers' Notch Resort",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "killington_resort_united_states_of_america",
+      "winter_sports_id": "1228774360",
+      "display_name": "Killington Resort",
+      "short_name": "Killington Resort",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "okemo_mountain_united_states_of_america",
+      "winter_sports_id": "1236284348",
+      "display_name": "Okemo Mountain",
+      "short_name": "Okemo Mountain",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "ascutney_outdoors_united_states_of_america",
+      "winter_sports_id": "1366784190",
+      "display_name": "Ascutney Outdoors",
+      "short_name": "Ascutney Outdoors",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "brattleboro_ski_hill_united_states_of_america",
+      "winter_sports_id": "1367080701",
+      "display_name": "Brattleboro Ski Hill",
+      "short_name": "Brattleboro Ski Hill",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "bellows_falls_ski_tow_united_states_of_america",
+      "winter_sports_id": "1367310450",
+      "display_name": "Bellows Falls Ski Tow",
+      "short_name": "Bellows Falls Ski Tow",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
+    },
+    {
+      "id": "stratton_mountain_resort_united_states_of_americ",
+      "winter_sports_id": "1367311040",
+      "display_name": "Stratton Mountain Resort",
+      "short_name": "Stratton Mountain Resort",
+      "continent": "north_america",
+      "region_label": "North America",
+      "country": "United States of America",
+      "playable_ver": null
     }
   ]
 }

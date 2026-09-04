@@ -97,6 +97,17 @@ Upload to S3 (public `clay_scenes/` prefix, same bucket as `game_scenes/`):
 python scripts/upload_clay_scenes.py
 ```
 
+Batch export toward the full catalog (~2k resorts, 10 at a time, mixed sizes):
+
+```powershell
+python scripts/bake_clay_scene_batches.py --pick-only          # preview next 10
+python scripts/bake_clay_scene_batches.py                      # export 1 batch of 10
+python scripts/bake_clay_scene_batches.py --upload             # export + upload
+python scripts/bake_clay_scene_batches.py --max-batches 0      # run until queue empty
+```
+
+Progress is tracked in `config/clay_scenes/_progress.json` (done / failed winter_sports_ids).
+
 Copy into **GlobalSkiAtlas_2**:
 
 ```powershell

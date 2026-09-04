@@ -153,6 +153,27 @@ def build_tree_point_features(
     return feats
 
 
+def _is_lift_pylon_or_station(props: dict[str, Any]) -> bool:
+    aerial = str(props.get("aerialway") or "").lower().replace("-", "_").replace(" ", "_")
+    if aerial in {"pylon", "station", "goods"}:
+        return True
+    tags = props.get("tags") if isinstance(props.get("tags"), dict) else {}
+    other = str(props.get("other_tags") or tags.get("other_tags") or "")
+    if '"aerialway"=>"pylon"' in other or '"aerialway"=>"station"' in other:
+        return True
+    return False
+
+
+def _is_xc_or_nordic_piste(props: dict[str, Any]) -> bool:
+    ptype = str(props.get("piste_type") or props.get("piste:type") or "").lower()
+    if ptype in {"nordic", "skitour", "hike", "sled", "sleigh", "snowshoe"}:
+        return True
+    name = str(props.get("name") or "").lower()
+    if " xc " in f" {name} " or name.endswith(" xc") or "nordic" in name or "catamount trail" in name:
+        return True
+    return False
+
+
 def write_homepage_vectors(
     out: Path,
     *,
@@ -178,15 +199,26 @@ def write_homepage_vectors(
     vectors_dir = out / "vectors"
     vectors_dir.mkdir(parents=True, exist_ok=True)
 
+    piste_src = [
+        f
+        for f in (layers.get("pistes") or [])
+        if not _is_xc_or_nordic_piste(f.get("properties") or {})
+    ]
     trail_feats = build_piste_trail_features(
-        layers.get("pistes") or [],
+        piste_src,
         elev,
         transform,
         local,
         cfg,
     )
     write_local_geojson(vectors_dir / "piste-trails.geojson", trail_feats, local, "piste-trails")
-    write_local_geojson(vectors_dir / "lifts.geojson", layers.get("lifts") or [], local, "lifts")
+
+    lift_feats = [
+        f
+        for f in (layers.get("lifts") or [])
+        if not _is_lift_pylon_or_station(f.get("properties") or {})
+    ]
+    write_local_geojson(vectors_dir / "lifts.geojson", lift_feats, local, "lifts")
     tree_feats = build_tree_point_features(
         layers.get("forest") or [],
         elev,
@@ -196,10 +228,40 @@ def write_homepage_vectors(
     )
     write_local_geojson(vectors_dir / "tree-points.geojson", tree_feats, local, "tree-points")
 
+    # Island rim for the wiki clay viewer (convex AOI in local meters).
+    try:
+        from shapely.geometry import mapping as shp_mapping
+
+        poly_local = None
+        ski = inputs.ski_area
+        if ski is not None and getattr(ski, "geometry", None) is not None:
+            from game_export.coords import geom_to_local, geom_to_projected
+
+            poly_local = geom_to_local(geom_to_projected(ski.geometry, to_proj), local)
+        if poly_local is not None and not poly_local.is_empty:
+            buf = poly_local.buffer(80)  # meters
+            write_local_geojson(
+                vectors_dir / "ski-area-buffer.geojson",
+                [
+                    {
+                        "type": "Feature",
+                        "geometry": shp_mapping(buf),
+                        "properties": {
+                            "winter_sports_id": cfg.winter_sports_id,
+                            "kind": "ski_area_buffer",
+                        },
+                    }
+                ],
+                local,
+                "ski-area-buffer",
+            )
+    except Exception as exc:
+        log.warning("ski-area-buffer write skipped: %s", exc)
+
     counts = {
-        "pistes": len(layers.get("pistes") or []),
+        "pistes": len(piste_src),
         "piste_trails": len(trail_feats),
-        "lifts": len(layers.get("lifts") or []),
+        "lifts": len(lift_feats),
         "forest": len(layers.get("forest") or []),
         "tree_points": len(tree_feats),
     }
