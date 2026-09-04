@@ -45,7 +45,7 @@ def main() -> int:
     inputs = resolve_inputs(REPO / "output", cfg, REPO / "cache", fetch_skadi=False)
     to_proj, _ = make_transformers(local.projected_crs)
     layers, repairs = collect_layers(
-        inputs.osm_nearby, inputs.pistes, inputs.lifts, to_proj, local, cfg
+        inputs.osm_nearby, inputs.pistes, inputs.lifts, to_proj, local, cfg, mode="game"
     )
     add_ski_area_polygon(layers, inputs.ski_polygon, to_proj, local, repairs)
     vec = scene / "vectors"

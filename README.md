@@ -77,7 +77,7 @@ python -m game_export --resort montage_mountain_pa --clay-scene --force
 
 (`--homepage-scene` is a compat alias for `--clay-scene`.)
 
-Output: `output/clay_scenes/<resort_id>/` (`scene-manifest.json`, Draco `terrain-mesh.glb`, OSM vectors, attribution, `ski-area-buffer` when available). Default vertex spacing is 12 m; larger resorts auto-coarsen until the mesh is under 1 MB.
+Output: `output/clay_scenes/<resort_id>/` (`scene-manifest.json`, Draco `terrain-mesh.glb`, downhill/snowpark `piste-trails`, lifts, forest polygons for client-side tree planting, `ski-area-buffer` when available). Export stripdown drops roads, admin, XC/sled, and point geometries. Default vertex spacing is 12 m; larger resorts auto-coarsen until the mesh is under 1 MB.
 
 **ID contract:** Wiki joins on `winter_sports_id` → catalog `id` → folder `clay_scenes/{id}/`. Do **not** use wiki `pageId` (different slug scheme). Catalog: `config/clay_scenes/catalog.json` (copied to the site as `clay_scenes/catalog.json`).
 

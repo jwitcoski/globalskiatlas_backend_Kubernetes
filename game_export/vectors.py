@@ -6,13 +6,19 @@ import logging
 from pathlib import Path
 from typing import Any, Optional
 
-import geopandas as gpd
 from shapely.geometry import mapping
 from shapely.validation import explain_validity, make_valid
 
 from game_export.config import GameExportConfig
 from game_export.coords import LocalCRS, geom_to_local, geom_to_projected
 from game_export import jsonutil
+from game_export.osm_stripdown import (
+    ROCK_NATURALS,
+    is_keep_piste,
+    is_lift_pylon_or_station,
+    layer_keep_for_mode,
+    prefer_line_piste_features,
+)
 
 log = logging.getLogger("game_export")
 
@@ -85,6 +91,8 @@ def project_and_local(geom, to_proj, local: LocalCRS, repairs: list):
         g = make_valid(g)
         if g is None or g.is_empty:
             return None
+    if g.geom_type in ("Point", "MultiPoint"):
+        return None
     gp = geom_to_projected(g, to_proj)
     return geom_to_local(gp, local)
 
@@ -96,6 +104,8 @@ def collect_layers(
     to_proj,
     local: LocalCRS,
     cfg: GameExportConfig,
+    *,
+    mode: str = "game",
 ) -> tuple[dict[str, list], list]:
     repairs: list = []
     layers: dict[str, list] = {
@@ -111,9 +121,12 @@ def collect_layers(
         "ski_area": [],
         "barriers": [],
     }
+    keep_layers = layer_keep_for_mode("clay" if mode == "clay" else "game")
     seen: set[tuple] = set()
 
     def add(layer: str, row, geom_local, extra: dict | None = None):
+        if layer not in keep_layers:
+            return
         tags = parse_tags(row.get("tags") if hasattr(row, "get") else None)
         # ogr geojson may flatten tags onto columns
         for col in getattr(row, "index", []):
@@ -157,6 +170,8 @@ def collect_layers(
 
     # Dedicated pistes / lifts tables
     for i, row in iter_rows(pistes):
+        if not is_keep_piste(row):
+            continue
         geom = project_and_local(row.geometry, to_proj, local, repairs)
         if geom is None:
             continue
@@ -165,6 +180,8 @@ def collect_layers(
         add("pistes", row, geom, {"piste_type": ptype})
 
     for i, row in iter_rows(lifts):
+        if is_lift_pylon_or_station(row):
+            continue
         geom = project_and_local(row.geometry, to_proj, local, repairs)
         if geom is None:
             continue
@@ -190,11 +207,15 @@ def collect_layers(
             return geom
 
         ptype = tag(tags, "piste:type")
-        if ptype == "downhill" or (ptype and "ski" in ptype.lower()):
+        if ptype:
+            if not is_keep_piste(row):
+                continue
             g = need()
             if g:
                 add("pistes", row, g, {"piste_type": ptype})
         elif tag(tags, "aerialway"):
+            if is_lift_pylon_or_station(row):
+                continue
             g = need()
             if g:
                 add("lifts", row, g, {"aerialway": tag(tags, "aerialway")})
@@ -206,53 +227,39 @@ def collect_layers(
             g = need()
             if g:
                 add("water", row, g)
-        elif tag(tags, "natural") in {"wood"} or tag(tags, "landuse") == "forest" or tag(tags, "natural") == "tree":
+        elif tag(tags, "natural") in {"wood"} or tag(tags, "landuse") == "forest":
+            # Polygons only — natural=tree points are dropped in project_and_local.
             g = need()
-            if g:
+            if g and g.geom_type in ("Polygon", "MultiPolygon"):
                 add("forest", row, g)
-        elif tag(tags, "natural") == "cliff":
+        elif (tag(tags, "natural") or "").lower() in ROCK_NATURALS:
             g = need()
             if g:
-                add("cliffs", row, g)
-        elif tag(tags, "highway"):
-            g = need()
-            if g:
-                add("roads", row, g, {"highway": tag(tags, "highway")})
-        elif tag(tags, "amenity") == "parking":
-            g = need()
-            if g:
-                add("parking", row, g)
+                add(
+                    "cliffs",
+                    row,
+                    g,
+                    {"natural": tag(tags, "natural"), "kind": "rock_outcrop"},
+                )
         elif tag(tags, "landuse") in {"winter_sports"} or tag(tags, "sport") == "skiing":
             g = need()
             if g:
                 add("ski_area", row, g)
-        elif tag(tags, "natural") in {"grassland", "grass", "scrub", "fell"} or tag(tags, "landuse") in {
-            "meadow",
-            "grass",
-            "recreation_ground",
-        }:
-            g = need()
-            if g:
-                add("grassland", row, g, {"cover": tag(tags, "natural") or tag(tags, "landuse")})
-        elif tag(tags, "barrier"):
-            g = need()
-            if g:
-                add("barriers", row, g, {"barrier": tag(tags, "barrier")})
+        # roads / parking / grassland / barriers intentionally omitted (export stripdown)
+
+    layers["pistes"] = prefer_line_piste_features(layers["pistes"])
 
     log.info(
-        "OSM layers: pistes=%s lifts=%s buildings=%s water=%s forest=%s cliffs=%s roads=%s "
-        "grassland=%s parking=%s ski_area=%s barriers=%s repairs=%s",
+        "OSM layers (%s): pistes=%s lifts=%s buildings=%s water=%s forest=%s cliffs=%s "
+        "ski_area=%s repairs=%s (roads/parking/grassland/barriers stripped)",
+        mode,
         len(layers["pistes"]),
         len(layers["lifts"]),
         len(layers["buildings"]),
         len(layers["water"]),
         len(layers["forest"]),
         len(layers["cliffs"]),
-        len(layers["roads"]),
-        len(layers["grassland"]),
-        len(layers["parking"]),
         len(layers["ski_area"]),
-        len(layers["barriers"]),
         len(repairs),
     )
     return layers, repairs

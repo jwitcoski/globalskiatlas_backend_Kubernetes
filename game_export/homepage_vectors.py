@@ -1,18 +1,20 @@
-"""OSM piste/lift vectors for the homepage hero scene."""
+"""OSM piste/lift/forest vectors for the clay homepage / wiki scene."""
 from __future__ import annotations
 
 import logging
-import random
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-from shapely.geometry import LineString, Point, mapping, shape
+from shapely.geometry import LineString, mapping, shape
 
 from game_export.config import GameExportConfig
 from game_export.coords import LocalCRS
+from game_export.osm_stripdown import (
+    is_keep_piste,
+    is_lift_pylon_or_station,
+    prefer_line_piste_features,
+)
 from game_export.routes import _as_lines, densify_line, polygon_descent_flowline
-from game_export.terrain import sample_elev
 from game_export.vectors import collect_layers, write_local_geojson
 
 log = logging.getLogger("game_export")
@@ -28,6 +30,8 @@ _PROP_KEYS = (
     "aerialway",
     "tags",
     "other_tags",
+    "landuse",
+    "natural",
 )
 
 
@@ -49,9 +53,12 @@ def build_piste_trail_features(
     spacing_m: float = 16.0,
     min_length_m: float = 18.0,
 ) -> list[dict]:
-    """Downhill centerlines for every mapped OSM piste (lines + polygon flowlines)."""
+    """Downhill centerlines: prefer mapped lines; polygon-only → descent flowline."""
+    src = prefer_line_piste_features(
+        [f for f in piste_features if is_keep_piste(f.get("properties") or {})]
+    )
     trails: list[dict] = []
-    for feat in piste_features:
+    for feat in src:
         props = feat.get("properties") or {}
         geom = shape(feat["geometry"])
         lines: list[LineString] = []
@@ -77,101 +84,28 @@ def build_piste_trail_features(
     return trails
 
 
-def _forest_polygons(forest_features: list[dict]) -> list:
-    polys = []
+def _forest_polygon_features(forest_features: list[dict]) -> list[dict]:
+    """Keep wood/forest polygons only (client plants an even grid from these)."""
+    out: list[dict] = []
     for feat in forest_features:
-        geom = shape(feat["geometry"])
-        if geom.geom_type == "Polygon":
-            polys.append(geom)
-        elif geom.geom_type == "MultiPolygon":
-            polys.extend(geom.geoms)
-    return [p for p in polys if not p.is_empty and p.area > 25]
-
-
-def build_tree_point_features(
-    forest_features: list[dict],
-    elev,
-    transform,
-    local: LocalCRS,
-    *,
-    forest_count: int = 480,
-    scatter_count: int = 200,
-    seed: int = 20260823,
-) -> list[dict]:
-    """Pre-placed bright-tree locations in OSM forest + open slopes."""
-    rng = random.Random(seed)
-    feats: list[dict] = []
-
-    def add_point(x: float, y: float) -> bool:
-        z = sample_elev(elev, transform, x + local.origin_easting_m, y + local.origin_northing_m)
-        if not np.isfinite(z):
-            return False
-        feats.append(
+        try:
+            geom = shape(feat["geometry"])
+        except Exception:
+            continue
+        if geom.is_empty or geom.geom_type not in ("Polygon", "MultiPolygon"):
+            continue
+        if geom.area <= 25:
+            continue
+        props = _copy_props(feat.get("properties") or {})
+        props.setdefault("natural", "wood")
+        out.append(
             {
                 "type": "Feature",
-                "geometry": {"type": "Point", "coordinates": [x, y]},
-                "properties": {"elevation_m": float(z), "kind": "tree"},
+                "geometry": mapping(geom),
+                "properties": props,
             }
         )
-        return True
-
-    polys = _forest_polygons(forest_features)
-    if polys:
-        areas = [p.area for p in polys]
-        total = sum(areas)
-        for poly, area in zip(polys, areas):
-            target = max(2, int(round(forest_count * area / total)))
-            minx, miny, maxx, maxy = poly.bounds
-            added = 0
-            tries = 0
-            while added < target and tries < target * 30:
-                tries += 1
-                x = rng.uniform(minx, maxx)
-                y = rng.uniform(miny, maxy)
-                if not poly.contains(Point(x, y)):
-                    continue
-                if add_point(x, y):
-                    added += 1
-
-    rows, cols = elev.shape
-    cell = abs(float(transform.a))
-    margin = cell * 3
-    max_e = cols * cell - margin
-    max_n = rows * cell - margin
-    added = 0
-    tries = 0
-    while added < scatter_count and tries < scatter_count * 40:
-        tries += 1
-        x = rng.uniform(margin, max_e)
-        y = rng.uniform(margin, max_n)
-        in_forest = any(p.contains(Point(x, y)) for p in polys) if polys else False
-        if in_forest and rng.random() < 0.65:
-            continue
-        if add_point(x, y):
-            added += 1
-
-    return feats
-
-
-def _is_lift_pylon_or_station(props: dict[str, Any]) -> bool:
-    aerial = str(props.get("aerialway") or "").lower().replace("-", "_").replace(" ", "_")
-    if aerial in {"pylon", "station", "goods"}:
-        return True
-    tags = props.get("tags") if isinstance(props.get("tags"), dict) else {}
-    other = str(props.get("other_tags") or tags.get("other_tags") or "")
-    if '"aerialway"=>"pylon"' in other or '"aerialway"=>"station"' in other:
-        return True
-    return False
-
-
-def _is_xc_or_nordic_piste(props: dict[str, Any]) -> bool:
-    ptype = str(props.get("piste_type") or props.get("piste:type") or "").lower()
-    if ptype in {"nordic", "skitour", "hike", "sled", "sleigh", "snowshoe"}:
-        return True
-    name = str(props.get("name") or "").lower()
-    if " xc " in f" {name} " or name.endswith(" xc") or "nordic" in name or "catamount trail" in name:
-        return True
-    return False
+    return out
 
 
 def write_homepage_vectors(
@@ -192,6 +126,7 @@ def write_homepage_vectors(
         to_proj,
         local,
         cfg,
+        mode="clay",
     )
     if repairs is not None:
         repairs.extend(layer_repairs)
@@ -202,7 +137,7 @@ def write_homepage_vectors(
     piste_src = [
         f
         for f in (layers.get("pistes") or [])
-        if not _is_xc_or_nordic_piste(f.get("properties") or {})
+        if is_keep_piste(f.get("properties") or {})
     ]
     trail_feats = build_piste_trail_features(
         piste_src,
@@ -216,17 +151,16 @@ def write_homepage_vectors(
     lift_feats = [
         f
         for f in (layers.get("lifts") or [])
-        if not _is_lift_pylon_or_station(f.get("properties") or {})
+        if not is_lift_pylon_or_station(f.get("properties") or {})
     ]
     write_local_geojson(vectors_dir / "lifts.geojson", lift_feats, local, "lifts")
-    tree_feats = build_tree_point_features(
-        layers.get("forest") or [],
-        elev,
-        transform,
-        local,
-        seed=cfg.seed,
-    )
-    write_local_geojson(vectors_dir / "tree-points.geojson", tree_feats, local, "tree-points")
+
+    forest_feats = _forest_polygon_features(layers.get("forest") or [])
+    write_local_geojson(vectors_dir / "forest.geojson", forest_feats, local, "forest")
+    # Remove legacy tree-points if rebuilding an existing folder.
+    legacy_trees = vectors_dir / "tree-points.geojson"
+    if legacy_trees.is_file():
+        legacy_trees.unlink()
 
     # Island rim for the wiki clay viewer (convex AOI in local meters).
     try:
@@ -262,15 +196,14 @@ def write_homepage_vectors(
         "pistes": len(piste_src),
         "piste_trails": len(trail_feats),
         "lifts": len(lift_feats),
-        "forest": len(layers.get("forest") or []),
-        "tree_points": len(tree_feats),
+        "forest": len(forest_feats),
+        "tree_points": 0,
     }
     log.info(
-        "Homepage vectors: pistes=%s trail_lines=%s lifts=%s forest=%s trees=%s",
+        "Homepage vectors: pistes=%s trail_lines=%s lifts=%s forest_polys=%s",
         counts["pistes"],
         counts["piste_trails"],
         counts["lifts"],
         counts["forest"],
-        counts["tree_points"],
     )
     return counts

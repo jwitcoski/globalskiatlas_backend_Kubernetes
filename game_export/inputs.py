@@ -615,9 +615,14 @@ def resolve_inputs(
     lifts = filter_by_ski(lifts, cfg, polygon)
     if elev_pts is not None and "winter_sports_id" in elev_pts.columns:
         elev_pts = elev_pts[_id_match(elev_pts["winter_sports_id"], cfg.winter_sports_id)].copy()
-    # Pylons inflate the DEM hull without adding usable lift runs.
-    if lifts is not None and not lifts.empty:
-        lifts = _drop_lift_pylons(lifts)
+    # Export-ready stripdown: downhill/snowpark only, no points/roads/admin,
+    # line-prefer pistes, hard AOI clip. Mode stays "game" here so clay + game
+    # share the same thinned inputs; clay writers simply omit unused layers.
+    from game_export.osm_stripdown import strip_for_export
+
+    osm, pistes, lifts = strip_for_export(
+        osm, pistes, lifts, polygon, mode="game"
+    )
     coverage = osm_feature_hull(osm, pistes, lifts)
     if coverage is None:
         coverage = polygon
