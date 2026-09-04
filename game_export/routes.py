@@ -14,6 +14,7 @@ from game_export.config import GameExportConfig
 from game_export.coords import LocalCRS, bearing_deg
 from game_export.terrain import sample_elev
 from game_export import jsonutil
+from game_export.osm_stripdown import is_keep_piste, prefer_line_piste_features
 
 log = logging.getLogger("game_export")
 
@@ -213,6 +214,9 @@ def build_routes(
 ) -> dict:
     routes = []
     center_feats = []
+    piste_features = prefer_line_piste_features(
+        [f for f in (piste_features or []) if is_keep_piste(f.get("properties") or {})]
+    )
     for i, feat in enumerate(piste_features):
         geom = shape(feat["geometry"])
         props = feat.get("properties") or {}

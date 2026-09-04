@@ -1,0 +1,89 @@
+# Upload staged clay scene(s) under deploy_clay/ to the public clay_scenes prefix.
+# Uses PutObject only (github-actions IAM user has no s3:ListBucket).
+name: Upload clay scenes
+
+on:
+  push:
+    paths:
+      - "deploy_clay/**"
+      - ".github/workflows/upload-clay-scenes.yml"
+  workflow_dispatch:
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Upload deploy_clay scenes
+        env:
+          BUCKET: globalskiatlas-backend-k8s-output
+          PREFIX: clay_scenes
+        run: |
+          set -euo pipefail
+          if [[ ! -d deploy_clay ]]; then
+            echo "No deploy_clay/ directory"
+            exit 1
+          fi
+          uploaded=0
+          while IFS= read -r -d '' scene; do
+            rid="$(basename "$scene")"
+            echo "Uploading $rid"
+            while IFS= read -r -d '' f; do
+              rel="${f#${scene}/}"
+              key="$PREFIX/$rid/$rel"
+              case "$f" in
+                *.json) ct="application/json; charset=utf-8" ;;
+                *.geojson) ct="application/geo+json" ;;
+                *.glb) ct="model/gltf-binary" ;;
+                *.md) ct="text/markdown; charset=utf-8" ;;
+                *.bin) ct="application/octet-stream" ;;
+                *) ct="application/octet-stream" ;;
+              esac
+              echo "  -> s3://$BUCKET/$key"
+              aws s3api put-object \
+                --bucket "$BUCKET" \
+                --key "$key" \
+                --body "$f" \
+                --content-type "$ct" \
+                --cache-control "public, max-age=300" \
+                --server-side-encryption AES256 \
+                >/dev/null
+            done < <(find "$scene" -type f -print0)
+            uploaded=$((uploaded + 1))
+          done < <(find deploy_clay -mindepth 1 -maxdepth 1 -type d -print0)
+
+          if [[ -f deploy_clay/catalog.json ]]; then
+            echo "Uploading catalog.json"
+            aws s3api put-object \
+              --bucket "$BUCKET" \
+              --key "$PREFIX/catalog.json" \
+              --body deploy_clay/catalog.json \
+              --content-type "application/json; charset=utf-8" \
+              --cache-control "public, max-age=60" \
+              --server-side-encryption AES256 \
+              >/dev/null
+          fi
+          echo "Uploaded $uploaded scene(s)"
+          test "$uploaded" -gt 0
+
+      - name: Invalidate CloudFront clay_scenes
+        continue-on-error: true
+        env:
+          DIST_ID: E3BDMTLYF8G4VB
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "$DIST_ID" \
+            --paths \
+              "/clay_scenes/catalog.json" \
+              "/clay_scenes/killington_resort_united_states_of_america/*" \
+            || echo "CloudFront invalidation skipped (IAM may lack cloudfront:CreateInvalidation)"

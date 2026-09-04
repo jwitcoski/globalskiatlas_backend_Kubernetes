@@ -1,0 +1,12 @@
+{
+  "osm": {
+    "attribution": "\u00a9 OpenStreetMap contributors",
+    "license": "ODbL 1.0",
+    "url": "https://www.openstreetmap.org/copyright"
+  },
+  "dem": {
+    "provider": "Mapzen Skadi / AWS Terrain Tiles",
+    "url": "https://elevation-tiles-prod.s3.amazonaws.com/skadi",
+    "license_notes": "Public elevation tiles; see AWS Open Data Terrain Tiles registry"
+  }
+}

@@ -15,6 +15,8 @@ from rasterio.crs import CRS
 from rasterio.transform import from_bounds
 from shapely.geometry import Point
 from shapely.ops import unary_union
+import math
+import pandas as pd
 
 from game_export.config import GameExportConfig, REPO_ROOT
 from game_export.s3_inputs import (
@@ -120,6 +122,9 @@ def _ski_row_from_parquet(path: Path, cfg: GameExportConfig) -> Optional[gpd.Geo
 def find_ski_area(data_root: Path, cfg: GameExportConfig) -> tuple[gpd.GeoSeries, Path]:
     paths = _ski_area_parquet_paths(data_root, cfg)
     if not paths:
+        synth = synthetic_ski_row_from_analyzed(cfg, data_root)
+        if synth is not None:
+            return synth
         raise FileNotFoundError(
             "ski_areas.parquet not found. Expected under "
             f"{data_root / cfg.region} or {data_root / 'combined'}. "
@@ -131,6 +136,9 @@ def find_ski_area(data_root: Path, cfg: GameExportConfig) -> tuple[gpd.GeoSeries
         if row is not None:
             return row, path.parent
         last_detail = f"id {cfg.winter_sports_id} not in {path} (or no polygon)"
+    synth = synthetic_ski_row_from_analyzed(cfg, data_root)
+    if synth is not None:
+        return synth
     raise RuntimeError(
         f"Ski area winter_sports_id={cfg.winter_sports_id} not found. {last_detail}"
     )
@@ -232,6 +240,31 @@ def osm_feature_hull(*gdfs) -> Any:
     return unary_union(geoms).convex_hull
 
 
+def _drop_lift_pylons(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Remove aerialway=pylon/station rows so DEM hull tracks real lift lines."""
+    if gdf is None or getattr(gdf, "empty", True):
+        return gdf
+    import re
+
+    keep = []
+    for _, row in gdf.iterrows():
+        aerial = ""
+        if "aerialway" in gdf.columns and row.get("aerialway") is not None:
+            aerial = str(row.get("aerialway") or "").lower()
+        other = str(row.get("other_tags") or "")
+        if not aerial:
+            m = re.search(r'aerialway"=>"([^"]+)', other)
+            if m:
+                aerial = m.group(1).lower()
+        aerial = aerial.replace("-", "_").replace(" ", "_")
+        keep.append(aerial not in {"pylon", "station", "goods"})
+    if all(keep):
+        return gdf
+    out = gdf.loc[keep].copy()
+    log.info("Dropped %s lift pylons/stations (%s remain)", int(len(gdf) - len(out)), len(out))
+    return out
+
+
 def _dem_valid_over_geom(path: Path, geom) -> bool:
     """True when the GeoTIFF covers *geom* with real elevations (not ski-AOI nodata)."""
     if geom is None or geom.is_empty or not path.is_file():
@@ -321,17 +354,69 @@ def resolve_dem(
 
 
 def filter_by_ski(gdf: Optional[gpd.GeoDataFrame], cfg: GameExportConfig, polygon) -> Optional[gpd.GeoDataFrame]:
+    """Keep features for this resort; avoid sucking in neighbors via a loose bbox.
+
+    Prefer ``Ski Area`` / name match to the resort display name when present (Killington
+    must not pull Pico). Fall back to winter_sports_id, then a tight spatial clip.
+    """
     if gdf is None or gdf.empty:
         return gdf
     out = gdf
-    if "winter_sports_id" in gdf.columns:
+    matched = False
+    target = (cfg.display_name or "").strip().casefold()
+    # Strip common suffixes so "Killington Resort" matches "Killington"
+    target_core = target
+    for suffix in (" ski resort", " ski area", " ski center", " ski centre", " resort", " mountain"):
+        if target_core.endswith(suffix) and len(target_core) > len(suffix) + 2:
+            target_core = target_core[: -len(suffix)].strip()
+            break
+
+    def _name_match(series) -> Any:
+        s = series.fillna("").astype(str).str.strip().str.casefold()
+        if not target:
+            return s.str.len() < 0  # empty mask
+        exact = s == target
+        if target_core and target_core != target:
+            soft = s.str.contains(target_core, regex=False)
+            return exact | soft
+        return exact | s.str.contains(target, regex=False)
+
+    for col in ("Ski Area", "ski_area", "name"):
+        if col not in gdf.columns or not target:
+            continue
+        m = _name_match(gdf[col])
+        if m.any():
+            out = gdf[m].copy()
+            matched = True
+            log.info(
+                "filter_by_ski: %s name match on %s → %s features (target=%r)",
+                cfg.resort_id,
+                col,
+                len(out),
+                cfg.display_name,
+            )
+            break
+
+    if not matched and "winter_sports_id" in gdf.columns:
         m = _id_match(gdf["winter_sports_id"], cfg.winter_sports_id)
         if m.any():
             out = gdf[m].copy()
-    # Spatial clip as additional filter / when statewide lifts/pistes lack ids
+            matched = True
+
+    # Spatial clip: tight when we already name-matched; slightly wider as sole filter.
     try:
-        buf = polygon.buffer(0.02)  # ~2 km in degrees, coarse prefilter
+        pad_deg = 0.004 if matched else 0.01  # ~0.3–0.8 km
+        buf = polygon.buffer(pad_deg)
+        before = len(out)
         out = out[out.geometry.intersects(buf)].copy()
+        if before and len(out) < before:
+            log.info(
+                "filter_by_ski: %s spatial clip %s → %s (pad=%.3f°)",
+                cfg.resort_id,
+                before,
+                len(out),
+                pad_deg,
+            )
     except Exception as exc:
         log.warning("Spatial prefilter skipped: %s", exc)
     return out
@@ -352,6 +437,82 @@ def _fetch_s3_parquet(
         parquet_key_candidates(cfg.region, name, allow_combined=allow_combined),
         cache_dir,
     )
+
+
+def _analyzed_paths(data_root: Path) -> list[Path]:
+    out = []
+    for p in (
+        data_root / "combined" / "ski_areas_analyzed.parquet",
+        REPO_ROOT / "output" / "combined" / "ski_areas_analyzed.parquet",
+    ):
+        if p.is_file() and p not in out:
+            out.append(p)
+    return out
+
+
+def _buffer_radius_m(area_ha: float) -> float:
+    """Radius for a synthetic circular AOI when winter_sports polygon is missing."""
+    ha = max(float(area_ha or 0), 0.25)
+    # Circle covering skiable ha, floored at ~350 m / capped at 2.5 km for clay meshes.
+    r = math.sqrt(ha * 10_000.0 / math.pi) * 1.8
+    return float(min(max(r, 350.0), 2500.0))
+
+
+def synthetic_ski_row_from_analyzed(
+    cfg: GameExportConfig,
+    data_root: Path,
+) -> Optional[tuple[gpd.GeoSeries, Path]]:
+    """Last-resort AOI from ski_areas_analyzed centroids when ski_areas.parquet lacks the id.
+
+    Tiny / incomplete OSM winter_sports ways often appear in analyzed stats but not in
+    the polygon extract. Clay export only needs a bounded AOI + DEM + nearby vectors.
+    """
+    for path in _analyzed_paths(data_root):
+        try:
+            df = pd.read_parquet(path)
+        except Exception as exc:
+            log.warning("Could not read analyzed parquet %s: %s", path, exc)
+            continue
+        if "winter_sports_id" not in df.columns:
+            continue
+        hit = df[_id_match(df["winter_sports_id"], cfg.winter_sports_id)]
+        if hit.empty:
+            continue
+        row = hit.iloc[0]
+        try:
+            lat = float(row.get("centroid_lat"))
+            lon = float(row.get("centroid_lon"))
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(lat) or not math.isfinite(lon):
+            continue
+        try:
+            ha = float(row.get("skiable_terrain_ha") or 0)
+        except (TypeError, ValueError):
+            ha = 0.0
+        radius_m = _buffer_radius_m(ha)
+        lat_m = 111_320.0
+        lon_m = max(111_320.0 * math.cos(math.radians(lat)), 1.0)
+        from shapely.affinity import scale
+
+        geom = scale(Point(lon, lat).buffer(1.0), xfact=radius_m / lon_m, yfact=radius_m / lat_m)
+        props = {
+            "winter_sports_id": cfg.winter_sports_id,
+            "name": str(row.get("english_name") or row.get("name") or cfg.display_name),
+            "Country": str(row.get("country") or cfg.country or ""),
+            "region": str(row.get("region") or cfg.region),
+            "_synthetic_aoi": True,
+            "_synthetic_radius_m": radius_m,
+        }
+        gdf = gpd.GeoDataFrame([{**props, "geometry": geom}], geometry="geometry", crs="EPSG:4326")
+        log.warning(
+            "Synthesized ski AOI for %s from analyzed centroid (r≈%.0fm); "
+            "id missing from ski_areas.parquet",
+            cfg.winter_sports_id,
+            radius_m,
+        )
+        return gdf.iloc[0], path.parent
+    return None
 
 
 def find_ski_area_s3(s3, bucket: str, cache_dir: Path, cfg: GameExportConfig) -> tuple[gpd.GeoSeries, Path]:
@@ -375,6 +536,9 @@ def find_ski_area_s3(s3, bucket: str, cache_dir: Path, cfg: GameExportConfig) ->
             log.info("Using ski area from combined S3 parquet %s", combined)
             return row, combined.parent
         last_detail = f"id {cfg.winter_sports_id} not in {combined} (or no polygon)"
+    synth = synthetic_ski_row_from_analyzed(cfg, REPO_ROOT / "output")
+    if synth is not None:
+        return synth
     if regional is None and combined is None:
         raise FileNotFoundError(
             f"ski_areas.parquet not found on s3://{bucket}/{cfg.region}/ "
@@ -451,6 +615,14 @@ def resolve_inputs(
     lifts = filter_by_ski(lifts, cfg, polygon)
     if elev_pts is not None and "winter_sports_id" in elev_pts.columns:
         elev_pts = elev_pts[_id_match(elev_pts["winter_sports_id"], cfg.winter_sports_id)].copy()
+    # Export-ready stripdown: downhill/snowpark only, no points/roads/admin,
+    # line-prefer pistes, hard AOI clip. Mode stays "game" here so clay + game
+    # share the same thinned inputs; clay writers simply omit unused layers.
+    from game_export.osm_stripdown import strip_for_export
+
+    osm, pistes, lifts = strip_for_export(
+        osm, pistes, lifts, polygon, mode="game"
+    )
     coverage = osm_feature_hull(osm, pistes, lifts)
     if coverage is None:
         coverage = polygon

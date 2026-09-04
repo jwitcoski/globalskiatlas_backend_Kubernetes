@@ -49,7 +49,8 @@ def write_homepage_manifest(
         "vectors": {
             "piste_trails": "vectors/piste-trails.geojson",
             "lifts": "vectors/lifts.geojson",
-            "tree_points": "vectors/tree-points.geojson",
+            "forest": "vectors/forest.geojson",
+            "ski_area_buffer": "vectors/ski-area-buffer.geojson",
         },
         "attribution": {
             "osm": "© OpenStreetMap contributors",
@@ -150,12 +151,12 @@ def export_homepage_scene(
         encoding="utf-8",
     )
     log.info(
-        "Clay scene %s: mesh=%s bytes tris=%s trails=%s lifts=%s trees=%s",
+        "Clay scene %s: mesh=%s bytes tris=%s trails=%s lifts=%s forest=%s",
         out,
         f"{mesh_bytes:,}",
         terrain["terrain_meta"]["mesh"]["triangle_count"],
         vector_counts["piste_trails"],
         vector_counts["lifts"],
-        vector_counts.get("tree_points", 0),
+        vector_counts.get("forest", 0),
     )
     return out

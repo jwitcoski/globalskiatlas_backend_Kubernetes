@@ -147,9 +147,16 @@ def config_from_candidate(row: dict[str, Any], *, used_ids: Iterable[str] = ()) 
     region = str(row.get("region") or "").strip()
     if not region:
         raise ValueError(f"candidate {wid}: missing region")
-    name = str(row.get("name") or row.get("display_name") or f"resort_{wid}")
+    name = str(
+        row.get("english_name")
+        or row.get("display_name")
+        or row.get("name")
+        or f"resort_{wid}"
+    ).strip()
+    # Prefer Latin slug when OSM name is non-ASCII (e.g. Armenian script).
+    slug_name = str(row.get("english_name") or name).strip() or name
     country = str(row.get("country") or "")
-    slug = slugify_resort(name, country)
+    slug = slugify_resort(slug_name, country)
     resort_id = unique_resort_id(slug, wid, used_ids)
     data = dict(_default_gameplay_mapping())
     data.update(

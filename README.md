@@ -77,7 +77,7 @@ python -m game_export --resort montage_mountain_pa --clay-scene --force
 
 (`--homepage-scene` is a compat alias for `--clay-scene`.)
 
-Output: `output/clay_scenes/<resort_id>/` (`scene-manifest.json`, Draco `terrain-mesh.glb`, OSM vectors, attribution, `ski-area-buffer` when available). Default vertex spacing is 12 m; larger resorts auto-coarsen until the mesh is under 1 MB.
+Output: `output/clay_scenes/<resort_id>/` (`scene-manifest.json`, Draco `terrain-mesh.glb`, downhill/snowpark `piste-trails`, lifts, forest polygons for client-side tree planting, `ski-area-buffer` when available). Export stripdown drops roads, admin, XC/sled, and point geometries. Default vertex spacing is 12 m; larger resorts auto-coarsen until the mesh is under 1 MB.
 
 **ID contract:** Wiki joins on `winter_sports_id` → catalog `id` → folder `clay_scenes/{id}/`. Do **not** use wiki `pageId` (different slug scheme). Catalog: `config/clay_scenes/catalog.json` (copied to the site as `clay_scenes/catalog.json`).
 
@@ -96,6 +96,17 @@ Upload to S3 (public `clay_scenes/` prefix, same bucket as `game_scenes/`):
 ```powershell
 python scripts/upload_clay_scenes.py
 ```
+
+Batch export toward the full catalog (~2k resorts, 10 at a time, mixed sizes):
+
+```powershell
+python scripts/bake_clay_scene_batches.py --pick-only          # preview next 10
+python scripts/bake_clay_scene_batches.py                      # export 1 batch of 10
+python scripts/bake_clay_scene_batches.py --upload             # export + upload
+python scripts/bake_clay_scene_batches.py --max-batches 0      # run until queue empty
+```
+
+Progress is tracked in `config/clay_scenes/_progress.json` (done / failed winter_sports_ids).
 
 Copy into **GlobalSkiAtlas_2**:
 
