@@ -28,6 +28,9 @@ COPY scripts/ scripts/
 COPY boundaries/ boundaries/
 COPY game_export/ game_export/
 COPY config/ config/
+COPY deploy_clay/ deploy_clay/
+COPY scripts/upload_deploy_clay_aws.sh scripts/upload_deploy_clay_aws.sh
+RUN chmod +x scripts/upload_deploy_clay_aws.sh
 
 # Default boundaries path (can override with -e BOUNDARIES=...)
 ENV BOUNDARIES=/app/boundaries
