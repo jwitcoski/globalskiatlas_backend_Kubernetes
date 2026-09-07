@@ -17,7 +17,9 @@ log = logging.getLogger("game_export")
 
 HOMEPAGE_OUT_ROOT = "clay_scenes"
 DEFAULT_MESH_RESOLUTION_M = 12.0
-MAX_MESH_BYTES = 1_048_576
+# Wiki/homepage clay mesh budget. Megaresorts (Park City, Whistler, etc.) need headroom
+# past 1 MB even after auto-coarsening; 3 MB still loads fine as a decorative 3D Map.
+MAX_MESH_BYTES = 3_145_728  # 3 MiB
 
 
 def write_homepage_manifest(
@@ -50,6 +52,9 @@ def write_homepage_manifest(
             "piste_trails": "vectors/piste-trails.geojson",
             "lifts": "vectors/lifts.geojson",
             "tree_points": "vectors/tree-points.geojson",
+            "ski_area_buffer": "vectors/ski-area-buffer.geojson",
+            "buildings": "vectors/buildings.geojson",
+            "water": "vectors/water.geojson",
         },
         "attribution": {
             "osm": "© OpenStreetMap contributors",
@@ -101,7 +106,9 @@ def export_homepage_scene(
     res = float(mesh_resolution_m)
     terrain = None
     mesh_bytes = 0
-    while res <= 48.0:
+    # Coarsen until under budget (or spacing exceeds ~100 m). Previously capped at 48 m,
+    # which bumped res to 54 m in the error message without ever exporting at 54 m.
+    while True:
         terrain = export_homepage_terrain(
             inputs.dem_path,
             out,
@@ -117,7 +124,10 @@ def export_homepage_scene(
             res,
             f"{MAX_MESH_BYTES:,}",
         )
-        res = round(res * 1.35, 1)
+        next_res = round(res * 1.35, 1)
+        if next_res > 100.0 or next_res <= res:
+            break
+        res = next_res
     if mesh_bytes > MAX_MESH_BYTES:
         raise RuntimeError(
             f"Homepage mesh is {mesh_bytes:,} bytes (limit {MAX_MESH_BYTES:,}) "

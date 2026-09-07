@@ -232,6 +232,34 @@ def osm_feature_hull(*gdfs) -> Any:
     return unary_union(geoms).convex_hull
 
 
+def _drop_lift_pylons(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Remove aerialway=pylon/station rows so DEM hull tracks real lift lines."""
+    if gdf is None or gdf.empty:
+        return gdf
+    keep = []
+    for _, row in gdf.iterrows():
+        aerial = ""
+        if "aerialway" in gdf.columns and row.get("aerialway") is not None:
+            aerial = str(row.get("aerialway") or "").lower()
+        other = str(row.get("other_tags") or "")
+        if not aerial:
+            import re
+
+            m = re.search(r'aerialway"=>"([^"]+)', other)
+            if m:
+                aerial = m.group(1).lower()
+        aerial = aerial.replace("-", "_").replace(" ", "_")
+        if aerial in {"pylon", "station", "goods"}:
+            keep.append(False)
+        else:
+            keep.append(True)
+    if all(keep):
+        return gdf
+    out = gdf.loc[keep].copy()
+    log.info("Dropped %s lift pylons/stations (%s remain)", len(gdf) - len(out), len(out))
+    return out
+
+
 def _dem_valid_over_geom(path: Path, geom) -> bool:
     """True when the GeoTIFF covers *geom* with real elevations (not ski-AOI nodata)."""
     if geom is None or geom.is_empty or not path.is_file():
@@ -321,17 +349,69 @@ def resolve_dem(
 
 
 def filter_by_ski(gdf: Optional[gpd.GeoDataFrame], cfg: GameExportConfig, polygon) -> Optional[gpd.GeoDataFrame]:
+    """Keep features for this resort; avoid sucking in neighbors via a loose bbox.
+
+    Prefer ``Ski Area`` / name match to the resort display name when present (Killington
+    must not pull Pico). Fall back to winter_sports_id, then a tight spatial clip.
+    """
     if gdf is None or gdf.empty:
         return gdf
     out = gdf
-    if "winter_sports_id" in gdf.columns:
+    matched = False
+    target = (cfg.display_name or "").strip().casefold()
+    # Strip common suffixes so "Killington Resort" matches "Killington"
+    target_core = target
+    for suffix in (" ski resort", " ski area", " ski center", " ski centre", " resort", " mountain"):
+        if target_core.endswith(suffix) and len(target_core) > len(suffix) + 2:
+            target_core = target_core[: -len(suffix)].strip()
+            break
+
+    def _name_match(series) -> Any:
+        s = series.fillna("").astype(str).str.strip().str.casefold()
+        if not target:
+            return s.str.len() < 0  # empty mask
+        exact = s == target
+        if target_core and target_core != target:
+            soft = s.str.contains(target_core, regex=False)
+            return exact | soft
+        return exact | s.str.contains(target, regex=False)
+
+    for col in ("Ski Area", "ski_area", "name"):
+        if col not in gdf.columns or not target:
+            continue
+        m = _name_match(gdf[col])
+        if m.any():
+            out = gdf[m].copy()
+            matched = True
+            log.info(
+                "filter_by_ski: %s name match on %s → %s features (target=%r)",
+                cfg.resort_id,
+                col,
+                len(out),
+                cfg.display_name,
+            )
+            break
+
+    if not matched and "winter_sports_id" in gdf.columns:
         m = _id_match(gdf["winter_sports_id"], cfg.winter_sports_id)
         if m.any():
             out = gdf[m].copy()
-    # Spatial clip as additional filter / when statewide lifts/pistes lack ids
+            matched = True
+
+    # Spatial clip: tight when we already name-matched; slightly wider as sole filter.
     try:
-        buf = polygon.buffer(0.02)  # ~2 km in degrees, coarse prefilter
+        pad_deg = 0.004 if matched else 0.01  # ~0.3–0.8 km
+        buf = polygon.buffer(pad_deg)
+        before = len(out)
         out = out[out.geometry.intersects(buf)].copy()
+        if before and len(out) < before:
+            log.info(
+                "filter_by_ski: %s spatial clip %s → %s (pad=%.3f°)",
+                cfg.resort_id,
+                before,
+                len(out),
+                pad_deg,
+            )
     except Exception as exc:
         log.warning("Spatial prefilter skipped: %s", exc)
     return out
@@ -451,12 +531,20 @@ def resolve_inputs(
     lifts = filter_by_ski(lifts, cfg, polygon)
     if elev_pts is not None and "winter_sports_id" in elev_pts.columns:
         elev_pts = elev_pts[_id_match(elev_pts["winter_sports_id"], cfg.winter_sports_id)].copy()
-    coverage = osm_feature_hull(osm, pistes, lifts)
-    if coverage is None:
+    # Pylons inflate the DEM hull without adding usable lift runs.
+    if lifts is not None and not lifts.empty:
+        lifts = _drop_lift_pylons(lifts)
+    # DEM crop must match the clay island (ski AOI + trails/lifts). Do NOT fold in
+    # osm_nearby forests/buildings — name matches there can pull a huge bbox and the
+    # wiki viewer then clips to ski-area-buffer, which looks like "half a mountain".
+    coverage = osm_feature_hull(pistes, lifts)
+    if coverage is not None and polygon is not None and not polygon.is_empty:
+        coverage = unary_union([coverage, polygon]).convex_hull
+    elif coverage is None:
         coverage = polygon
         warnings.append("OSM feature hull empty; DEM crop fell back to ski-area polygon")
-    else:
-        log.info("DEM coverage: OSM-feature convex hull (not winter_sports AOI)")
+    if coverage is not None:
+        log.info("DEM coverage: ski AOI ∪ piste/lift convex hull (excluding osm_nearby)")
     dem_path, dem_note = resolve_dem(
         data_root,
         cfg,

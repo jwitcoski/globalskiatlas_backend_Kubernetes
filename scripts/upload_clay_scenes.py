@@ -57,6 +57,16 @@ def main() -> int:
     p.add_argument("--scenes-dir", type=Path, default=DEFAULT_SCENES)
     p.add_argument("--catalog", type=Path, default=DEFAULT_CATALOG)
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument(
+        "--only",
+        default=None,
+        help="Comma-separated resort ids to upload (default: all catalog entries with local scenes)",
+    )
+    p.add_argument(
+        "--strict",
+        action="store_true",
+        help="Fail if any catalog resort is missing locally (default: skip missing and prune catalog upload)",
+    )
     args = p.parse_args()
 
     if not args.catalog.is_file():
@@ -68,35 +78,58 @@ def main() -> int:
         print("Catalog has no resorts", file=sys.stderr)
         return 2
 
+    only_ids = None
+    if args.only:
+        only_ids = {x.strip() for x in args.only.split(",") if x.strip()}
+
     to_upload: list[tuple[Path, str]] = []
     missing: list[str] = []
+    present: list[dict] = []
 
     for resort in resorts:
         rid = str(resort.get("id") or "").strip()
         if not rid:
+            continue
+        if only_ids is not None and rid not in only_ids:
             continue
         scene = args.scenes_dir / rid
         manifest = scene / "scene-manifest.json"
         if not manifest.is_file():
             missing.append(rid)
             continue
+        present.append(resort)
         for f, rel in iter_files(scene):
             key = f"{args.prefix}/{rid}/{rel.as_posix()}"
             to_upload.append((f, key))
 
     if missing:
-        print(f"Missing local scenes: {', '.join(missing)}", file=sys.stderr)
+        print(f"Skipping missing local scenes ({len(missing)}): {', '.join(missing)}", file=sys.stderr)
+        if args.strict:
+            return 2
+    if not present:
+        print("No local scenes to upload", file=sys.stderr)
         return 2
 
+    # Catalog on S3 should list every local scene we have, even when --only uploads
+    # a subset of scene folders.
+    catalog_resorts = []
+    for resort in resorts:
+        rid = str(resort.get("id") or "").strip()
+        if not rid:
+            continue
+        if (args.scenes_dir / rid / "scene-manifest.json").is_file():
+            catalog_resorts.append(resort)
+    upload_catalog = {**catalog, "resorts": catalog_resorts}
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as tmp:
-        json.dump(catalog, tmp, indent=2, ensure_ascii=True)
+        json.dump(upload_catalog, tmp, indent=2, ensure_ascii=True)
         tmp_path = Path(tmp.name)
     to_upload.append((tmp_path, f"{args.prefix}/catalog.json"))
 
     total = sum(f.stat().st_size for f, _ in to_upload)
     print(
         f"{len(to_upload)} files, {total / 1e6:.1f} MB -> s3://{args.bucket}/{args.prefix}/ "
-        f"({len(resorts)} resorts)"
+        f"(uploading {len(present)} scene(s); catalog {len(catalog_resorts)} resorts; "
+        f"skipped {len(missing)} missing)"
     )
     if args.dry_run:
         for f, key in to_upload[:12]:

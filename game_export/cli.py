@@ -111,7 +111,7 @@ def parse_args(argv=None):
         "--homepage-mesh-m",
         type=float,
         default=None,
-        help="Homepage terrain vertex spacing in meters (default 12; target mesh <1 MB)",
+        help="Homepage terrain vertex spacing in meters (default 12; target mesh <3 MB)",
     )
     return p.parse_args(argv)
 

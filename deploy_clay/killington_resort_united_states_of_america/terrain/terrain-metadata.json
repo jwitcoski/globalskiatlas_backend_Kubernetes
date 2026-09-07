@@ -1,0 +1,45 @@
+{
+  "kind": "homepage_hero",
+  "source_dem": "/workspace/cache/game_export_dems/north-america/us/vermont/1228774360-osmhull.tif",
+  "source_crs": "EPSG:4326",
+  "projected_crs": "EPSG:32618",
+  "work_resolution_m": 21.9,
+  "mesh": {
+    "file": "terrain-mesh.glb",
+    "vertex_count": 68040,
+    "triangle_count": 127570,
+    "byte_size": 877796,
+    "compression": "draco",
+    "draco_quantization_bits": 16,
+    "draco_compression_level": 5,
+    "vertex_spacing_m": 21.9,
+    "coordinate_space": "game (X east, Y elevation, Z negative north)"
+  },
+  "local_crs": {
+    "source_crs": "EPSG:4326",
+    "projected_crs": "EPSG:32618",
+    "origin_easting_m": 675422.0349412871,
+    "origin_northing_m": 4828388.647462899,
+    "origin_longitude": -72.8270000418769,
+    "origin_latitude": 43.58781981904106,
+    "units": "meters",
+    "game_axes": {
+      "x": "east_m",
+      "y": "elevation_m",
+      "z": "negative_north_m"
+    },
+    "local_origin": {
+      "easting_m": 675422.0349412871,
+      "northing_m": 4828388.647462899,
+      "longitude": -72.8270000418769,
+      "latitude": 43.58781981904106
+    }
+  },
+  "grid": {
+    "rows": 243,
+    "cols": 280,
+    "cell_m": 21.9
+  },
+  "elevation_min_m": 321.64508056640625,
+  "elevation_max_m": 1287.45654296875
+}

@@ -69,7 +69,7 @@ Version id is `v0-` + a content hash of config + DEM + OSM fingerprints (S3 ETag
 
 **Limitations:** OSM downhill pistes at Montage may be incomplete. Routes are tagged `approved` / `review_needed` / `rejected`. Not an official map or safety product.
 
-**Clay 3D scene** (mesh + vectors for homepage hero and wiki **3D Map** tab; mesh under 1 MB):
+**Clay 3D scene** (mesh + vectors for homepage hero and wiki **3D Map** tab; mesh under 3 MB):
 
 ```powershell
 python -m game_export --resort montage_mountain_pa --clay-scene --force
@@ -77,7 +77,7 @@ python -m game_export --resort montage_mountain_pa --clay-scene --force
 
 (`--homepage-scene` is a compat alias for `--clay-scene`.)
 
-Output: `output/clay_scenes/<resort_id>/` (`scene-manifest.json`, Draco `terrain-mesh.glb`, OSM vectors, attribution, `ski-area-buffer` when available). Default vertex spacing is 12 m; larger resorts auto-coarsen until the mesh is under 1 MB.
+Output: `output/clay_scenes/<resort_id>/` (`scene-manifest.json`, Draco `terrain-mesh.glb`, OSM vectors, attribution, `ski-area-buffer` when available). Default vertex spacing is 12 m; larger resorts auto-coarsen until the mesh is under 3 MB.
 
 **ID contract:** Wiki joins on `winter_sports_id` → catalog `id` → folder `clay_scenes/{id}/`. Do **not** use wiki `pageId` (different slug scheme). Catalog: `config/clay_scenes/catalog.json` (copied to the site as `clay_scenes/catalog.json`).
 
