@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Any, Optional
 
 import geopandas as gpd
-from shapely.geometry import mapping
+from shapely.geometry import mapping, shape
+from shapely.ops import unary_union
 from shapely.validation import explain_validity, make_valid
 
 from game_export.config import GameExportConfig
@@ -206,7 +207,7 @@ def collect_layers(
             g = need()
             if g:
                 add("water", row, g)
-        elif tag(tags, "natural") in {"wood"} or tag(tags, "landuse") == "forest" or tag(tags, "natural") == "tree":
+        elif tag(tags, "natural") in {"wood", "forest"} or tag(tags, "landuse") == "forest":
             g = need()
             if g:
                 add("forest", row, g)
@@ -256,6 +257,32 @@ def collect_layers(
         len(repairs),
     )
     return layers, repairs
+
+
+def dissolve_forest_features(forest_features: list[dict]) -> list[dict]:
+    """Dissolve OSM forest polygons while preserving holes and multipolygons."""
+    geometries = []
+    for feature in forest_features:
+        geometry = shape(feature["geometry"])
+        if not geometry.is_empty and geometry.geom_type in ("Polygon", "MultiPolygon"):
+            geometries.append(geometry)
+    if not geometries:
+        return []
+    dissolved = unary_union(geometries)
+    if dissolved.is_empty:
+        return []
+    return [
+        {
+            "type": "Feature",
+            "geometry": mapping(dissolved),
+            "properties": {
+                "id": "forest:dissolved",
+                "source": "OpenStreetMap",
+                "source_confidence": "osm_as_mapped_dissolved",
+                "coordinate_space": "local_east_m, local_north_m",
+            },
+        }
+    ]
 
 
 def add_ski_area_polygon(layers: dict, ski_geom, to_proj, local: LocalCRS, repairs: list) -> None:

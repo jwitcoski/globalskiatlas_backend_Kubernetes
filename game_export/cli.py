@@ -159,6 +159,22 @@ def main(argv=None) -> int:
         out_root = data_root / "game_scenes"
     s3_bucket = args.s3_bucket or default_s3_bucket()
 
+    cfg = None
+    if args.winter_sports_id:
+        from game_export.config import config_from_candidate
+
+        cand_path = REPO_ROOT / "config" / "resorts" / "_playable_candidates.json"
+        payload = json.loads(cand_path.read_text(encoding="utf-8"))
+        wid = str(args.winter_sports_id).strip()
+        row = next(
+            (r for r in payload.get("candidates") or [] if str(r.get("winter_sports_id")) == wid),
+            None,
+        )
+        if not row:
+            log.error("winter_sports_id %s not in %s", wid, cand_path)
+            return 2
+        cfg = config_from_candidate(row)
+
     if args.catalog_only:
         dest = write_catalog(out_root)
         print(f"Catalog written: {dest}")
@@ -168,10 +184,11 @@ def main(argv=None) -> int:
         from game_export.homepage import DEFAULT_MESH_RESOLUTION_M, export_homepage_scene
 
         cfg_path = args.config or default_config_path(args.resort)
-        if not cfg_path.is_file():
+        if cfg is None and not cfg_path.is_file():
             log.error("Config not found: %s", cfg_path)
             return 2
-        cfg = load_resort_config(cfg_path)
+        if cfg is None:
+            cfg = load_resort_config(cfg_path)
         mesh_m = args.homepage_mesh_m if args.homepage_mesh_m is not None else DEFAULT_MESH_RESOLUTION_M
         if args.dry_run:
             print(
@@ -223,21 +240,6 @@ def main(argv=None) -> int:
             return 1
         return 0
 
-    cfg = None
-    if args.winter_sports_id:
-        from game_export.config import config_from_candidate
-
-        cand_path = REPO_ROOT / "config" / "resorts" / "_playable_candidates.json"
-        payload = json.loads(cand_path.read_text(encoding="utf-8"))
-        wid = str(args.winter_sports_id).strip()
-        row = next(
-            (r for r in payload.get("candidates") or [] if str(r.get("winter_sports_id")) == wid),
-            None,
-        )
-        if not row:
-            log.error("winter_sports_id %s not in %s", wid, cand_path)
-            return 2
-        cfg = config_from_candidate(row)
     cfg_path = None if cfg is not None else (args.config or default_config_path(args.resort))
     return _export_resort(
         args,

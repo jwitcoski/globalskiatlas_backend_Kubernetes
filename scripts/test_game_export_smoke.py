@@ -16,12 +16,15 @@ import numpy as np
 import rasterio
 import yaml
 from rasterio.transform import from_bounds
-from shapely.geometry import LineString, Polygon, box
+from shapely.geometry import LineString, Polygon, box, mapping, shape
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
 from game_export.cli import main as game_export_main  # noqa: E402
+from game_export.homepage_vectors import build_tree_point_features  # noqa: E402
+from game_export.vectors import collect_layers, dissolve_forest_features  # noqa: E402
+from game_export.coords import LocalCRS  # noqa: E402
 
 
 def _write_dem(path: Path) -> None:
@@ -83,6 +86,16 @@ def _write_vectors(region_dir: Path, wid: str) -> None:
 
 
 def main() -> int:
+    outer = box(0, 0, 100, 100)
+    hole = box(40, 40, 60, 60)
+    forest = {"type": "Feature", "geometry": mapping(outer.difference(hole)), "properties": {}}
+    overlapping = {"type": "Feature", "geometry": mapping(box(80, 0, 120, 40)), "properties": {}}
+    dissolved = dissolve_forest_features([forest, overlapping])
+    assert len(dissolved) == 1
+    dissolved_geom = shape(dissolved[0]["geometry"])
+    assert dissolved_geom.contains(box(40, 40, 60, 60).centroid) is False
+    assert dissolved_geom.contains(box(90, 20, 91, 21).centroid)
+
     wid = "45096232"
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)

@@ -8,12 +8,13 @@ from typing import Any
 
 import numpy as np
 from shapely.geometry import LineString, Point, mapping, shape
+from shapely.ops import unary_union
 
 from game_export.config import GameExportConfig
 from game_export.coords import LocalCRS
 from game_export.routes import _as_lines, densify_line, polygon_descent_flowline
 from game_export.terrain import sample_elev
-from game_export.vectors import collect_layers, write_local_geojson
+from game_export.vectors import collect_layers, dissolve_forest_features, write_local_geojson
 
 log = logging.getLogger("game_export")
 
@@ -29,6 +30,7 @@ _PROP_KEYS = (
     "tags",
     "other_tags",
 )
+MAX_TREES = 420
 
 
 def _copy_props(props: dict[str, Any]) -> dict[str, Any]:
@@ -94,8 +96,7 @@ def build_tree_point_features(
     transform,
     local: LocalCRS,
     *,
-    forest_count: int = 480,
-    scatter_count: int = 200,
+    max_trees: int = MAX_TREES,
     seed: int = 20260823,
 ) -> list[dict]:
     """Pre-placed bright-tree locations in OSM forest + open slopes."""
@@ -117,38 +118,21 @@ def build_tree_point_features(
 
     polys = _forest_polygons(forest_features)
     if polys:
-        areas = [p.area for p in polys]
-        total = sum(areas)
-        for poly, area in zip(polys, areas):
-            target = max(2, int(round(forest_count * area / total)))
-            minx, miny, maxx, maxy = poly.bounds
-            added = 0
-            tries = 0
-            while added < target and tries < target * 30:
-                tries += 1
-                x = rng.uniform(minx, maxx)
-                y = rng.uniform(miny, maxy)
-                if not poly.contains(Point(x, y)):
-                    continue
-                if add_point(x, y):
-                    added += 1
-
-    rows, cols = elev.shape
-    cell = abs(float(transform.a))
-    margin = cell * 3
-    max_e = cols * cell - margin
-    max_n = rows * cell - margin
-    added = 0
+        sampling_geom = polys[0] if len(polys) == 1 else unary_union(polys)
+        minx, miny, maxx, maxy = sampling_geom.bounds
+    else:
+        rows, cols = elev.shape
+        cell = abs(float(transform.a))
+        margin = cell * 3
+        minx, miny, maxx, maxy = margin, margin, cols * cell - margin, rows * cell - margin
+        sampling_geom = None
     tries = 0
-    while added < scatter_count and tries < scatter_count * 40:
+    while len(feats) < max_trees and tries < max_trees * 40:
         tries += 1
-        x = rng.uniform(margin, max_e)
-        y = rng.uniform(margin, max_n)
-        in_forest = any(p.contains(Point(x, y)) for p in polys) if polys else False
-        if in_forest and rng.random() < 0.65:
-            continue
-        if add_point(x, y):
-            added += 1
+        x = rng.uniform(minx, maxx)
+        y = rng.uniform(miny, maxy)
+        if sampling_geom is None or sampling_geom.contains(Point(x, y)):
+            add_point(x, y)
 
     return feats
 
@@ -219,13 +203,11 @@ def write_homepage_vectors(
         if not _is_lift_pylon_or_station(f.get("properties") or {})
     ]
     write_local_geojson(vectors_dir / "lifts.geojson", lift_feats, local, "lifts")
-    tree_feats = build_tree_point_features(
-        layers.get("forest") or [],
-        elev,
-        transform,
-        local,
-        seed=cfg.seed,
-    )
+    forest_feats = dissolve_forest_features(layers.get("forest") or [])
+    write_local_geojson(vectors_dir / "forest.geojson", forest_feats, local, "forest")
+    tree_feats = []
+    if not forest_feats:
+        tree_feats = build_tree_point_features([], elev, transform, local, seed=cfg.seed)
     write_local_geojson(vectors_dir / "tree-points.geojson", tree_feats, local, "tree-points")
 
     building_feats = [
@@ -273,7 +255,7 @@ def write_homepage_vectors(
         "pistes": len(piste_src),
         "piste_trails": len(trail_feats),
         "lifts": len(lift_feats),
-        "forest": len(layers.get("forest") or []),
+        "forest": len(forest_feats),
         "tree_points": len(tree_feats),
         "buildings": len(building_feats),
         "water": len(water_feats),
