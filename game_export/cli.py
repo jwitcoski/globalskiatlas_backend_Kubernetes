@@ -113,6 +113,24 @@ def parse_args(argv=None):
         default=None,
         help="Homepage terrain vertex spacing in meters (default 12; target mesh <3 MB)",
     )
+    p.add_argument(
+        "--region-clay",
+        action="store_true",
+        help="Export a wiki admin-region clay island under clay_scenes/regions/{pageId}/",
+    )
+    p.add_argument("--state", default=None, help="Admin 1 name for --region-clay (e.g. West Virginia)")
+    p.add_argument("--country", default=None, help="Admin 0 name for --region-clay (e.g. United States of America)")
+    p.add_argument(
+        "--page-id",
+        default=None,
+        help="Wiki pageId for --region-clay (e.g. state-west-virginia-united-states-of-america)",
+    )
+    p.add_argument(
+        "--region-mesh-m",
+        type=float,
+        default=None,
+        help="Region clay vertex spacing in meters (default auto ~250–2000)",
+    )
     return p.parse_args(argv)
 
 
@@ -178,6 +196,40 @@ def main(argv=None) -> int:
     if args.catalog_only:
         dest = write_catalog(out_root)
         print(f"Catalog written: {dest}")
+        return 0
+
+    if args.region_clay:
+        from game_export.region_clay import export_region_scene
+
+        clay_out = data_root
+        if from_s3 and args.out_root is None:
+            clay_out = REPO_ROOT / "output"
+        if args.dry_run:
+            print(
+                f"DRY RUN region clay: state={args.state} country={args.country} "
+                f"pageId={args.page_id} out={clay_out / 'clay_scenes' / 'regions'}"
+            )
+            return 0
+        try:
+            scene = export_region_scene(
+                state=args.state,
+                country=args.country,
+                page_id=args.page_id,
+                data_root=data_root,
+                cache_dir=cache_dir,
+                out_root=clay_out,
+                from_s3=from_s3,
+                s3_bucket=s3_bucket,
+                mesh_resolution_m=args.region_mesh_m,
+                force=args.force,
+            )
+        except (FileNotFoundError, RuntimeError, PermissionError, ValueError) as e:
+            log.error("%s", e)
+            return 1
+        glb = scene / "terrain" / "terrain-mesh.glb"
+        print(f"Region clay written: {scene}")
+        if glb.is_file():
+            print(f"Terrain mesh: {glb} ({glb.stat().st_size:,} bytes)")
         return 0
 
     if args.clay_scene or args.homepage_scene:

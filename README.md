@@ -106,4 +106,12 @@ foreach ($r in @("montage_mountain_pa","pal_arinsal_andorra","hakuba_cortina_jap
 }
 ```
 
+**Wiki region clay** (state/country 3D Map — admin outline island, not a resort cake): see [docs/REGION_CLAY_SCENES.md](docs/REGION_CLAY_SCENES.md).
+
+```powershell
+python scripts/bake_region_clay.py --state "West Virginia" --country "United States of America" --force
+python scripts/upload_region_clay_scenes.py --only state-west-virginia-united-states-of-america
+python -u scripts/bake_all_country_clay.py --upload
+```
+
 The browser game is not in this repo.

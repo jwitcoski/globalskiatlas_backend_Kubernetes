@@ -313,22 +313,30 @@ def _boundary_for_unit(
             g = _admin_match(states, "NAME", unit.state)
         if g.empty and "admin" in states.columns:
             g = _admin_match(states, "admin", unit.state)
-        # Prefer state in correct country when multiple matches
-        if not g.empty and "admin" in g.columns:
-            cfold = unit.country.casefold()
-            for col in ("ADMIN", "adm0_a3", "sov_a3"):
+        # Prefer the feature in the requested country (Maryland, US vs Maryland, Liberia).
+        if not g.empty:
+            cfold = unit.country.strip().casefold()
+            filtered = g.iloc[0:0]
+            for col in ("admin", "ADMIN", "adm0_a3", "sov_a3", "geonunit"):
                 if col not in g.columns:
                     continue
-            if "name" in countries.columns:
-                cmatch = countries[
-                    countries["ADMIN"].astype(str).str.strip().str.casefold()
-                    == cfold
-                ]
-                if not cmatch.empty and "iso_a2" in g.columns and "iso_a2" in cmatch.columns:
-                    iso = cmatch.iloc[0]["iso_a2"]
-                    g2 = g[g["iso_a2"] == iso] if "iso_a2" in g.columns else g.iloc[0:0]
-                    if not g2.empty:
-                        g = g2
+                hit = g[g[col].astype(str).str.strip().str.casefold() == cfold]
+                if not hit.empty:
+                    filtered = hit
+                    break
+            if filtered.empty and "iso_a2" in g.columns:
+                cmatch = _admin_match(countries, "ADMIN", unit.country)
+                if cmatch.empty:
+                    cmatch = _admin_match(countries, "NAME", unit.country)
+                if not cmatch.empty:
+                    iso_col = "iso_a2" if "iso_a2" in cmatch.columns else None
+                    if iso_col:
+                        iso = str(cmatch.iloc[0][iso_col]).strip()
+                        hit = g[g["iso_a2"].astype(str).str.strip() == iso]
+                        if not hit.empty:
+                            filtered = hit
+            if not filtered.empty:
+                g = filtered
         if len(g) > 1:
             g = g.iloc[[0]]
     else:

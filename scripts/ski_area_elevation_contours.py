@@ -75,22 +75,28 @@ def fetch_skadi_tile(
     cache_dir: Path,
     base_url: str = SKADI_BASE,
     timeout: int = 60,
+    keep_cache: bool = True,
 ) -> Optional[np.ndarray]:
     """
     Fetch one Skadi tile, decompress, return 2D array (row = north->south, col = west->east).
-    Caches to cache_dir. Returns None on missing/failure.
+    Caches to cache_dir unless keep_cache=False (region clay: do not fill the disk).
     """
     name = _skadi_tile_name(lat_sw, lon_sw)
     ns = "N" if lat_sw >= 0 else "S"
     subdir = f"{ns}{abs(lat_sw)}"
     cache_path = cache_dir / "skadi" / subdir / f"{name}.hgt"
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
 
     if cache_path.exists():
         try:
-            return _read_hgt_file(cache_path, lat_sw, lon_sw)
+            arr = _read_hgt_file(cache_path, lat_sw, lon_sw)
         except Exception:
             cache_path.unlink(missing_ok=True)
+            arr = None
+        else:
+            if not keep_cache:
+                cache_path.unlink(missing_ok=True)
+            if arr is not None:
+                return arr
 
     url = f"{base_url}/{subdir}/{name}.hgt.gz"
     try:
@@ -100,14 +106,15 @@ def fetch_skadi_tile(
         print(f"  Warning: could not fetch {url}: {e}", file=sys.stderr)
         return None
 
-    # Save uncompressed for next time (skip if disk full so run can continue)
-    try:
-        cache_path.write_bytes(data)
-    except OSError as e:
-        if e.errno == 28:  # No space left on device
-            print(f"  Warning: disk full, skipping cache write for {name}", file=sys.stderr)
-        else:
-            raise
+    if keep_cache:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            cache_path.write_bytes(data)
+        except OSError as e:
+            if e.errno == 28:  # No space left on device
+                print(f"  Warning: disk full, skipping cache write for {name}", file=sys.stderr)
+            else:
+                raise
     return _read_hgt_array(data, lat_sw, lon_sw)
 
 
