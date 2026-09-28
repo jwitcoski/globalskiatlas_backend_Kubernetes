@@ -5,6 +5,7 @@ __pycache__/
 .git/
 *.parquet
 *.json
+!config/**/*.json
 !boundaries/*.shp
 !boundaries/*.shx
 !boundaries/*.dbf

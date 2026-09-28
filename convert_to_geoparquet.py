@@ -207,8 +207,10 @@ def _sanitize_geometries(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     def _is_acceptable(geom):
         if geom is None or geom.is_empty:
             return False
-        if geom.geom_type == "Point":
+        if geom.geom_type in ("Point", "LineString"):
             return True
+        if geom.geom_type == "MultiLineString":
+            return all(_is_acceptable(p) for p in geom.geoms)
         if geom.geom_type == "Polygon":
             if geom.exterior is None or len(geom.exterior.coords) < 3:
                 return False

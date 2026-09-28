@@ -119,7 +119,24 @@ def main() -> int:
             continue
         if (args.scenes_dir / rid / "scene-manifest.json").is_file():
             catalog_resorts.append(resort)
-    upload_catalog = {**catalog, "resorts": catalog_resorts}
+    # A one-resort folder must not replace the public catalog with only that resort.
+    merged = {str(r.get("id") or ""): r for r in catalog_resorts if r.get("id")}
+    if only_ids is not None:
+        import boto3
+        from botocore.exceptions import ClientError
+
+        try:
+            raw = boto3.client("s3").get_object(Bucket=args.bucket, Key=f"{args.prefix}/catalog.json")
+            remote = json.loads(raw["Body"].read().decode())
+            for resort in remote.get("resorts") or []:
+                rid = str(resort.get("id") or "")
+                if rid and rid not in merged:
+                    merged[rid] = resort
+        except ClientError as exc:
+            code = exc.response.get("Error", {}).get("Code")
+            if code not in ("404", "NoSuchKey", "NotFound"):
+                raise
+    upload_catalog = {**catalog, "resorts": [merged[k] for k in sorted(merged)]}
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as tmp:
         json.dump(upload_catalog, tmp, indent=2, ensure_ascii=True)
         tmp_path = Path(tmp.name)

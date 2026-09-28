@@ -216,7 +216,7 @@ def main() -> int:
         print(f"Terrain mesh: {glb} ({glb.stat().st_size:,} bytes)")
 
     if args.upload:
-        cmd = [sys.executable, str(REPO / "scripts" / "upload_region_clay_scenes.py")]
+        cmd = [sys.executable, str(REPO / "scripts" / "upload_region_clay_scenes.py"), "--only", scene.name]
         return subprocess.call(cmd)
     return 0
 

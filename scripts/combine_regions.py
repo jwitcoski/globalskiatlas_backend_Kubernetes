@@ -9,6 +9,7 @@ Usage:
   # Or: python scripts/combine_regions.py   # auto-discovers regions from output/
 """
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -35,6 +36,33 @@ EXTRA_TABULAR_FILES = [
     "ski_areas_elevation.parquet",
 ]
 ALL_FILES = PARQUET_FILES + TABULAR_FILES
+
+
+ID_COLUMNS = ("winter_sports_id", "osm_way_id", "osm_id", "osm_relation_id")
+
+
+def skip_ids(combined_dir: Path) -> set[str]:
+    path = combined_dir / "resort_skip.json"
+    if not path.is_file():
+        return set()
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return {str(x) for x in (data.get("winter_sports_ids") or [])}
+
+
+def without_skipped(df, out_path: Path):
+    """Drop resorts listed in combined/resort_skip.json so a full rebuild stays deleted."""
+    ids = skip_ids(out_path.parent)
+    if not ids or df is None or len(df) == 0:
+        return df
+    mask = None
+    for col in ID_COLUMNS:
+        if col not in df.columns:
+            continue
+        hit = df[col].astype(str).isin(ids)
+        mask = hit if mask is None else (mask | hit)
+    if mask is None:
+        return df
+    return df.loc[~mask].reset_index(drop=True)
 
 
 def _dir_has_data(d: Path) -> bool:
@@ -88,6 +116,7 @@ def combine_geoparquet(region_paths: list[tuple[str, Path]], out_path: Path) -> 
     if not gdfs:
         return 0
     combined = pd.concat(gdfs, ignore_index=True)
+    combined = without_skipped(combined, out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     combined.to_parquet(out_path, index=False)
     return len(combined)
@@ -108,7 +137,7 @@ def combine_lifts_geoparquet(region_paths: list[tuple[str, Path]], lifts_path: P
         gdfs.append(gdf)
     if not gdfs:
         return 0, 0
-    combined = pd.concat(gdfs, ignore_index=True)
+    combined = without_skipped(pd.concat(gdfs, ignore_index=True), lifts_path)
     lifts_path.parent.mkdir(parents=True, exist_ok=True)
     # Split pylon and station (infrastructure) into separate file
     if "aerialway" in combined.columns:
@@ -140,7 +169,7 @@ def combine_tabular(region_paths: list[tuple[str, Path]], out_path: Path) -> int
         dfs.append(df)
     if not dfs:
         return 0
-    combined = pd.concat(dfs, ignore_index=True)
+    combined = without_skipped(pd.concat(dfs, ignore_index=True), out_path)
     # Coerce object columns to string (some regions have int in name etc) for parquet
     for col in combined.columns:
         if combined[col].dtype == object:

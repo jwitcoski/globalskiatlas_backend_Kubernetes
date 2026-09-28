@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgdal-dev \
     wget \
     curl \
+    openjdk-21-jre-headless \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -27,6 +28,7 @@ COPY *.py .
 COPY scripts/ scripts/
 COPY boundaries/ boundaries/
 COPY game_export/ game_export/
+COPY atlas/ atlas/
 COPY config/ config/
 
 # Default boundaries path (can override with -e BOUNDARIES=...)

@@ -486,7 +486,7 @@ def main() -> None:
             analyzed_path,
             force=not args.skip_export,
         )
-    elif do_resort and not args.from_geojson:
+    if do_resort and not args.from_geojson:
         materialize_tileset_parquet(
             input_dir,
             staging_resort,

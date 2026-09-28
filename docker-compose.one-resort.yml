@@ -1,0 +1,40 @@
+# One resort add / update / delete. Same command Fargate runs.
+# Build once: docker build -f Dockerfile.aws -t globalskiatlas-pipeline .
+#
+#   $env:ACTION="update"; $env:WINTER_SPORTS_ID="29785325"; $env:REGION="north-america/us/massachusetts"
+#   docker compose -f docker-compose.one-resort.yml run --rm one-resort
+#
+# ACTION is update, add, or delete. Add needs NAME (and STATE, COUNTRY, LAT, LON
+# when the name search needs them). Delete and update need WINTER_SPORTS_ID and REGION.
+
+services:
+  one-resort:
+    image: globalskiatlas-pipeline
+    build:
+      context: .
+      dockerfile: Dockerfile.aws
+    command: ["python", "scripts/run_one_resort.py"]
+    environment:
+      ACTION: ${ACTION:-update}
+      WINTER_SPORTS_ID: ${WINTER_SPORTS_ID:-}
+      REGION: ${REGION:-}
+      NAME: ${NAME:-}
+      COUNTRY: ${COUNTRY:-}
+      STATE: ${STATE:-}
+      LAT: ${LAT:-}
+      LON: ${LON:-}
+      JOB_ID: ${JOB_ID:-local}
+      S3_BUCKET: ${S3_BUCKET:-globalskiatlas-backend-k8s-output}
+      BOUNDARIES: /app/boundaries
+      WIKI_TABLE: ${WIKI_TABLE:-atlas-WikiPages}
+      CLOUDFRONT_DISTRIBUTION_ID: ${CLOUDFRONT_DISTRIBUTION_ID:-E3BDMTLYF8G4VB}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      JAVA_HEAP: ${JAVA_HEAP:-6g}
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 16G

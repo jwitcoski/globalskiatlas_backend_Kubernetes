@@ -205,9 +205,7 @@ def write_homepage_vectors(
     write_local_geojson(vectors_dir / "lifts.geojson", lift_feats, local, "lifts")
     forest_feats = dissolve_forest_features(layers.get("forest") or [])
     write_local_geojson(vectors_dir / "forest.geojson", forest_feats, local, "forest")
-    tree_feats = []
-    if not forest_feats:
-        tree_feats = build_tree_point_features([], elev, transform, local, seed=cfg.seed)
+    tree_feats = build_tree_point_features(forest_feats, elev, transform, local, seed=cfg.seed)
     write_local_geojson(vectors_dir / "tree-points.geojson", tree_feats, local, "tree-points")
 
     building_feats = [
