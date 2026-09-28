@@ -1,0 +1,21 @@
+[
+  {
+    "Id": "daily-resort-batch",
+    "Arn": "arn:aws:ecs:us-east-1:298043721974:cluster/globalskiatlas-backend-k8s",
+    "RoleArn": "arn:aws:iam::298043721974:role/globalskiatlas-resort-job-schedule",
+    "EcsParameters": {
+      "TaskDefinitionArn": "arn:aws:ecs:us-east-1:298043721974:task-definition/globalskiatlas-backend-k8s-pipeline-medium",
+      "TaskCount": 1,
+      "LaunchType": "FARGATE",
+      "NetworkConfiguration": {
+        "awsvpcConfiguration": {
+          "Subnets": ["subnet-00ba7dc5f79bdff9d"],
+          "SecurityGroups": ["sg-0e84d586983a95a42"],
+          "AssignPublicIp": "ENABLED"
+        }
+      },
+      "PlatformVersion": "LATEST"
+    },
+    "Input": "{\"containerOverrides\":[{\"name\":\"pipeline\",\"command\":[\"python\",\"scripts/run_one_resort.py\"],\"environment\":[{\"name\":\"ACTION\",\"value\":\"batch\"},{\"name\":\"JOB_ID\",\"value\":\"daily\"},{\"name\":\"S3_BUCKET\",\"value\":\"globalskiatlas-backend-k8s-output\"},{\"name\":\"JAVA_HEAP\",\"value\":\"6g\"},{\"name\":\"WIKI_TABLE\",\"value\":\"atlas-WikiPages\"},{\"name\":\"CLOUDFRONT_DISTRIBUTION_ID\",\"value\":\"E3BDMTLYF8G4VB\"}]}]}"
+  }
+]
