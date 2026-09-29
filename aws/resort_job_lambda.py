@@ -68,10 +68,10 @@ def _post(body: dict) -> dict:
         return _resp(400, {"message": "action must be update, add, or delete"})
     wid = str(body.get("winter_sports_id") or "")
     region = str(body.get("region") or "")
+    if action == "add" and not wid:
+        return _resp(400, {"message": "winter_sports_id is required"})
     if action != "add" and (not wid or not region):
         return _resp(400, {"message": "winter_sports_id and region are required"})
-    if action == "add" and not body.get("name"):
-        return _resp(400, {"message": "name is required"})
     s3 = boto3.client("s3")
     if wid:
         held = _lock_held(s3, wid)

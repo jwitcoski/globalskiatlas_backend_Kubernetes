@@ -154,6 +154,61 @@ def fetch_winter_sports(wid: str) -> dict | None:
     return els[0] if els else None
 
 
+_COUNTRY_REGION_SLUG = {
+    "united states of america": "us",
+    "united states": "us",
+}
+
+
+def _hyphen(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", (text or "").lower()).strip("-")
+
+
+def _region_paths() -> list[str]:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "regions_list", REPO / "scripts" / "list_regions_for_pipeline.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return [row[0] for row in mod.load_region_rows()]
+
+
+def region_for_place(country: str, state: str) -> str:
+    """Match Natural Earth country and state names to a pipeline region path."""
+    paths = _region_paths()
+    country_slug = _COUNTRY_REGION_SLUG.get((country or "").lower(), _hyphen(country))
+    state_slug = _hyphen(state)
+    if state_slug:
+        hits = [
+            path for path in paths
+            if path.endswith("/" + state_slug) and country_slug in path.split("/")
+        ]
+        if len(hits) == 1:
+            return hits[0]
+        if len(hits) > 1:
+            raise SystemExit(f"several regions for {country} / {state}: {hits}")
+    hits = [path for path in paths if path.split("/")[-1] == country_slug]
+    if len(hits) == 1:
+        return hits[0]
+    if not hits:
+        raise SystemExit(f"no region for {country} / {state}")
+    raise SystemExit(f"several regions for {country}: {hits}")
+
+
+def _centroid(el: dict) -> tuple[float, float]:
+    pts = _coords(el)
+    if pts:
+        return sum(p[1] for p in pts) / len(pts), sum(p[0] for p in pts) / len(pts)
+    bounds = el.get("bounds") or {}
+    if "minlat" in bounds and "minlon" in bounds:
+        return (bounds["minlat"] + bounds["maxlat"]) / 2, (bounds["minlon"] + bounds["maxlon"]) / 2
+    if "lat" in el and "lon" in el:
+        return float(el["lat"]), float(el["lon"])
+    raise SystemExit("winter sports element has no location")
+
+
 def search_by_name(name: str, state: str, country: str, lat: str, lon: str) -> list[dict]:
     safe = name.replace('"', "")
     if lat and lon:
@@ -842,19 +897,26 @@ def main() -> int:
     s3 = _s3() if os.environ.get("SKIP_S3") != "1" else None
     try:
         _put_job(s3, bucket, job_id, "running", action)
+        resort = None
         if action == "add":
-            hits = search_by_name(
-                os.environ.get("NAME", ""),
-                os.environ.get("STATE", ""),
-                os.environ.get("COUNTRY", ""),
-                os.environ.get("LAT", ""),
-                os.environ.get("LON", ""),
-            )
-            if len(hits) != 1:
-                msg = "not found" if not hits else "several matches"
-                _put_job(s3, bucket, job_id, "failed", msg, {"candidates": [str(h.get("id")) for h in hits]})
+            if not wid:
+                _put_job(s3, bucket, job_id, "failed", "winter_sports_id is required")
                 return 2
-            wid = str(hits[0]["id"])
+            resort = fetch_winter_sports(wid)
+            if not resort:
+                _put_job(s3, bucket, job_id, "failed", "not in OSM")
+                return 2
+            if not os.environ.get("NAME"):
+                os.environ["NAME"] = str((resort.get("tags") or {}).get("name") or wid)
+            if not region:
+                from analyze_ski_areas import _lookup_country_state_from_boundaries
+
+                lat, lon = _centroid(resort)
+                country, state = _lookup_country_state_from_boundaries(lat, lon, Path(boundaries))
+                os.environ["COUNTRY"] = str(country or "")
+                os.environ["STATE"] = str(state or "")
+                region = region_for_place(os.environ["COUNTRY"], os.environ["STATE"])
+                print("region", region, flush=True)
         if not wid or not region:
             _put_job(s3, bucket, job_id, "failed", "winter_sports_id and region are required")
             return 2
@@ -874,7 +936,8 @@ def main() -> int:
             _invalidate_site(s3, wid)
             _put_job(s3, bucket, job_id, "succeeded", f"deleted {wid}")
             return 0
-        resort = fetch_winter_sports(wid)
+        if resort is None:
+            resort = fetch_winter_sports(wid)
         if not resort:
             _put_job(s3, bucket, job_id, "failed", "not in OSM")
             return 2
