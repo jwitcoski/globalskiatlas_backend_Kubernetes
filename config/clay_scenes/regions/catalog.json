@@ -26,9 +26,9 @@
       "resort_count": 1,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=60.19230785 +lon_0=20.30783125 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3935.4502457199123,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 2256
+      "vertex_spacing_m": 4832.804835850806,
+      "height_exaggerate": 96.0,
+      "glb_bytes": 1516
     },
     {
       "id": "country-andorra",
@@ -47,9 +47,25 @@
       "resort_count": 2,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=42.53901957 +lon_0=1.56422449 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3809.8182866336456,
+      "vertex_spacing_m": 4590.80011529701,
       "height_exaggerate": 6.0,
-      "glb_bytes": 1880
+      "glb_bytes": 1396,
+      "admin1": [
+        {
+          "id": "state-la-massana-andorra",
+          "pageId": "state-la-massana-andorra",
+          "title": "La Massana",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-ordino-andorra",
+          "pageId": "state-ordino-andorra",
+          "title": "Ordino",
+          "resort_count": 2,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-argentina",
@@ -69,8 +85,52 @@
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=-38.41947682 +lon_0=-63.61714575 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
       "vertex_spacing_m": 7111.631023588208,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 2614072
+      "height_exaggerate": 62.9,
+      "glb_bytes": 2614072,
+      "admin1": [
+        {
+          "id": "state-chubut-argentina",
+          "pageId": "state-chubut-argentina",
+          "title": "Chubut",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-mendoza-argentina",
+          "pageId": "state-mendoza-argentina",
+          "title": "Mendoza",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-neuqun-argentina",
+          "pageId": "state-neuqun-argentina",
+          "title": "Neuqu\u00e9n",
+          "resort_count": 4,
+          "ready": true
+        },
+        {
+          "id": "state-ro-negro-argentina",
+          "pageId": "state-ro-negro-argentina",
+          "title": "R\u00edo Negro",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-santa-cruz-argentina",
+          "pageId": "state-santa-cruz-argentina",
+          "title": "Santa Cruz",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-tierra-del-fuego-argentina",
+          "pageId": "state-tierra-del-fuego-argentina",
+          "title": "Tierra del Fuego",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-armenia",
@@ -89,9 +149,18 @@
       "resort_count": 1,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=40.07707682 +lon_0=45.02152022 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3963.1848336502267,
-      "height_exaggerate": 9.4,
-      "glb_bytes": 89700
+      "vertex_spacing_m": 4988.781172807177,
+      "height_exaggerate": 9.6,
+      "glb_bytes": 56076,
+      "admin1": [
+        {
+          "id": "state-kotayk-armenia",
+          "pageId": "state-kotayk-armenia",
+          "title": "Kotayk",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-australia",
@@ -110,9 +179,32 @@
       "resort_count": 11,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=-31.99529388 +lon_0=136.03016198 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 14778.699826528687,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 1668304
+      "vertex_spacing_m": 11799.747243694372,
+      "height_exaggerate": 96.0,
+      "glb_bytes": 2613280,
+      "admin1": [
+        {
+          "id": "state-new-south-wales-australia",
+          "pageId": "state-new-south-wales-australia",
+          "title": "New South Wales",
+          "resort_count": 4,
+          "ready": true
+        },
+        {
+          "id": "state-tasmania-australia",
+          "pageId": "state-tasmania-australia",
+          "title": "Tasmania",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-victoria-australia",
+          "pageId": "state-victoria-australia",
+          "title": "Victoria",
+          "resort_count": 5,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-austria",
@@ -131,9 +223,67 @@
       "resort_count": 257,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=47.69327861 +lon_0=13.33474634 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3979.0931426400775,
-      "height_exaggerate": 21.2,
-      "glb_bytes": 250600
+      "vertex_spacing_m": 4982.401555552366,
+      "height_exaggerate": 20.0,
+      "glb_bytes": 158124,
+      "admin1": [
+        {
+          "id": "state-burgenland-austria",
+          "pageId": "state-burgenland-austria",
+          "title": "Burgenland",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-krnten-austria",
+          "pageId": "state-krnten-austria",
+          "title": "K\u00e4rnten",
+          "resort_count": 27,
+          "ready": true
+        },
+        {
+          "id": "state-niedersterreich-austria",
+          "pageId": "state-niedersterreich-austria",
+          "title": "Nieder\u00f6sterreich",
+          "resort_count": 23,
+          "ready": true
+        },
+        {
+          "id": "state-obersterreich-austria",
+          "pageId": "state-obersterreich-austria",
+          "title": "Ober\u00f6sterreich",
+          "resort_count": 16,
+          "ready": true
+        },
+        {
+          "id": "state-salzburg-austria",
+          "pageId": "state-salzburg-austria",
+          "title": "Salzburg",
+          "resort_count": 39,
+          "ready": true
+        },
+        {
+          "id": "state-steiermark-austria",
+          "pageId": "state-steiermark-austria",
+          "title": "Steiermark",
+          "resort_count": 52,
+          "ready": true
+        },
+        {
+          "id": "state-tirol-austria",
+          "pageId": "state-tirol-austria",
+          "title": "Tirol",
+          "resort_count": 78,
+          "ready": true
+        },
+        {
+          "id": "state-vorarlberg-austria",
+          "pageId": "state-vorarlberg-austria",
+          "title": "Vorarlberg",
+          "resort_count": 28,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-azerbaijan",
@@ -152,9 +302,18 @@
       "resort_count": 1,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=40.14320974 +lon_0=47.69673283 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3991.738127672193,
-      "height_exaggerate": 14.4,
-      "glb_bytes": 253556
+      "vertex_spacing_m": 4989.752100670316,
+      "height_exaggerate": 14.7,
+      "glb_bytes": 160000,
+      "admin1": [
+        {
+          "id": "state-qusar-azerbaijan",
+          "pageId": "state-qusar-azerbaijan",
+          "title": "Qusar",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-belarus",
@@ -173,9 +332,25 @@
       "resort_count": 2,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=53.69680105 +lon_0=27.94258854 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3997.017700013538,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 617180
+      "vertex_spacing_m": 4988.7813571596525,
+      "height_exaggerate": 96.0,
+      "glb_bytes": 392988,
+      "admin1": [
+        {
+          "id": "state-city-of-minsk-belarus",
+          "pageId": "state-city-of-minsk-belarus",
+          "title": "City of Minsk",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-minsk-belarus",
+          "pageId": "state-minsk-belarus",
+          "title": "Minsk",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-belgium",
@@ -194,9 +369,32 @@
       "resort_count": 4,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=50.49715139 +lon_0=4.44816256 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3947.1918784139984,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 91448
+      "vertex_spacing_m": 4951.6102902410485,
+      "height_exaggerate": 41.6,
+      "glb_bytes": 58648,
+      "admin1": [
+        {
+          "id": "state-antwerp-belgium",
+          "pageId": "state-antwerp-belgium",
+          "title": "Antwerp",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-liege-belgium",
+          "pageId": "state-liege-belgium",
+          "title": "Liege",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-limburg-belgium",
+          "pageId": "state-limburg-belgium",
+          "title": "Limburg",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-bosnia-and-herzegovina",
@@ -215,9 +413,25 @@
       "resort_count": 2,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=43.92464559 +lon_0=17.66995976 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3966.3499504948204,
-      "height_exaggerate": 19.1,
-      "glb_bytes": 153752
+      "vertex_spacing_m": 4988.495393039019,
+      "height_exaggerate": 19.3,
+      "glb_bytes": 97912,
+      "admin1": [
+        {
+          "id": "state-central-bosnia-bosnia-and-herzegovina",
+          "pageId": "state-central-bosnia-bosnia-and-herzegovina",
+          "title": "Central Bosnia",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-vlasenica-bosnia-and-herzegovina",
+          "pageId": "state-vlasenica-bosnia-and-herzegovina",
+          "title": "Vlasenica",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-brazil",
@@ -236,9 +450,18 @@
       "resort_count": 1,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=-14.23672557 +lon_0=-51.44776964 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 12386.43504730308,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 2622424
+      "vertex_spacing_m": 11995.4116157373,
+      "height_exaggerate": 96.0,
+      "glb_bytes": 2800764,
+      "admin1": [
+        {
+          "id": "state-so-paulo-brazil",
+          "pageId": "state-so-paulo-brazil",
+          "title": "S\u00e3o Paulo",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-bulgaria",
@@ -257,9 +480,39 @@
       "resort_count": 9,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=42.73466461 +lon_0=25.46170149 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3999.0358914150015,
-      "height_exaggerate": 21.1,
-      "glb_bytes": 333328
+      "vertex_spacing_m": 4979.940582786465,
+      "height_exaggerate": 21.7,
+      "glb_bytes": 215780,
+      "admin1": [
+        {
+          "id": "state-blagoevgrad-bulgaria",
+          "pageId": "state-blagoevgrad-bulgaria",
+          "title": "Blagoevgrad",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-grad-sofiya-bulgaria",
+          "pageId": "state-grad-sofiya-bulgaria",
+          "title": "Grad Sofiya",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-plovdiv-bulgaria",
+          "pageId": "state-plovdiv-bulgaria",
+          "title": "Plovdiv",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-smolyan-bulgaria",
+          "pageId": "state-smolyan-bulgaria",
+          "title": "Smolyan",
+          "resort_count": 2,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-canada",
@@ -278,9 +531,74 @@
       "resort_count": 132,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=62.39421224 +lon_0=-96.81718909 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 13327.374277835217,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 2544032
+      "vertex_spacing_m": 11997.57712951847,
+      "height_exaggerate": 96.0,
+      "glb_bytes": 3125416,
+      "admin1": [
+        {
+          "id": "state-alberta-canada",
+          "pageId": "state-alberta-canada",
+          "title": "Alberta",
+          "resort_count": 18,
+          "ready": true
+        },
+        {
+          "id": "state-british-columbia-canada",
+          "pageId": "state-british-columbia-canada",
+          "title": "British Columbia",
+          "resort_count": 30,
+          "ready": true
+        },
+        {
+          "id": "state-new-brunswick-canada",
+          "pageId": "state-new-brunswick-canada",
+          "title": "New Brunswick",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-newfoundland-and-labrador-canada",
+          "pageId": "state-newfoundland-and-labrador-canada",
+          "title": "Newfoundland and Labrador",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-nova-scotia-canada",
+          "pageId": "state-nova-scotia-canada",
+          "title": "Nova Scotia",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-ontario-canada",
+          "pageId": "state-ontario-canada",
+          "title": "Ontario",
+          "resort_count": 28,
+          "ready": true
+        },
+        {
+          "id": "state-qubec-canada",
+          "pageId": "state-qubec-canada",
+          "title": "Qu\u00e9bec",
+          "resort_count": 46,
+          "ready": true
+        },
+        {
+          "id": "state-saskatchewan-canada",
+          "pageId": "state-saskatchewan-canada",
+          "title": "Saskatchewan",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-yukon-canada",
+          "pageId": "state-yukon-canada",
+          "title": "Yukon",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-chile",
@@ -299,9 +617,39 @@
       "resort_count": 6,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=-36.71254621 +lon_0=-87.93903561 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 12201.052795825526,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 205640
+      "vertex_spacing_m": 6249.076723010137,
+      "height_exaggerate": 71.7,
+      "glb_bytes": 823096,
+      "admin1": [
+        {
+          "id": "state-la-araucana-chile",
+          "pageId": "state-la-araucana-chile",
+          "title": "La Araucan\u00eda",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-libertador-general-bernardo-ohiggins-chile",
+          "pageId": "state-libertador-general-bernardo-ohiggins-chile",
+          "title": "Libertador General Bernardo O'Higgins",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-los-lagos-chile",
+          "pageId": "state-los-lagos-chile",
+          "title": "Los Lagos",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-valparaso-chile",
+          "pageId": "state-valparaso-chile",
+          "title": "Valpara\u00edso",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-china",
@@ -320,9 +668,186 @@
       "resort_count": 228,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=34.66936168 +lon_0=104.19020837 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 13033.441087898056,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 2618776
+      "vertex_spacing_m": 11998.319783510919,
+      "height_exaggerate": 76.5,
+      "glb_bytes": 3094216,
+      "admin1": [
+        {
+          "id": "state-anhui-china",
+          "pageId": "state-anhui-china",
+          "title": "Anhui",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-beijing-china",
+          "pageId": "state-beijing-china",
+          "title": "Beijing",
+          "resort_count": 20,
+          "ready": true
+        },
+        {
+          "id": "state-chongqing-china",
+          "pageId": "state-chongqing-china",
+          "title": "Chongqing",
+          "resort_count": 5,
+          "ready": true
+        },
+        {
+          "id": "state-gansu-china",
+          "pageId": "state-gansu-china",
+          "title": "Gansu",
+          "resort_count": 8,
+          "ready": true
+        },
+        {
+          "id": "state-guizhou-china",
+          "pageId": "state-guizhou-china",
+          "title": "Guizhou",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-hebei-china",
+          "pageId": "state-hebei-china",
+          "title": "Hebei",
+          "resort_count": 21,
+          "ready": true
+        },
+        {
+          "id": "state-heilongjiang-china",
+          "pageId": "state-heilongjiang-china",
+          "title": "Heilongjiang",
+          "resort_count": 11,
+          "ready": true
+        },
+        {
+          "id": "state-henan-china",
+          "pageId": "state-henan-china",
+          "title": "Henan",
+          "resort_count": 10,
+          "ready": true
+        },
+        {
+          "id": "state-hubei-china",
+          "pageId": "state-hubei-china",
+          "title": "Hubei",
+          "resort_count": 7,
+          "ready": true
+        },
+        {
+          "id": "state-hunan-china",
+          "pageId": "state-hunan-china",
+          "title": "Hunan",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-inner-mongol-china",
+          "pageId": "state-inner-mongol-china",
+          "title": "Inner Mongol",
+          "resort_count": 12,
+          "ready": true
+        },
+        {
+          "id": "state-jiangsu-china",
+          "pageId": "state-jiangsu-china",
+          "title": "Jiangsu",
+          "resort_count": 8,
+          "ready": true
+        },
+        {
+          "id": "state-jiangxi-china",
+          "pageId": "state-jiangxi-china",
+          "title": "Jiangxi",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-jilin-china",
+          "pageId": "state-jilin-china",
+          "title": "Jilin",
+          "resort_count": 14,
+          "ready": true
+        },
+        {
+          "id": "state-liaoning-china",
+          "pageId": "state-liaoning-china",
+          "title": "Liaoning",
+          "resort_count": 17,
+          "ready": true
+        },
+        {
+          "id": "state-ningxia-china",
+          "pageId": "state-ningxia-china",
+          "title": "Ningxia",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-qinghai-china",
+          "pageId": "state-qinghai-china",
+          "title": "Qinghai",
+          "resort_count": 9,
+          "ready": true
+        },
+        {
+          "id": "state-shaanxi-china",
+          "pageId": "state-shaanxi-china",
+          "title": "Shaanxi",
+          "resort_count": 12,
+          "ready": true
+        },
+        {
+          "id": "state-shandong-china",
+          "pageId": "state-shandong-china",
+          "title": "Shandong",
+          "resort_count": 23,
+          "ready": true
+        },
+        {
+          "id": "state-shanxi-china",
+          "pageId": "state-shanxi-china",
+          "title": "Shanxi",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-sichuan-china",
+          "pageId": "state-sichuan-china",
+          "title": "Sichuan",
+          "resort_count": 10,
+          "ready": true
+        },
+        {
+          "id": "state-tianjin-china",
+          "pageId": "state-tianjin-china",
+          "title": "Tianjin",
+          "resort_count": 6,
+          "ready": true
+        },
+        {
+          "id": "state-xinjiang-china",
+          "pageId": "state-xinjiang-china",
+          "title": "Xinjiang",
+          "resort_count": 11,
+          "ready": true
+        },
+        {
+          "id": "state-yunnan-china",
+          "pageId": "state-yunnan-china",
+          "title": "Yunnan",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-zhejiang-china",
+          "pageId": "state-zhejiang-china",
+          "title": "Zhejiang",
+          "resort_count": 12,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-croatia",
@@ -341,9 +866,25 @@
       "resort_count": 2,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=44.48165314 +lon_0=16.45746443 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3985.381013255671,
-      "height_exaggerate": 28.8,
-      "glb_bytes": 151188
+      "vertex_spacing_m": 4971.605377223511,
+      "height_exaggerate": 32.1,
+      "glb_bytes": 95216,
+      "admin1": [
+        {
+          "id": "state-karlovacka-croatia",
+          "pageId": "state-karlovacka-croatia",
+          "title": "Karlovacka",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-primorsko-goranska-croatia",
+          "pageId": "state-primorsko-goranska-croatia",
+          "title": "Primorsko-Goranska",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-czechia",
@@ -383,9 +924,25 @@
       "resort_count": 2,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=58.59335155 +lon_0=25.00942142 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3980.5243640572776,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 131584
+      "vertex_spacing_m": 4950.3889608910085,
+      "height_exaggerate": 96.0,
+      "glb_bytes": 84064,
+      "admin1": [
+        {
+          "id": "state-jrva-estonia",
+          "pageId": "state-jrva-estonia",
+          "title": "J\u00e4rva",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-valga-estonia",
+          "pageId": "state-valga-estonia",
+          "title": "Valga",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-finland",
@@ -404,9 +961,116 @@
       "resort_count": 35,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=64.94326752 +lon_0=26.09634465 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3982.794453482596,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 987524
+      "vertex_spacing_m": 4961.175595974088,
+      "height_exaggerate": 96.0,
+      "glb_bytes": 632104,
+      "admin1": [
+        {
+          "id": "state-central-finland-finland",
+          "pageId": "state-central-finland-finland",
+          "title": "Central Finland",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-finland-proper-finland",
+          "pageId": "state-finland-proper-finland",
+          "title": "Finland Proper",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-kainuu-finland",
+          "pageId": "state-kainuu-finland",
+          "title": "Kainuu",
+          "resort_count": 4,
+          "ready": true
+        },
+        {
+          "id": "state-kymenlaakso-finland",
+          "pageId": "state-kymenlaakso-finland",
+          "title": "Kymenlaakso",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-lapland-finland",
+          "pageId": "state-lapland-finland",
+          "title": "Lapland",
+          "resort_count": 8,
+          "ready": true
+        },
+        {
+          "id": "state-north-karelia-finland",
+          "pageId": "state-north-karelia-finland",
+          "title": "North Karelia",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-northern-ostrobothnia-finland",
+          "pageId": "state-northern-ostrobothnia-finland",
+          "title": "Northern Ostrobothnia",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-northern-savonia-finland",
+          "pageId": "state-northern-savonia-finland",
+          "title": "Northern Savonia",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-ostrobothnia-finland",
+          "pageId": "state-ostrobothnia-finland",
+          "title": "Ostrobothnia",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-pirkanmaa-finland",
+          "pageId": "state-pirkanmaa-finland",
+          "title": "Pirkanmaa",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-pijt-hme-finland",
+          "pageId": "state-pijt-hme-finland",
+          "title": "P\u00e4ij\u00e4t-H\u00e4me",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-southern-ostrobothnia-finland",
+          "pageId": "state-southern-ostrobothnia-finland",
+          "title": "Southern Ostrobothnia",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-southern-savonia-finland",
+          "pageId": "state-southern-savonia-finland",
+          "title": "Southern Savonia",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-tavastia-proper-finland",
+          "pageId": "state-tavastia-proper-finland",
+          "title": "Tavastia Proper",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-uusimaa-finland",
+          "pageId": "state-uusimaa-finland",
+          "title": "Uusimaa",
+          "resort_count": 4,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-france",
@@ -425,9 +1089,235 @@
       "resort_count": 215,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=14.85980352 +lon_0=-2.97142493 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 29746.500444877685,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 31868
+      "vertex_spacing_m": 15252.929069351661,
+      "height_exaggerate": 96.0,
+      "glb_bytes": 125428,
+      "admin1": [
+        {
+          "id": "state-ain-france",
+          "pageId": "state-ain-france",
+          "title": "Ain",
+          "resort_count": 5,
+          "ready": true
+        },
+        {
+          "id": "state-allier-france",
+          "pageId": "state-allier-france",
+          "title": "Allier",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-alpes-maritimes-france",
+          "pageId": "state-alpes-maritimes-france",
+          "title": "Alpes-Maritimes",
+          "resort_count": 10,
+          "ready": true
+        },
+        {
+          "id": "state-alpes-de-haute-provence-france",
+          "pageId": "state-alpes-de-haute-provence-france",
+          "title": "Alpes-de-Haute-Provence",
+          "resort_count": 7,
+          "ready": true
+        },
+        {
+          "id": "state-ardche-france",
+          "pageId": "state-ardche-france",
+          "title": "Ard\u00e8che",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-arige-france",
+          "pageId": "state-arige-france",
+          "title": "Ari\u00e8ge",
+          "resort_count": 8,
+          "ready": true
+        },
+        {
+          "id": "state-aude-france",
+          "pageId": "state-aude-france",
+          "title": "Aude",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-aveyron-france",
+          "pageId": "state-aveyron-france",
+          "title": "Aveyron",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-bas-rhin-france",
+          "pageId": "state-bas-rhin-france",
+          "title": "Bas-Rhin",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-cantal-france",
+          "pageId": "state-cantal-france",
+          "title": "Cantal",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-corse-du-sud-france",
+          "pageId": "state-corse-du-sud-france",
+          "title": "Corse-du-Sud",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-doubs-france",
+          "pageId": "state-doubs-france",
+          "title": "Doubs",
+          "resort_count": 12,
+          "ready": true
+        },
+        {
+          "id": "state-drme-france",
+          "pageId": "state-drme-france",
+          "title": "Dr\u00f4me",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-haute-corse-france",
+          "pageId": "state-haute-corse-france",
+          "title": "Haute-Corse",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-haute-garonne-france",
+          "pageId": "state-haute-garonne-france",
+          "title": "Haute-Garonne",
+          "resort_count": 4,
+          "ready": true
+        },
+        {
+          "id": "state-haute-loire-france",
+          "pageId": "state-haute-loire-france",
+          "title": "Haute-Loire",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-haute-rhin-france",
+          "pageId": "state-haute-rhin-france",
+          "title": "Haute-Rhin",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-haute-savoie-france",
+          "pageId": "state-haute-savoie-france",
+          "title": "Haute-Savoie",
+          "resort_count": 33,
+          "ready": true
+        },
+        {
+          "id": "state-haute-sane-france",
+          "pageId": "state-haute-sane-france",
+          "title": "Haute-Sa\u00f4ne",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-hautes-alpes-france",
+          "pageId": "state-hautes-alpes-france",
+          "title": "Hautes-Alpes",
+          "resort_count": 24,
+          "ready": true
+        },
+        {
+          "id": "state-hautes-pyrnes-france",
+          "pageId": "state-hautes-pyrnes-france",
+          "title": "Hautes-Pyr\u00e9n\u00e9es",
+          "resort_count": 8,
+          "ready": true
+        },
+        {
+          "id": "state-isre-france",
+          "pageId": "state-isre-france",
+          "title": "Is\u00e8re",
+          "resort_count": 23,
+          "ready": true
+        },
+        {
+          "id": "state-jura-france",
+          "pageId": "state-jura-france",
+          "title": "Jura",
+          "resort_count": 6,
+          "ready": true
+        },
+        {
+          "id": "state-loire-france",
+          "pageId": "state-loire-france",
+          "title": "Loire",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-lozre-france",
+          "pageId": "state-lozre-france",
+          "title": "Loz\u00e8re",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-puy-de-dme-france",
+          "pageId": "state-puy-de-dme-france",
+          "title": "Puy-de-D\u00f4me",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-pyrnes-atlantiques-france",
+          "pageId": "state-pyrnes-atlantiques-france",
+          "title": "Pyr\u00e9n\u00e9es-Atlantiques",
+          "resort_count": 4,
+          "ready": true
+        },
+        {
+          "id": "state-pyrnes-orientales-france",
+          "pageId": "state-pyrnes-orientales-france",
+          "title": "Pyr\u00e9n\u00e9es-Orientales",
+          "resort_count": 9,
+          "ready": true
+        },
+        {
+          "id": "state-savoie-france",
+          "pageId": "state-savoie-france",
+          "title": "Savoie",
+          "resort_count": 21,
+          "ready": true
+        },
+        {
+          "id": "state-territoire-de-belfort-france",
+          "pageId": "state-territoire-de-belfort-france",
+          "title": "Territoire de Belfort",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-vaucluse-france",
+          "pageId": "state-vaucluse-france",
+          "title": "Vaucluse",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-vosges-france",
+          "pageId": "state-vosges-france",
+          "title": "Vosges",
+          "resort_count": 13,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-georgia",
@@ -446,9 +1336,32 @@
       "resort_count": 5,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=42.29154114 +lon_0=43.34038973 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3976.91420442279,
-      "height_exaggerate": 14.3,
-      "glb_bytes": 205956
+      "vertex_spacing_m": 4979.9889672387735,
+      "height_exaggerate": 14.6,
+      "glb_bytes": 130764,
+      "admin1": [
+        {
+          "id": "state-ajaria-georgia",
+          "pageId": "state-ajaria-georgia",
+          "title": "Ajaria",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-mtskheta-mtianeti-georgia",
+          "pageId": "state-mtskheta-mtianeti-georgia",
+          "title": "Mtskheta-Mtianeti",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-samtskhe-javakheti-georgia",
+          "pageId": "state-samtskhe-javakheti-georgia",
+          "title": "Samtskhe-Javakheti",
+          "resort_count": 3,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-germany",
@@ -467,9 +1380,60 @@
       "resort_count": 97,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=51.16822764 +lon_0=10.44011682 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3981.9933085712987,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 1063128
+      "vertex_spacing_m": 4970.142074543341,
+      "height_exaggerate": 54.9,
+      "glb_bytes": 677032,
+      "admin1": [
+        {
+          "id": "state-baden-wrttemberg-germany",
+          "pageId": "state-baden-wrttemberg-germany",
+          "title": "Baden-W\u00fcrttemberg",
+          "resort_count": 15,
+          "ready": true
+        },
+        {
+          "id": "state-bayern-germany",
+          "pageId": "state-bayern-germany",
+          "title": "Bayern",
+          "resort_count": 50,
+          "ready": true
+        },
+        {
+          "id": "state-hessen-germany",
+          "pageId": "state-hessen-germany",
+          "title": "Hessen",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-niedersachsen-germany",
+          "pageId": "state-niedersachsen-germany",
+          "title": "Niedersachsen",
+          "resort_count": 4,
+          "ready": true
+        },
+        {
+          "id": "state-nordrhein-westfalen-germany",
+          "pageId": "state-nordrhein-westfalen-germany",
+          "title": "Nordrhein-Westfalen",
+          "resort_count": 6,
+          "ready": true
+        },
+        {
+          "id": "state-rheinland-pfalz-germany",
+          "pageId": "state-rheinland-pfalz-germany",
+          "title": "Rheinland-Pfalz",
+          "resort_count": 4,
+          "ready": true
+        },
+        {
+          "id": "state-sachsen-germany",
+          "pageId": "state-sachsen-germany",
+          "title": "Sachsen",
+          "resort_count": 21,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-greece",
@@ -488,9 +1452,53 @@
       "resort_count": 8,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=38.28234192 +lon_0=23.93311608 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3994.692292314379,
-      "height_exaggerate": 20.4,
-      "glb_bytes": 362888
+      "vertex_spacing_m": 4999.842660752743,
+      "height_exaggerate": 36.5,
+      "glb_bytes": 223428,
+      "admin1": [
+        {
+          "id": "state-dytiki-ellada-greece",
+          "pageId": "state-dytiki-ellada-greece",
+          "title": "Dytiki Ellada",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-dytiki-makedonia-greece",
+          "pageId": "state-dytiki-makedonia-greece",
+          "title": "Dytiki Makedonia",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-kentriki-makedonia-greece",
+          "pageId": "state-kentriki-makedonia-greece",
+          "title": "Kentriki Makedonia",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-peloponnisos-greece",
+          "pageId": "state-peloponnisos-greece",
+          "title": "Peloponnisos",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-stere-ellda-greece",
+          "pageId": "state-stere-ellda-greece",
+          "title": "Stere\u00e1 Ell\u00e1da",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-thessalia-greece",
+          "pageId": "state-thessalia-greece",
+          "title": "Thessalia",
+          "resort_count": 2,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-hungary",
@@ -509,9 +1517,46 @@
       "resort_count": 9,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=47.15552073 +lon_0=19.48581791 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3998.5798746533496,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 275532
+      "vertex_spacing_m": 4970.210686488244,
+      "height_exaggerate": 83.2,
+      "glb_bytes": 175984,
+      "admin1": [
+        {
+          "id": "state-budapest-hungary",
+          "pageId": "state-budapest-hungary",
+          "title": "Budapest",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-heves-hungary",
+          "pageId": "state-heves-hungary",
+          "title": "Heves",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-pest-hungary",
+          "pageId": "state-pest-hungary",
+          "title": "Pest",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-veszprm-hungary",
+          "pageId": "state-veszprm-hungary",
+          "title": "Veszpr\u00e9m",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-zalaegerszeg-hungary",
+          "pageId": "state-zalaegerszeg-hungary",
+          "title": "Zalaegerszeg",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-iceland",
@@ -530,9 +1575,18 @@
       "resort_count": 1,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=64.98043447 +lon_0=-19.03003903 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3974.1444478944745,
-      "height_exaggerate": 24.8,
-      "glb_bytes": 294568
+      "vertex_spacing_m": 4977.207584766029,
+      "height_exaggerate": 27.3,
+      "glb_bytes": 185456,
+      "admin1": [
+        {
+          "id": "state-hfuborgarsvi-iceland",
+          "pageId": "state-hfuborgarsvi-iceland",
+          "title": "H\u00f6fu\u00f0borgarsv\u00e6\u00f0i",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-india",
@@ -551,9 +1605,18 @@
       "resort_count": 3,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=21.12047821 +lon_0=82.75282780 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 9454.192546313401,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 1663000
+      "vertex_spacing_m": 7563.354037050722,
+      "height_exaggerate": 51.3,
+      "glb_bytes": 2605460,
+      "admin1": [
+        {
+          "id": "state-jammu-and-kashmir-india",
+          "pageId": "state-jammu-and-kashmir-india",
+          "title": "Jammu and Kashmir",
+          "resort_count": 3,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-iran",
@@ -573,8 +1636,87 @@
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=32.41265122 +lon_0=53.66724573 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
       "vertex_spacing_m": 5417.357493303653,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 2630492
+      "height_exaggerate": 42.2,
+      "glb_bytes": 2630480,
+      "admin1": [
+        {
+          "id": "state-chahar-mahall-and-bakhtiari-iran",
+          "pageId": "state-chahar-mahall-and-bakhtiari-iran",
+          "title": "Chahar Mahall and Bakhtiari",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-east-azarbaijan-iran",
+          "pageId": "state-east-azarbaijan-iran",
+          "title": "East Azarbaijan",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-esfahan-iran",
+          "pageId": "state-esfahan-iran",
+          "title": "Esfahan",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-fars-iran",
+          "pageId": "state-fars-iran",
+          "title": "Fars",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-hamadan-iran",
+          "pageId": "state-hamadan-iran",
+          "title": "Hamadan",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-kordestan-iran",
+          "pageId": "state-kordestan-iran",
+          "title": "Kordestan",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-lorestan-iran",
+          "pageId": "state-lorestan-iran",
+          "title": "Lorestan",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-razavi-khorasan-iran",
+          "pageId": "state-razavi-khorasan-iran",
+          "title": "Razavi Khorasan",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-tehran-iran",
+          "pageId": "state-tehran-iran",
+          "title": "Tehran",
+          "resort_count": 7,
+          "ready": true
+        },
+        {
+          "id": "state-west-azarbaijan-iran",
+          "pageId": "state-west-azarbaijan-iran",
+          "title": "West Azarbaijan",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-zanjan-iran",
+          "pageId": "state-zanjan-iran",
+          "title": "Zanjan",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-ireland",
@@ -593,9 +1735,18 @@
       "resort_count": 1,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=53.41604239 +lon_0=-8.22740638 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3985.9594736338317,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 198636
+      "vertex_spacing_m": 4967.334736780101,
+      "height_exaggerate": 84.1,
+      "glb_bytes": 125680,
+      "admin1": [
+        {
+          "id": "state-dn-laoghairerathdown-ireland",
+          "pageId": "state-dn-laoghairerathdown-ireland",
+          "title": "D\u00fan Laoghaire\u2013Rathdown",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-italy",
@@ -614,9 +1765,242 @@
       "resort_count": 147,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=41.28722941 +lon_0=12.55942610 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3998.9288207275063,
-      "height_exaggerate": 22.0,
-      "glb_bytes": 884920
+      "vertex_spacing_m": 4978.671737702108,
+      "height_exaggerate": 37.7,
+      "glb_bytes": 564708,
+      "admin1": [
+        {
+          "id": "state-alessandria-italy",
+          "pageId": "state-alessandria-italy",
+          "title": "Alessandria",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-aoste-italy",
+          "pageId": "state-aoste-italy",
+          "title": "Aoste",
+          "resort_count": 15,
+          "ready": true
+        },
+        {
+          "id": "state-arezzo-italy",
+          "pageId": "state-arezzo-italy",
+          "title": "Arezzo",
+          "resort_count": 4,
+          "ready": true
+        },
+        {
+          "id": "state-belluno-italy",
+          "pageId": "state-belluno-italy",
+          "title": "Belluno",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-bergamo-italy",
+          "pageId": "state-bergamo-italy",
+          "title": "Bergamo",
+          "resort_count": 6,
+          "ready": true
+        },
+        {
+          "id": "state-biella-italy",
+          "pageId": "state-biella-italy",
+          "title": "Biella",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-bologna-italy",
+          "pageId": "state-bologna-italy",
+          "title": "Bologna",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-bozen-italy",
+          "pageId": "state-bozen-italy",
+          "title": "Bozen",
+          "resort_count": 13,
+          "ready": true
+        },
+        {
+          "id": "state-brescia-italy",
+          "pageId": "state-brescia-italy",
+          "title": "Brescia",
+          "resort_count": 4,
+          "ready": true
+        },
+        {
+          "id": "state-chieti-italy",
+          "pageId": "state-chieti-italy",
+          "title": "Chieti",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-como-italy",
+          "pageId": "state-como-italy",
+          "title": "Como",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-cuneo-italy",
+          "pageId": "state-cuneo-italy",
+          "title": "Cuneo",
+          "resort_count": 13,
+          "ready": true
+        },
+        {
+          "id": "state-forl-cesena-italy",
+          "pageId": "state-forl-cesena-italy",
+          "title": "Forl\u00ec-Cesena",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-imperia-italy",
+          "pageId": "state-imperia-italy",
+          "title": "Imperia",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-laquila-italy",
+          "pageId": "state-laquila-italy",
+          "title": "L'Aquila",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-lecco-italy",
+          "pageId": "state-lecco-italy",
+          "title": "Lecco",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-lucca-italy",
+          "pageId": "state-lucca-italy",
+          "title": "Lucca",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-macerata-italy",
+          "pageId": "state-macerata-italy",
+          "title": "Macerata",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-massa-carrara-italy",
+          "pageId": "state-massa-carrara-italy",
+          "title": "Massa-Carrara",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-modena-italy",
+          "pageId": "state-modena-italy",
+          "title": "Modena",
+          "resort_count": 4,
+          "ready": true
+        },
+        {
+          "id": "state-parma-italy",
+          "pageId": "state-parma-italy",
+          "title": "Parma",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-pavia-italy",
+          "pageId": "state-pavia-italy",
+          "title": "Pavia",
+          "resort_count": 4,
+          "ready": true
+        },
+        {
+          "id": "state-pordenone-italy",
+          "pageId": "state-pordenone-italy",
+          "title": "Pordenone",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-reggio-emilia-italy",
+          "pageId": "state-reggio-emilia-italy",
+          "title": "Reggio Emilia",
+          "resort_count": 4,
+          "ready": true
+        },
+        {
+          "id": "state-sondrio-italy",
+          "pageId": "state-sondrio-italy",
+          "title": "Sondrio",
+          "resort_count": 21,
+          "ready": true
+        },
+        {
+          "id": "state-trento-italy",
+          "pageId": "state-trento-italy",
+          "title": "Trento",
+          "resort_count": 7,
+          "ready": true
+        },
+        {
+          "id": "state-turin-italy",
+          "pageId": "state-turin-italy",
+          "title": "Turin",
+          "resort_count": 13,
+          "ready": true
+        },
+        {
+          "id": "state-udine-italy",
+          "pageId": "state-udine-italy",
+          "title": "Udine",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-varese-italy",
+          "pageId": "state-varese-italy",
+          "title": "Varese",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-verbano-cusio-ossola-italy",
+          "pageId": "state-verbano-cusio-ossola-italy",
+          "title": "Verbano-Cusio-Ossola",
+          "resort_count": 10,
+          "ready": true
+        },
+        {
+          "id": "state-vercelli-italy",
+          "pageId": "state-vercelli-italy",
+          "title": "Vercelli",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-verona-italy",
+          "pageId": "state-verona-italy",
+          "title": "Verona",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-vicenza-italy",
+          "pageId": "state-vicenza-italy",
+          "title": "Vicenza",
+          "resort_count": 4,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-japan",
@@ -635,9 +2019,214 @@
       "resort_count": 412,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=34.86397940 +lon_0=138.46212813 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 7807.120743251541,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 273412
+      "vertex_spacing_m": 4993.507730310527,
+      "height_exaggerate": 96.0,
+      "glb_bytes": 682016,
+      "admin1": [
+        {
+          "id": "state-akita-japan",
+          "pageId": "state-akita-japan",
+          "title": "Akita",
+          "resort_count": 17,
+          "ready": true
+        },
+        {
+          "id": "state-aomori-japan",
+          "pageId": "state-aomori-japan",
+          "title": "Aomori",
+          "resort_count": 9,
+          "ready": true
+        },
+        {
+          "id": "state-ehime-japan",
+          "pageId": "state-ehime-japan",
+          "title": "Ehime",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-fukui-japan",
+          "pageId": "state-fukui-japan",
+          "title": "Fukui",
+          "resort_count": 7,
+          "ready": true
+        },
+        {
+          "id": "state-fukushima-japan",
+          "pageId": "state-fukushima-japan",
+          "title": "Fukushima",
+          "resort_count": 24,
+          "ready": true
+        },
+        {
+          "id": "state-gifu-japan",
+          "pageId": "state-gifu-japan",
+          "title": "Gifu",
+          "resort_count": 18,
+          "ready": true
+        },
+        {
+          "id": "state-gunma-japan",
+          "pageId": "state-gunma-japan",
+          "title": "Gunma",
+          "resort_count": 31,
+          "ready": true
+        },
+        {
+          "id": "state-hiroshima-japan",
+          "pageId": "state-hiroshima-japan",
+          "title": "Hiroshima",
+          "resort_count": 6,
+          "ready": true
+        },
+        {
+          "id": "state-hokkaid-japan",
+          "pageId": "state-hokkaid-japan",
+          "title": "Hokkaid\u014d",
+          "resort_count": 90,
+          "ready": true
+        },
+        {
+          "id": "state-hygo-japan",
+          "pageId": "state-hygo-japan",
+          "title": "Hy\u014dgo",
+          "resort_count": 11,
+          "ready": true
+        },
+        {
+          "id": "state-ishikawa-japan",
+          "pageId": "state-ishikawa-japan",
+          "title": "Ishikawa",
+          "resort_count": 4,
+          "ready": true
+        },
+        {
+          "id": "state-iwate-japan",
+          "pageId": "state-iwate-japan",
+          "title": "Iwate",
+          "resort_count": 11,
+          "ready": true
+        },
+        {
+          "id": "state-mie-japan",
+          "pageId": "state-mie-japan",
+          "title": "Mie",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-miyagi-japan",
+          "pageId": "state-miyagi-japan",
+          "title": "Miyagi",
+          "resort_count": 9,
+          "ready": true
+        },
+        {
+          "id": "state-miyazaki-japan",
+          "pageId": "state-miyazaki-japan",
+          "title": "Miyazaki",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-nagano-japan",
+          "pageId": "state-nagano-japan",
+          "title": "Nagano",
+          "resort_count": 72,
+          "ready": true
+        },
+        {
+          "id": "state-niigata-japan",
+          "pageId": "state-niigata-japan",
+          "title": "Niigata",
+          "resort_count": 46,
+          "ready": true
+        },
+        {
+          "id": "state-okayama-japan",
+          "pageId": "state-okayama-japan",
+          "title": "Okayama",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-saga-japan",
+          "pageId": "state-saga-japan",
+          "title": "Saga",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-shiga-japan",
+          "pageId": "state-shiga-japan",
+          "title": "Shiga",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-shimane-japan",
+          "pageId": "state-shimane-japan",
+          "title": "Shimane",
+          "resort_count": 7,
+          "ready": true
+        },
+        {
+          "id": "state-shizuoka-japan",
+          "pageId": "state-shizuoka-japan",
+          "title": "Shizuoka",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-tochigi-japan",
+          "pageId": "state-tochigi-japan",
+          "title": "Tochigi",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-tokushima-japan",
+          "pageId": "state-tokushima-japan",
+          "title": "Tokushima",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-tottori-japan",
+          "pageId": "state-tottori-japan",
+          "title": "Tottori",
+          "resort_count": 8,
+          "ready": true
+        },
+        {
+          "id": "state-toyama-japan",
+          "pageId": "state-toyama-japan",
+          "title": "Toyama",
+          "resort_count": 4,
+          "ready": true
+        },
+        {
+          "id": "state-yamagata-japan",
+          "pageId": "state-yamagata-japan",
+          "title": "Yamagata",
+          "resort_count": 19,
+          "ready": true
+        },
+        {
+          "id": "state-yamanashi-japan",
+          "pageId": "state-yamanashi-japan",
+          "title": "Yamanashi",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-ita-japan",
+          "pageId": "state-ita-japan",
+          "title": "\u014cita",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-kazakhstan",
@@ -657,8 +2246,24 @@
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=48.00960297 +lon_0=66.90103744 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
       "vertex_spacing_m": 7017.513052882801,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 2616904
+      "height_exaggerate": 66.6,
+      "glb_bytes": 2616784,
+      "admin1": [
+        {
+          "id": "state-almaty-kazakhstan",
+          "pageId": "state-almaty-kazakhstan",
+          "title": "Almaty",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-east-kazakhstan-kazakhstan",
+          "pageId": "state-east-kazakhstan-kazakhstan",
+          "title": "East Kazakhstan",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-kosovo",
@@ -677,9 +2282,18 @@
       "resort_count": 0,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=42.55354065 +lon_0=20.90371586 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3960.2790809914673,
-      "height_exaggerate": 9.8,
-      "glb_bytes": 32460
+      "vertex_spacing_m": 4921.550401201778,
+      "height_exaggerate": 9.9,
+      "glb_bytes": 20908,
+      "admin1": [
+        {
+          "id": "state-trpce-kosovo",
+          "pageId": "state-trpce-kosovo",
+          "title": "\u0160trpce",
+          "resort_count": 2,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-kyrgyzstan",
@@ -698,9 +2312,25 @@
       "resort_count": 16,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=41.22546926 +lon_0=74.72875085 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3993.427409123372,
-      "height_exaggerate": 18.6,
-      "glb_bytes": 590440
+      "vertex_spacing_m": 4981.309834490083,
+      "height_exaggerate": 18.8,
+      "glb_bytes": 375180,
+      "admin1": [
+        {
+          "id": "state-chuy-kyrgyzstan",
+          "pageId": "state-chuy-kyrgyzstan",
+          "title": "Chuy",
+          "resort_count": 15,
+          "ready": true
+        },
+        {
+          "id": "state-ysyk-kl-kyrgyzstan",
+          "pageId": "state-ysyk-kl-kyrgyzstan",
+          "title": "Ysyk-K\u00f6l",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-latvia",
@@ -719,9 +2349,18 @@
       "resort_count": 1,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=56.87585765 +lon_0=24.59533695 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3972.638265073163,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 193172
+      "vertex_spacing_m": 4987.219968229362,
+      "height_exaggerate": 96.0,
+      "glb_bytes": 123572,
+      "admin1": [
+        {
+          "id": "state-engures-latvia",
+          "pageId": "state-engures-latvia",
+          "title": "Engures",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-lebanon",
@@ -740,9 +2379,25 @@
       "resort_count": 3,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=33.88746755 +lon_0=35.85466821 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3975.389514595263,
-      "height_exaggerate": 6.0,
-      "glb_bytes": 30028
+      "vertex_spacing_m": 4970.005970912976,
+      "height_exaggerate": 6.4,
+      "glb_bytes": 19228,
+      "admin1": [
+        {
+          "id": "state-mount-lebanon-lebanon",
+          "pageId": "state-mount-lebanon-lebanon",
+          "title": "Mount Lebanon",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-north-lebanon-lebanon",
+          "pageId": "state-north-lebanon-lebanon",
+          "title": "North Lebanon",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-lesotho",
@@ -761,9 +2416,18 @@
       "resort_count": 1,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=-29.61478037 +lon_0=28.21903162 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3999.5715296370026,
-      "height_exaggerate": 13.3,
-      "glb_bytes": 88052
+      "vertex_spacing_m": 4922.557814752522,
+      "height_exaggerate": 13.7,
+      "glb_bytes": 57992,
+      "admin1": [
+        {
+          "id": "state-butha-buthe-lesotho",
+          "pageId": "state-butha-buthe-lesotho",
+          "title": "Butha-Buthe",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-liechtenstein",
@@ -782,9 +2446,18 @@
       "resort_count": 1,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=47.15983571 +lon_0=9.54637293 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3790.301466212375,
+      "vertex_spacing_m": 4361.730037640947,
       "height_exaggerate": 6.0,
-      "glb_bytes": 1008
+      "glb_bytes": 940,
+      "admin1": [
+        {
+          "id": "state-triesenberg-liechtenstein",
+          "pageId": "state-triesenberg-liechtenstein",
+          "title": "Triesenberg",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-lithuania",
@@ -803,9 +2476,32 @@
       "resort_count": 3,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=55.16472178 +lon_0=23.86264448 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3972.5750808128732,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 194588
+      "vertex_spacing_m": 4978.637442021032,
+      "height_exaggerate": 96.0,
+      "glb_bytes": 122752,
+      "admin1": [
+        {
+          "id": "state-kauno-lithuania",
+          "pageId": "state-kauno-lithuania",
+          "title": "Kauno",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-taurages-lithuania",
+          "pageId": "state-taurages-lithuania",
+          "title": "Taurages",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-vilniaus-lithuania",
+          "pageId": "state-vilniaus-lithuania",
+          "title": "Vilniaus",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-montenegro",
@@ -824,9 +2520,18 @@
       "resort_count": 2,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=42.69929718 +lon_0=19.39357548 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3930.5305575859984,
-      "height_exaggerate": 9.6,
-      "glb_bytes": 41004
+      "vertex_spacing_m": 4915.0929037162205,
+      "height_exaggerate": 10.1,
+      "glb_bytes": 25856,
+      "admin1": [
+        {
+          "id": "state-kolain-montenegro",
+          "pageId": "state-kolain-montenegro",
+          "title": "Kola\u0161in",
+          "resort_count": 2,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-morocco",
@@ -845,9 +2550,25 @@
       "resort_count": 3,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=28.67223748 +lon_0=-9.02287140 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 4985.578058496778,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 1128420
+      "vertex_spacing_m": 4998.078058496778,
+      "height_exaggerate": 46.2,
+      "glb_bytes": 1126856,
+      "admin1": [
+        {
+          "id": "state-marrakech-tensift-al-haouz-morocco",
+          "pageId": "state-marrakech-tensift-al-haouz-morocco",
+          "title": "Marrakech - Tensift - Al Haouz",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-mekns-tafilalet-morocco",
+          "pageId": "state-mekns-tafilalet-morocco",
+          "title": "Mekn\u00e8s - Tafilalet",
+          "resort_count": 2,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-netherlands",
@@ -866,9 +2587,39 @@
       "resort_count": 4,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=32.79085928 +lon_0=-30.61139889 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 15229.009593011902,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 7156
+      "vertex_spacing_m": 7808.474738194264,
+      "height_exaggerate": 96.0,
+      "glb_bytes": 26936,
+      "admin1": [
+        {
+          "id": "state-noord-brabant-netherlands",
+          "pageId": "state-noord-brabant-netherlands",
+          "title": "Noord-Brabant",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-noord-holland-netherlands",
+          "pageId": "state-noord-holland-netherlands",
+          "title": "Noord-Holland",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-utrecht-netherlands",
+          "pageId": "state-utrecht-netherlands",
+          "title": "Utrecht",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-zuid-holland-netherlands",
+          "pageId": "state-zuid-holland-netherlands",
+          "title": "Zuid-Holland",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-new-zealand",
@@ -887,9 +2638,53 @@
       "resort_count": 23,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=-30.57177005 +lon_0=-182.64445960 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 9740.010606455904,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 124900
+      "vertex_spacing_m": 4992.563566093719,
+      "height_exaggerate": 96.0,
+      "glb_bytes": 493540,
+      "admin1": [
+        {
+          "id": "state-canterbury-new-zealand",
+          "pageId": "state-canterbury-new-zealand",
+          "title": "Canterbury",
+          "resort_count": 13,
+          "ready": true
+        },
+        {
+          "id": "state-manawatu-wanganui-new-zealand",
+          "pageId": "state-manawatu-wanganui-new-zealand",
+          "title": "Manawatu-Wanganui",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-otago-new-zealand",
+          "pageId": "state-otago-new-zealand",
+          "title": "Otago",
+          "resort_count": 4,
+          "ready": true
+        },
+        {
+          "id": "state-taranaki-new-zealand",
+          "pageId": "state-taranaki-new-zealand",
+          "title": "Taranaki",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-tasman-district-new-zealand",
+          "pageId": "state-tasman-district-new-zealand",
+          "title": "Tasman District",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-west-coast-new-zealand",
+          "pageId": "state-west-coast-new-zealand",
+          "title": "West Coast",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-north-macedonia",
@@ -929,9 +2724,109 @@
       "resort_count": 43,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=13.15690746 +lon_0=12.26148522 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 15145.373594772065,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 62472
+      "vertex_spacing_m": 7797.396437314742,
+      "height_exaggerate": 96.0,
+      "glb_bytes": 251096,
+      "admin1": [
+        {
+          "id": "state-akershus-norway",
+          "pageId": "state-akershus-norway",
+          "title": "Akershus",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-aust-agder-norway",
+          "pageId": "state-aust-agder-norway",
+          "title": "Aust-Agder",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-buskerud-norway",
+          "pageId": "state-buskerud-norway",
+          "title": "Buskerud",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-hedmark-norway",
+          "pageId": "state-hedmark-norway",
+          "title": "Hedmark",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-hordaland-norway",
+          "pageId": "state-hordaland-norway",
+          "title": "Hordaland",
+          "resort_count": 7,
+          "ready": true
+        },
+        {
+          "id": "state-nord-trndelag-norway",
+          "pageId": "state-nord-trndelag-norway",
+          "title": "Nord-Tr\u00f8ndelag",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-nordland-norway",
+          "pageId": "state-nordland-norway",
+          "title": "Nordland",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-oppland-norway",
+          "pageId": "state-oppland-norway",
+          "title": "Oppland",
+          "resort_count": 9,
+          "ready": true
+        },
+        {
+          "id": "state-oslo-norway",
+          "pageId": "state-oslo-norway",
+          "title": "Oslo",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-sogn-og-fjordane-norway",
+          "pageId": "state-sogn-og-fjordane-norway",
+          "title": "Sogn og Fjordane",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-svalbard-norway",
+          "pageId": "state-svalbard-norway",
+          "title": "Svalbard",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-sr-trndelag-norway",
+          "pageId": "state-sr-trndelag-norway",
+          "title": "S\u00f8r-Tr\u00f8ndelag",
+          "resort_count": 4,
+          "ready": true
+        },
+        {
+          "id": "state-troms-norway",
+          "pageId": "state-troms-norway",
+          "title": "Troms",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-vest-agder-norway",
+          "pageId": "state-vest-agder-norway",
+          "title": "Vest-Agder",
+          "resort_count": 4,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-poland",
@@ -950,9 +2845,95 @@
       "resort_count": 112,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=51.91616873 +lon_0=19.13353967 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3986.6514804708618,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 935872
+      "vertex_spacing_m": 4997.445859460158,
+      "height_exaggerate": 38.8,
+      "glb_bytes": 597140,
+      "admin1": [
+        {
+          "id": "state-greater-poland-poland",
+          "pageId": "state-greater-poland-poland",
+          "title": "Greater Poland",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-lesser-poland-poland",
+          "pageId": "state-lesser-poland-poland",
+          "title": "Lesser Poland",
+          "resort_count": 32,
+          "ready": true
+        },
+        {
+          "id": "state-lower-silesian-poland",
+          "pageId": "state-lower-silesian-poland",
+          "title": "Lower Silesian",
+          "resort_count": 21,
+          "ready": true
+        },
+        {
+          "id": "state-lublin-poland",
+          "pageId": "state-lublin-poland",
+          "title": "Lublin",
+          "resort_count": 11,
+          "ready": true
+        },
+        {
+          "id": "state-podlachian-poland",
+          "pageId": "state-podlachian-poland",
+          "title": "Podlachian",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-pomeranian-poland",
+          "pageId": "state-pomeranian-poland",
+          "title": "Pomeranian",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-silesian-poland",
+          "pageId": "state-silesian-poland",
+          "title": "Silesian",
+          "resort_count": 28,
+          "ready": true
+        },
+        {
+          "id": "state-subcarpathian-poland",
+          "pageId": "state-subcarpathian-poland",
+          "title": "Subcarpathian",
+          "resort_count": 5,
+          "ready": true
+        },
+        {
+          "id": "state-warmian-masurian-poland",
+          "pageId": "state-warmian-masurian-poland",
+          "title": "Warmian-Masurian",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-west-pomeranian-poland",
+          "pageId": "state-west-pomeranian-poland",
+          "title": "West Pomeranian",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-d-poland",
+          "pageId": "state-d-poland",
+          "title": "\u0141\u00f3d\u017a",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-witokrzyskie-poland",
+          "pageId": "state-witokrzyskie-poland",
+          "title": "\u015awi\u0119tokrzyskie",
+          "resort_count": 5,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-republic-of-serbia",
@@ -971,9 +2952,32 @@
       "resort_count": 6,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=44.20309113 +lon_0=20.91994226 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3956.313565420171,
-      "height_exaggerate": 28.9,
-      "glb_bytes": 231740
+      "vertex_spacing_m": 4974.275431307927,
+      "height_exaggerate": 29.5,
+      "glb_bytes": 146172,
+      "admin1": [
+        {
+          "id": "state-pomoravski-republic-of-serbia",
+          "pageId": "state-pomoravski-republic-of-serbia",
+          "title": "Pomoravski",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-zajecarski-republic-of-serbia",
+          "pageId": "state-zajecarski-republic-of-serbia",
+          "title": "Zajecarski",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-zlatiborski-republic-of-serbia",
+          "pageId": "state-zlatiborski-republic-of-serbia",
+          "title": "Zlatiborski",
+          "resort_count": 3,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-romania",
@@ -992,9 +2996,102 @@
       "resort_count": 26,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=45.96244110 +lon_0=24.97119043 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3983.072508861434,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 703888
+      "vertex_spacing_m": 4978.952001150073,
+      "height_exaggerate": 36.7,
+      "glb_bytes": 452820,
+      "admin1": [
+        {
+          "id": "state-alba-romania",
+          "pageId": "state-alba-romania",
+          "title": "Alba",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-bistrita-nasaud-romania",
+          "pageId": "state-bistrita-nasaud-romania",
+          "title": "Bistrita-Nasaud",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-brasov-romania",
+          "pageId": "state-brasov-romania",
+          "title": "Brasov",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-caras-severin-romania",
+          "pageId": "state-caras-severin-romania",
+          "title": "Caras-Severin",
+          "resort_count": 4,
+          "ready": true
+        },
+        {
+          "id": "state-cluj-romania",
+          "pageId": "state-cluj-romania",
+          "title": "Cluj",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-covasna-romania",
+          "pageId": "state-covasna-romania",
+          "title": "Covasna",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-harghita-romania",
+          "pageId": "state-harghita-romania",
+          "title": "Harghita",
+          "resort_count": 7,
+          "ready": true
+        },
+        {
+          "id": "state-hunedoara-romania",
+          "pageId": "state-hunedoara-romania",
+          "title": "Hunedoara",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-maramures-romania",
+          "pageId": "state-maramures-romania",
+          "title": "Maramures",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-prahova-romania",
+          "pageId": "state-prahova-romania",
+          "title": "Prahova",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-sibiu-romania",
+          "pageId": "state-sibiu-romania",
+          "title": "Sibiu",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-suceava-romania",
+          "pageId": "state-suceava-romania",
+          "title": "Suceava",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-vlcea-romania",
+          "pageId": "state-vlcea-romania",
+          "title": "V\u00e2lcea",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-slovakia",
@@ -1013,9 +3110,60 @@
       "resort_count": 94,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=48.68357992 +lon_0=19.69205855 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3990.30476449821,
-      "height_exaggerate": 24.1,
-      "glb_bytes": 143940
+      "vertex_spacing_m": 4987.991128753464,
+      "height_exaggerate": 24.9,
+      "glb_bytes": 92392,
+      "admin1": [
+        {
+          "id": "state-banskobystrick-slovakia",
+          "pageId": "state-banskobystrick-slovakia",
+          "title": "Banskobystrick\u00fd",
+          "resort_count": 26,
+          "ready": true
+        },
+        {
+          "id": "state-bratislavsk-slovakia",
+          "pageId": "state-bratislavsk-slovakia",
+          "title": "Bratislavsk\u00fd",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-koick-slovakia",
+          "pageId": "state-koick-slovakia",
+          "title": "Ko\u0161ick\u00fd",
+          "resort_count": 8,
+          "ready": true
+        },
+        {
+          "id": "state-nitriansky-slovakia",
+          "pageId": "state-nitriansky-slovakia",
+          "title": "Nitriansky",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-preov-slovakia",
+          "pageId": "state-preov-slovakia",
+          "title": "Pre\u0161ov",
+          "resort_count": 16,
+          "ready": true
+        },
+        {
+          "id": "state-trenciansky-slovakia",
+          "pageId": "state-trenciansky-slovakia",
+          "title": "Trenciansky",
+          "resort_count": 9,
+          "ready": true
+        },
+        {
+          "id": "state-ilinsk-slovakia",
+          "pageId": "state-ilinsk-slovakia",
+          "title": "\u017dilinsk\u00fd",
+          "resort_count": 32,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-slovenia",
@@ -1034,9 +3182,109 @@
       "resort_count": 17,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=46.14640920 +lon_0=14.93304671 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3954.4669119573314,
-      "height_exaggerate": 13.4,
-      "glb_bytes": 60212
+      "vertex_spacing_m": 4925.289609004274,
+      "height_exaggerate": 12.8,
+      "glb_bytes": 38220,
+      "admin1": [
+        {
+          "id": "state-bohinj-slovenia",
+          "pageId": "state-bohinj-slovenia",
+          "title": "Bohinj",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-bovec-slovenia",
+          "pageId": "state-bovec-slovenia",
+          "title": "Bovec",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-celje-slovenia",
+          "pageId": "state-celje-slovenia",
+          "title": "Celje",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-cerklje-na-gorenjskem-slovenia",
+          "pageId": "state-cerklje-na-gorenjskem-slovenia",
+          "title": "Cerklje na Gorenjskem",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-cerkno-slovenia",
+          "pageId": "state-cerkno-slovenia",
+          "title": "Cerkno",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-gorenja-vas-poljane-slovenia",
+          "pageId": "state-gorenja-vas-poljane-slovenia",
+          "title": "Gorenja vas-Poljane",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-kamnik-slovenia",
+          "pageId": "state-kamnik-slovenia",
+          "title": "Kamnik",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-kranjska-gora-slovenia",
+          "pageId": "state-kranjska-gora-slovenia",
+          "title": "Kranjska Gora",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-mozirje-slovenia",
+          "pageId": "state-mozirje-slovenia",
+          "title": "Mozirje",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-radlje-ob-dravi-slovenia",
+          "pageId": "state-radlje-ob-dravi-slovenia",
+          "title": "Radlje ob Dravi",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-ribnica-na-pohorju-slovenia",
+          "pageId": "state-ribnica-na-pohorju-slovenia",
+          "title": "Ribnica na Pohorju",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-rue-slovenia",
+          "pageId": "state-rue-slovenia",
+          "title": "Ru\u0161e",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-entilj-slovenia",
+          "pageId": "state-entilj-slovenia",
+          "title": "\u0160entilj",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-elezniki-slovenia",
+          "pageId": "state-elezniki-slovenia",
+          "title": "\u017delezniki",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-south-africa",
@@ -1055,9 +3303,18 @@
       "resort_count": 1,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=-34.54610239 +lon_0=27.22388757 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 5884.233823002958,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 1674328
+      "vertex_spacing_m": 4989.174280022214,
+      "height_exaggerate": 88.3,
+      "glb_bytes": 2327708,
+      "admin1": [
+        {
+          "id": "state-eastern-cape-south-africa",
+          "pageId": "state-eastern-cape-south-africa",
+          "title": "Eastern Cape",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-south-korea",
@@ -1076,9 +3333,39 @@
       "resort_count": 14,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=35.91095612 +lon_0=128.23806964 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3976.0094074216095,
-      "height_exaggerate": 21.8,
-      "glb_bytes": 282616
+      "vertex_spacing_m": 4962.718437778688,
+      "height_exaggerate": 50.2,
+      "glb_bytes": 179576,
+      "admin1": [
+        {
+          "id": "state-gangwon-south-korea",
+          "pageId": "state-gangwon-south-korea",
+          "title": "Gangwon",
+          "resort_count": 8,
+          "ready": true
+        },
+        {
+          "id": "state-gyeonggi-south-korea",
+          "pageId": "state-gyeonggi-south-korea",
+          "title": "Gyeonggi",
+          "resort_count": 4,
+          "ready": true
+        },
+        {
+          "id": "state-north-gyeongsang-south-korea",
+          "pageId": "state-north-gyeongsang-south-korea",
+          "title": "North Gyeongsang",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-south-gyeongsang-south-korea",
+          "pageId": "state-south-gyeongsang-south-korea",
+          "title": "South Gyeongsang",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-spain",
@@ -1097,9 +3384,88 @@
       "resort_count": 33,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=35.71798330 +lon_0=-6.91165117 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 4998.549340027501,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 956968
+      "vertex_spacing_m": 4996.160466008297,
+      "height_exaggerate": 75.1,
+      "glb_bytes": 956728,
+      "admin1": [
+        {
+          "id": "state-gerona-spain",
+          "pageId": "state-gerona-spain",
+          "title": "Gerona",
+          "resort_count": 4,
+          "ready": true
+        },
+        {
+          "id": "state-granada-spain",
+          "pageId": "state-granada-spain",
+          "title": "Granada",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-huesca-spain",
+          "pageId": "state-huesca-spain",
+          "title": "Huesca",
+          "resort_count": 4,
+          "ready": true
+        },
+        {
+          "id": "state-la-rioja-spain",
+          "pageId": "state-la-rioja-spain",
+          "title": "La Rioja",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-len-spain",
+          "pageId": "state-len-spain",
+          "title": "Le\u00f3n",
+          "resort_count": 12,
+          "ready": true
+        },
+        {
+          "id": "state-lrida-spain",
+          "pageId": "state-lrida-spain",
+          "title": "L\u00e9rida",
+          "resort_count": 5,
+          "ready": true
+        },
+        {
+          "id": "state-orense-spain",
+          "pageId": "state-orense-spain",
+          "title": "Orense",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-salamanca-spain",
+          "pageId": "state-salamanca-spain",
+          "title": "Salamanca",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-segovia-spain",
+          "pageId": "state-segovia-spain",
+          "title": "Segovia",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-soria-spain",
+          "pageId": "state-soria-spain",
+          "title": "Soria",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-teruel-spain",
+          "pageId": "state-teruel-spain",
+          "title": "Teruel",
+          "resort_count": 2,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-sweden",
@@ -1118,9 +3484,130 @@
       "resort_count": 73,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=62.20945506 +lon_0=17.63563073 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3984.1142657799605,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 1318552
+      "vertex_spacing_m": 4987.422791222541,
+      "height_exaggerate": 96.0,
+      "glb_bytes": 839872,
+      "admin1": [
+        {
+          "id": "state-blekinge-sweden",
+          "pageId": "state-blekinge-sweden",
+          "title": "Blekinge",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-dalarna-sweden",
+          "pageId": "state-dalarna-sweden",
+          "title": "Dalarna",
+          "resort_count": 7,
+          "ready": true
+        },
+        {
+          "id": "state-gvleborg-sweden",
+          "pageId": "state-gvleborg-sweden",
+          "title": "G\u00e4vleborg",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-halland-sweden",
+          "pageId": "state-halland-sweden",
+          "title": "Halland",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-jmtland-sweden",
+          "pageId": "state-jmtland-sweden",
+          "title": "J\u00e4mtland",
+          "resort_count": 22,
+          "ready": true
+        },
+        {
+          "id": "state-jnkping-sweden",
+          "pageId": "state-jnkping-sweden",
+          "title": "J\u00f6nk\u00f6ping",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-kalmar-sweden",
+          "pageId": "state-kalmar-sweden",
+          "title": "Kalmar",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-norrbotten-sweden",
+          "pageId": "state-norrbotten-sweden",
+          "title": "Norrbotten",
+          "resort_count": 7,
+          "ready": true
+        },
+        {
+          "id": "state-stockholm-sweden",
+          "pageId": "state-stockholm-sweden",
+          "title": "Stockholm",
+          "resort_count": 5,
+          "ready": true
+        },
+        {
+          "id": "state-sdermanland-sweden",
+          "pageId": "state-sdermanland-sweden",
+          "title": "S\u00f6dermanland",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-uppsala-sweden",
+          "pageId": "state-uppsala-sweden",
+          "title": "Uppsala",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-vrmland-sweden",
+          "pageId": "state-vrmland-sweden",
+          "title": "V\u00e4rmland",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-vsterbotten-sweden",
+          "pageId": "state-vsterbotten-sweden",
+          "title": "V\u00e4sterbotten",
+          "resort_count": 7,
+          "ready": true
+        },
+        {
+          "id": "state-vsternorrland-sweden",
+          "pageId": "state-vsternorrland-sweden",
+          "title": "V\u00e4sternorrland",
+          "resort_count": 9,
+          "ready": true
+        },
+        {
+          "id": "state-vstmanland-sweden",
+          "pageId": "state-vstmanland-sweden",
+          "title": "V\u00e4stmanland",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-vstra-gtaland-sweden",
+          "pageId": "state-vstra-gtaland-sweden",
+          "title": "V\u00e4stra G\u00f6taland",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-stergtland-sweden",
+          "pageId": "state-stergtland-sweden",
+          "title": "\u00d6sterg\u00f6tland",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-switzerland",
@@ -1139,9 +3626,151 @@
       "resort_count": 328,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=46.81094228 +lon_0=8.20880599 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3979.868585257999,
-      "height_exaggerate": 11.2,
-      "glb_bytes": 119292
+      "vertex_spacing_m": 4948.216773763214,
+      "height_exaggerate": 11.6,
+      "glb_bytes": 76352,
+      "admin1": [
+        {
+          "id": "state-appenzell-ausserrhoden-switzerland",
+          "pageId": "state-appenzell-ausserrhoden-switzerland",
+          "title": "Appenzell Ausserrhoden",
+          "resort_count": 13,
+          "ready": true
+        },
+        {
+          "id": "state-appenzell-innerrhoden-switzerland",
+          "pageId": "state-appenzell-innerrhoden-switzerland",
+          "title": "Appenzell Innerrhoden",
+          "resort_count": 8,
+          "ready": true
+        },
+        {
+          "id": "state-bern-switzerland",
+          "pageId": "state-bern-switzerland",
+          "title": "Bern",
+          "resort_count": 58,
+          "ready": true
+        },
+        {
+          "id": "state-fribourg-switzerland",
+          "pageId": "state-fribourg-switzerland",
+          "title": "Fribourg",
+          "resort_count": 14,
+          "ready": true
+        },
+        {
+          "id": "state-glarus-switzerland",
+          "pageId": "state-glarus-switzerland",
+          "title": "Glarus",
+          "resort_count": 7,
+          "ready": true
+        },
+        {
+          "id": "state-graubnden-switzerland",
+          "pageId": "state-graubnden-switzerland",
+          "title": "Graub\u00fcnden",
+          "resort_count": 51,
+          "ready": true
+        },
+        {
+          "id": "state-jura-switzerland",
+          "pageId": "state-jura-switzerland",
+          "title": "Jura",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-lucerne-switzerland",
+          "pageId": "state-lucerne-switzerland",
+          "title": "Lucerne",
+          "resort_count": 8,
+          "ready": true
+        },
+        {
+          "id": "state-neuchtel-switzerland",
+          "pageId": "state-neuchtel-switzerland",
+          "title": "Neuch\u00e2tel",
+          "resort_count": 9,
+          "ready": true
+        },
+        {
+          "id": "state-nidwalden-switzerland",
+          "pageId": "state-nidwalden-switzerland",
+          "title": "Nidwalden",
+          "resort_count": 5,
+          "ready": true
+        },
+        {
+          "id": "state-obwalden-switzerland",
+          "pageId": "state-obwalden-switzerland",
+          "title": "Obwalden",
+          "resort_count": 9,
+          "ready": true
+        },
+        {
+          "id": "state-sankt-gallen-switzerland",
+          "pageId": "state-sankt-gallen-switzerland",
+          "title": "Sankt Gallen",
+          "resort_count": 16,
+          "ready": true
+        },
+        {
+          "id": "state-schwyz-switzerland",
+          "pageId": "state-schwyz-switzerland",
+          "title": "Schwyz",
+          "resort_count": 18,
+          "ready": true
+        },
+        {
+          "id": "state-solothurn-switzerland",
+          "pageId": "state-solothurn-switzerland",
+          "title": "Solothurn",
+          "resort_count": 8,
+          "ready": true
+        },
+        {
+          "id": "state-ticino-switzerland",
+          "pageId": "state-ticino-switzerland",
+          "title": "Ticino",
+          "resort_count": 11,
+          "ready": true
+        },
+        {
+          "id": "state-uri-switzerland",
+          "pageId": "state-uri-switzerland",
+          "title": "Uri",
+          "resort_count": 6,
+          "ready": true
+        },
+        {
+          "id": "state-valais-switzerland",
+          "pageId": "state-valais-switzerland",
+          "title": "Valais",
+          "resort_count": 52,
+          "ready": true
+        },
+        {
+          "id": "state-vaud-switzerland",
+          "pageId": "state-vaud-switzerland",
+          "title": "Vaud",
+          "resort_count": 27,
+          "ready": true
+        },
+        {
+          "id": "state-zug-switzerland",
+          "pageId": "state-zug-switzerland",
+          "title": "Zug",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-zrich-switzerland",
+          "pageId": "state-zrich-switzerland",
+          "title": "Z\u00fcrich",
+          "resort_count": 4,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-tajikistan",
@@ -1160,9 +3789,18 @@
       "resort_count": 1,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=38.85972219 +lon_0=71.25710230 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3994.716201226507,
+      "vertex_spacing_m": 4986.349895139282,
       "height_exaggerate": 12.3,
-      "glb_bytes": 414896
+      "glb_bytes": 264876,
+      "admin1": [
+        {
+          "id": "state-tadzhikistan-territories-tajikistan",
+          "pageId": "state-tadzhikistan-territories-tajikistan",
+          "title": "Tadzhikistan Territories",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-turkey",
@@ -1181,9 +3819,88 @@
       "resort_count": 12,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=38.95614696 +lon_0=35.23512607 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3990.575872269405,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 2327636
+      "vertex_spacing_m": 4985.2874372497035,
+      "height_exaggerate": 44.4,
+      "glb_bytes": 1490392,
+      "admin1": [
+        {
+          "id": "state-amasya-turkey",
+          "pageId": "state-amasya-turkey",
+          "title": "Amasya",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-bitlis-turkey",
+          "pageId": "state-bitlis-turkey",
+          "title": "Bitlis",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-bursa-turkey",
+          "pageId": "state-bursa-turkey",
+          "title": "Bursa",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-erzincan-turkey",
+          "pageId": "state-erzincan-turkey",
+          "title": "Erzincan",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-erzurum-turkey",
+          "pageId": "state-erzurum-turkey",
+          "title": "Erzurum",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-isparta-turkey",
+          "pageId": "state-isparta-turkey",
+          "title": "Isparta",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-kastamonu-turkey",
+          "pageId": "state-kastamonu-turkey",
+          "title": "Kastamonu",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-kayseri-turkey",
+          "pageId": "state-kayseri-turkey",
+          "title": "Kayseri",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-tunceli-turkey",
+          "pageId": "state-tunceli-turkey",
+          "title": "Tunceli",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-van-turkey",
+          "pageId": "state-van-turkey",
+          "title": "Van",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-ankiri-turkey",
+          "pageId": "state-ankiri-turkey",
+          "title": "\u00c7ankiri",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-ukraine",
@@ -1202,9 +3919,60 @@
       "resort_count": 12,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=48.79043203 +lon_0=31.14619145 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3989.6480814811425,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 1708192
+      "vertex_spacing_m": 4983.390733443059,
+      "height_exaggerate": 88.5,
+      "glb_bytes": 1090624,
+      "admin1": [
+        {
+          "id": "state-chernivtsi-ukraine",
+          "pageId": "state-chernivtsi-ukraine",
+          "title": "Chernivtsi",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-ivano-frankivsk-ukraine",
+          "pageId": "state-ivano-frankivsk-ukraine",
+          "title": "Ivano-Frankivs'k",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-kiev-city-ukraine",
+          "pageId": "state-kiev-city-ukraine",
+          "title": "Kiev City",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-lviv-ukraine",
+          "pageId": "state-lviv-ukraine",
+          "title": "L'viv",
+          "resort_count": 3,
+          "ready": true
+        },
+        {
+          "id": "state-poltava-ukraine",
+          "pageId": "state-poltava-ukraine",
+          "title": "Poltava",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-ternopil-ukraine",
+          "pageId": "state-ternopil-ukraine",
+          "title": "Ternopil'",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-transcarpathia-ukraine",
+          "pageId": "state-transcarpathia-ukraine",
+          "title": "Transcarpathia",
+          "resort_count": 4,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-united-kingdom",
@@ -1223,9 +3991,109 @@
       "resort_count": 14,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=55.37150707 +lon_0=-5.95962480 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3989.7719761196227,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 687232
+      "vertex_spacing_m": 4977.389930722898,
+      "height_exaggerate": 96.0,
+      "glb_bytes": 436840,
+      "admin1": [
+        {
+          "id": "state-aberdeen-united-kingdom",
+          "pageId": "state-aberdeen-united-kingdom",
+          "title": "Aberdeen",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-aberdeenshire-united-kingdom",
+          "pageId": "state-aberdeenshire-united-kingdom",
+          "title": "Aberdeenshire",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-argyll-and-bute-united-kingdom",
+          "pageId": "state-argyll-and-bute-united-kingdom",
+          "title": "Argyll and Bute",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-carmarthenshire-united-kingdom",
+          "pageId": "state-carmarthenshire-united-kingdom",
+          "title": "Carmarthenshire",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-glasgow-united-kingdom",
+          "pageId": "state-glasgow-united-kingdom",
+          "title": "Glasgow",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-gloucestershire-united-kingdom",
+          "pageId": "state-gloucestershire-united-kingdom",
+          "title": "Gloucestershire",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-hertfordshire-united-kingdom",
+          "pageId": "state-hertfordshire-united-kingdom",
+          "title": "Hertfordshire",
+          "resort_count": 2,
+          "ready": true
+        },
+        {
+          "id": "state-kent-united-kingdom",
+          "pageId": "state-kent-united-kingdom",
+          "title": "Kent",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-lancashire-united-kingdom",
+          "pageId": "state-lancashire-united-kingdom",
+          "title": "Lancashire",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-luton-united-kingdom",
+          "pageId": "state-luton-united-kingdom",
+          "title": "Luton",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-medway-united-kingdom",
+          "pageId": "state-medway-united-kingdom",
+          "title": "Medway",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-salford-united-kingdom",
+          "pageId": "state-salford-united-kingdom",
+          "title": "Salford",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-southampton-united-kingdom",
+          "pageId": "state-southampton-united-kingdom",
+          "title": "Southampton",
+          "resort_count": 1,
+          "ready": true
+        },
+        {
+          "id": "state-wiltshire-united-kingdom",
+          "pageId": "state-wiltshire-united-kingdom",
+          "title": "Wiltshire",
+          "resort_count": 1,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "country-united-states-of-america",
@@ -1246,7 +4114,7 @@
       "projected_crs": "+proj=laea +lat_0=45.15930974 +lon_0=-127.25062008 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
       "vertex_spacing_m": 11993.480648431754,
       "height_exaggerate": 96.0,
-      "glb_bytes": 865096,
+      "glb_bytes": 3138760,
       "admin1": [
         {
           "id": "state-alabama-united-states-of-america",
@@ -1512,9 +4380,18 @@
       "resort_count": 2,
       "ready": true,
       "projected_crs": "+proj=laea +lat_0=41.37115804 +lon_0=64.55960413 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs",
-      "vertex_spacing_m": 3998.25941782311,
-      "height_exaggerate": 36.0,
-      "glb_bytes": 1323044
+      "vertex_spacing_m": 4997.830233176754,
+      "height_exaggerate": 39.2,
+      "glb_bytes": 845700,
+      "admin1": [
+        {
+          "id": "state-tashkent-uzbekistan",
+          "pageId": "state-tashkent-uzbekistan",
+          "title": "Tashkent",
+          "resort_count": 2,
+          "ready": true
+        }
+      ]
     },
     {
       "id": "state-aberdeen-united-kingdom",

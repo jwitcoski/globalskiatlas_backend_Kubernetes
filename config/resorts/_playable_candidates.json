@@ -13,7 +13,7 @@
     "analyzed": 4330,
     "downhill_ski_resort": 3035,
     "downhill_trails_ge_1": 2867,
-    "candidates": 2363
+    "candidates": 2364
   },
   "candidates": [
     {
@@ -22095,6 +22095,16 @@
       "downhill_trails": 55.0,
       "total_lifts": 6.0,
       "longest_trail_mi": 0.05
+    },
+    {
+      "winter_sports_id": "390274626",
+      "region": "north-america/us/pennsylvania",
+      "name": "Liberty Mountain Resort",
+      "state": "Pennsylvania",
+      "country": "United States of America",
+      "downhill_trails": 46.0,
+      "total_lifts": 9.0,
+      "longest_trail_mi": 0.04
     },
     {
       "winter_sports_id": "48782596",
