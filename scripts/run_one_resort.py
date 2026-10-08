@@ -59,6 +59,8 @@ def replace_resort_rows(existing: pd.DataFrame | None, incoming: pd.DataFrame | 
         return kept.reset_index(drop=True)
     hit = _match(incoming, wid)
     add = incoming.loc[hit] if hit.any() else incoming
+    if "osm_uid" in kept.columns and "osm_uid" in add.columns:
+        kept = kept.loc[~kept["osm_uid"].isin(add["osm_uid"].dropna())]
     return pd.concat([kept, add], ignore_index=True)
 
 
@@ -997,6 +999,9 @@ if __name__ == "__main__":
         assert list(out["name"]) == ["Other", "Montage"], out
         gone = replace_resort_rows(existing, None, "45096232")
         assert list(gone["winter_sports_id"]) == ["1"], gone
+        lifts = pd.DataFrame({"osm_uid": ["way/1", "way/2"], "name": ["Keep", "Old"]})
+        again = replace_resort_rows(lifts, pd.DataFrame({"osm_uid": ["way/2"], "name": ["New"]}), "45096232")
+        assert list(again["name"]) == ["Keep", "New"], again
         print("check ok")
         raise SystemExit(0)
     raise SystemExit(main())

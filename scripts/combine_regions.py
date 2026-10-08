@@ -16,6 +16,9 @@ from pathlib import Path
 import geopandas as gpd
 import pandas as pd
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from convert_to_geoparquet import normalize_lifts_pistes  # noqa: E402
+
 
 PARQUET_FILES = [
     "ski_areas.parquet",
@@ -100,44 +103,71 @@ def discover_regions(output_dir: Path) -> list[str]:
     return sorted(regions)
 
 
-def combine_geoparquet(region_paths: list[tuple[str, Path]], out_path: Path) -> int:
-    """Read geoparquet from each region, add region column, concatenate, write."""
+def _to_4326(gdf):
+    if gdf.crs and gdf.crs.to_epsg() != 4326:
+        return gdf.to_crs("EPSG:4326")
+    if not gdf.crs:
+        gdf.set_crs("EPSG:4326", inplace=True)
+    return gdf
+
+
+def _concat_regions(region_paths: list[tuple[str, Path]], keep_from: list[Path] | None = None):
+    """Concatenate regional files. keep_from: existing combined files whose rows are kept unless
+    their region is one of the regions being read (--update-existing)."""
     gdfs = []
     for region, p in region_paths:
         if not p.exists():
             continue
-        gdf = gpd.read_parquet(p)
-        if gdf.crs and gdf.crs.to_epsg() != 4326:
-            gdf = gdf.to_crs("EPSG:4326")
-        elif not gdf.crs:
-            gdf.set_crs("EPSG:4326", inplace=True)
+        gdf = _to_4326(gpd.read_parquet(p))
         gdf["region"] = region
         gdfs.append(gdf)
     if not gdfs:
+        return None
+    replaced = {r for r, p in region_paths if p.exists()}
+    kept = []
+    for path in keep_from or []:
+        if not path.exists():
+            continue
+        old = _to_4326(gpd.read_parquet(path))
+        if "region" in old.columns:
+            old = old.loc[~old["region"].isin(replaced)]
+        kept.append(old)
+    return pd.concat(kept + gdfs, ignore_index=True)
+
+
+def _normalized_lines(combined, out_path: Path):
+    """Stable ids, promoted tags, Ski Area against the combined ski areas; one row per OSM element
+    (neighbouring regional extracts overlap at their borders)."""
+    ski_areas_path = out_path.parent / "ski_areas.parquet"
+    ski_areas = gpd.read_parquet(ski_areas_path) if ski_areas_path.exists() else None
+    combined = normalize_lifts_pistes(combined, ski_areas)
+    has_uid = combined["osm_uid"].notna()
+    dup = has_uid & combined["osm_uid"].duplicated(keep="last")
+    return combined.loc[~dup].reset_index(drop=True)
+
+
+def combine_geoparquet(region_paths: list[tuple[str, Path]], out_path: Path, update_existing: bool = False) -> int:
+    """Read geoparquet from each region, add region column, concatenate, write."""
+    combined = _concat_regions(region_paths, [out_path] if update_existing else None)
+    if combined is None:
         return 0
-    combined = pd.concat(gdfs, ignore_index=True)
     combined = without_skipped(combined, out_path)
+    if out_path.name == "pistes.parquet":
+        combined = _normalized_lines(combined, out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     combined.to_parquet(out_path, index=False)
     return len(combined)
 
 
-def combine_lifts_geoparquet(region_paths: list[tuple[str, Path]], lifts_path: Path, pylons_stations_path: Path) -> tuple[int, int]:
+def combine_lifts_geoparquet(
+    region_paths: list[tuple[str, Path]], lifts_path: Path, pylons_stations_path: Path, update_existing: bool = False
+) -> tuple[int, int]:
     """Combine lifts, split aerialway=pylon and aerialway=station into separate file for faster downstream use."""
-    gdfs = []
-    for region, p in region_paths:
-        if not p.exists():
-            continue
-        gdf = gpd.read_parquet(p)
-        if gdf.crs and gdf.crs.to_epsg() != 4326:
-            gdf = gdf.to_crs("EPSG:4326")
-        elif not gdf.crs:
-            gdf.set_crs("EPSG:4326", inplace=True)
-        gdf["region"] = region
-        gdfs.append(gdf)
-    if not gdfs:
+    keep_from = [lifts_path, pylons_stations_path] if update_existing else None
+    combined = _concat_regions(region_paths, keep_from)
+    if combined is None:
         return 0, 0
-    combined = without_skipped(pd.concat(gdfs, ignore_index=True), lifts_path)
+    combined = _normalized_lines(without_skipped(combined, lifts_path), lifts_path)
     lifts_path.parent.mkdir(parents=True, exist_ok=True)
     # Split pylon and station (infrastructure) into separate file
     if "aerialway" in combined.columns:
@@ -198,10 +228,18 @@ def main():
         default=None,
         help="Where to write combined files (default: <output-dir>/combined)",
     )
+    parser.add_argument(
+        "--update-existing",
+        action="store_true",
+        help="Only rewrite ski_areas/lifts/pistes: replace the given regions' rows in the existing combined "
+             "files and keep every other row (including single-resort job patches). Requires --regions.",
+    )
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
     combined_dir = Path(args.combined_dir) if args.combined_dir else output_dir / "combined"
+    if args.update_existing and not args.regions:
+        parser.error("--update-existing needs --regions")
 
     regions = args.regions if args.regions else discover_regions(output_dir)
     if not regions:
@@ -218,11 +256,14 @@ def main():
         return output_dir / Path(*parts) / filename
 
     total_rows = 0
+    update = args.update_existing
     for filename in PARQUET_FILES:
+        if update and filename not in ("ski_areas.parquet", "lifts.parquet", "pistes.parquet"):
+            continue
         if filename == "lifts.parquet":
             paths = [(r, region_path(r, filename)) for r in regions]
             n_main, n_infra = combine_lifts_geoparquet(
-                paths, combined_dir / "lifts.parquet", combined_dir / "lifts_pylons_stations.parquet"
+                paths, combined_dir / "lifts.parquet", combined_dir / "lifts_pylons_stations.parquet", update
             )
             if n_main > 0:
                 print(f"  lifts.parquet: {n_main} rows")
@@ -231,10 +272,13 @@ def main():
                 print(f"  lifts_pylons_stations.parquet: {n_infra} rows")
         else:
             paths = [(r, region_path(r, filename)) for r in regions]
-            n = combine_geoparquet(paths, combined_dir / filename)
+            n = combine_geoparquet(paths, combined_dir / filename, update)
             if n > 0:
                 print(f"  {filename}: {n} rows")
                 total_rows += n
+    if update:
+        print(f"Done. Updated ski_areas/lifts/pistes in {combined_dir}/")
+        return
 
     for filename in TABULAR_FILES:
         paths = [(r, region_path(r, filename)) for r in regions]
