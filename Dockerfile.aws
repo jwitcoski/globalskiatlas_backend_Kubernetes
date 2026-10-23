@@ -24,7 +24,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt awscli
 
 # All Python scripts and boundaries
-COPY *.py .
+COPY *.py ./
 COPY scripts/ scripts/
 COPY boundaries/ boundaries/
 COPY game_export/ game_export/

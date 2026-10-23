@@ -7,7 +7,10 @@ LAT, LON, JOB_ID, S3_BUCKET, BOUNDARIES, OVERPASS_URL.
 ACTION=batch first asks Overpass for named landuse=winter_sports ways and
 relations. Any id missing from combined/ski_areas.parquet, the delete skip list,
 and the job inbox is queued as an add. DISCOVER_MAX (default 8) caps how many
-new resorts one night starts.
+new resorts one night starts. A state that is not its own extract, such as
+Shizuoka inside Chubu, is filed under the Geofabrik region that contains it.
+A country with no extract is added when Geofabrik publishes one. One resort
+that fails is recorded and removed from the queue so the rest of the batch runs.
 
 Set DATA_ROOT to a local output directory (the Docker host volume) to read and
 write that catalog with no S3, DynamoDB, or CloudFront calls.
@@ -22,6 +25,7 @@ import shutil
 import subprocess
 import sys
 import time
+import unicodedata
 import urllib.parse
 import urllib.request
 import uuid
@@ -174,10 +178,12 @@ _COUNTRY_REGION_SLUG = {
 
 
 def _hyphen(text: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", (text or "").lower()).strip("-")
+    folded = unicodedata.normalize("NFKD", text or "")
+    folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
+    return re.sub(r"[^a-z0-9]+", "-", folded.lower()).strip("-")
 
 
-def _region_paths() -> list[str]:
+def _regions_module():
     import importlib.util
 
     spec = importlib.util.spec_from_file_location(
@@ -185,7 +191,15 @@ def _region_paths() -> list[str]:
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    return [row[0] for row in mod.load_region_rows()]
+    return mod
+
+
+def _region_paths() -> list[str]:
+    return [row[0] for row in _regions_module().load_region_rows()]
+
+
+def _region_rows() -> list[tuple[str, str]]:
+    return [(row[0], row[1]) for row in _regions_module().load_region_rows()]
 
 
 # Natural Earth often names a French department. Pipeline regions are the older regions.
@@ -228,12 +242,63 @@ _FRANCE_DEPT = {
     "var": "provence-alpes-cote-d-azur", "vaucluse": "provence-alpes-cote-d-azur",
 }
 
+# Natural Earth names prefectures. Pipeline regions are the Geofabrik extracts.
+_JAPAN_PREF = {
+    "hokkaido": "hokkaido",
+    "aomori": "tohoku", "iwate": "tohoku", "miyagi": "tohoku", "akita": "tohoku",
+    "yamagata": "tohoku", "fukushima": "tohoku",
+    "ibaraki": "kanto", "tochigi": "kanto", "gunma": "kanto", "gumma": "kanto",
+    "saitama": "kanto", "chiba": "kanto", "tokyo": "kanto", "kanagawa": "kanto",
+    "niigata": "chubu", "toyama": "chubu", "ishikawa": "chubu", "fukui": "chubu",
+    "yamanashi": "chubu", "nagano": "chubu", "gifu": "chubu", "shizuoka": "chubu", "aichi": "chubu",
+    "mie": "kansai", "shiga": "kansai", "kyoto": "kansai", "osaka": "kansai",
+    "hyogo": "kansai", "nara": "kansai", "wakayama": "kansai",
+    "tottori": "chugoku", "shimane": "chugoku", "okayama": "chugoku",
+    "hiroshima": "chugoku", "yamaguchi": "chugoku",
+    "tokushima": "shikoku", "kagawa": "shikoku", "ehime": "shikoku", "kochi": "shikoku",
+    "fukuoka": "kyushu", "saga": "kyushu", "nagasaki": "kyushu", "kumamoto": "kyushu",
+    "oita": "kyushu", "miyazaki": "kyushu", "kagoshima": "kyushu", "okinawa": "kyushu",
+}
+
+# Countries left out of config/regions.yaml on purpose.
+_EXCLUDED_COUNTRY_SLUGS = {
+    "vietnam", "cambodia", "indonesia", "laos", "thailand", "philippines",
+    "malaysia", "singapore", "brunei", "bangladesh", "east-timor", "timor-leste",
+    "malta", "monaco",
+}
+_FULL_CONTINENTS = {"africa", "south-america", "australia-oceania"}
+_CONTINENT_SLUG = {
+    "asia": "asia",
+    "europe": "europe",
+    "africa": "africa",
+    "north america": "north-america",
+    "south america": "south-america",
+    "oceania": "australia-oceania",
+    "australia": "australia-oceania",
+}
+
+
+def _country_slug(country: str) -> str:
+    return _COUNTRY_REGION_SLUG.get((country or "").lower(), _hyphen(country))
+
+
+def _state_slug(country_slug: str, state: str) -> str:
+    slug = _hyphen(state)
+    if country_slug == "france":
+        return _FRANCE_DEPT.get(slug, slug)
+    if country_slug == "japan":
+        for suffix in ("-prefecture", "-ken", "-fu", "-do", "-to"):
+            if slug.endswith(suffix):
+                slug = slug[: -len(suffix)]
+        return _JAPAN_PREF.get(slug, slug)
+    return slug
+
 
 def region_for_place(country: str, state: str) -> str:
     """Match Natural Earth country and state names to a pipeline region path."""
     paths = _region_paths()
-    country_slug = _COUNTRY_REGION_SLUG.get((country or "").lower(), _hyphen(country))
-    state_slug = _FRANCE_DEPT.get(_hyphen(state), _hyphen(state)) if country_slug == "france" else _hyphen(state)
+    country_slug = _country_slug(country)
+    state_slug = _state_slug(country_slug, state)
     if state_slug:
         hits = [
             path for path in paths
@@ -249,6 +314,256 @@ def region_for_place(country: str, state: str) -> str:
     if not hits:
         raise SystemExit(f"no region for {country} / {state}")
     raise SystemExit(f"several regions for {country}: {hits}")
+
+
+def _parse_poly(text: str) -> list[tuple[list[tuple[float, float]], bool]]:
+    """Geofabrik .poly rings as (lon, lat) with a hole flag."""
+    rings = []
+    current: list[tuple[float, float]] = []
+    hole = False
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line == "END":
+            if len(current) >= 3:
+                rings.append((current, hole))
+            current = []
+            hole = False
+            continue
+        if line.startswith("!"):
+            hole = True
+            line = line[1:].strip()
+            if not line:
+                continue
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        try:
+            current.append((float(parts[0]), float(parts[1])))
+        except ValueError:
+            continue
+    if len(current) >= 3:
+        rings.append((current, hole))
+    return rings
+
+
+def _point_in_ring(lon: float, lat: float, ring: list[tuple[float, float]]) -> bool:
+    inside = False
+    j = len(ring) - 1
+    for i in range(len(ring)):
+        xi, yi = ring[i]
+        xj, yj = ring[j]
+        if (yi > lat) != (yj > lat):
+            cross = (xj - xi) * (lat - yi) / (yj - yi) + xi
+            if lon < cross:
+                inside = not inside
+        j = i
+    return inside
+
+
+def _rings_contain(lon: float, lat: float, rings: list[tuple[list[tuple[float, float]], bool]]) -> bool:
+    outer = False
+    hole = False
+    for ring, is_hole in rings:
+        if not _point_in_ring(lon, lat, ring):
+            continue
+        if is_hole:
+            hole = True
+        else:
+            outer = True
+    return outer and not hole
+
+
+def _ring_area(ring: list[tuple[float, float]]) -> float:
+    area = 0.0
+    j = len(ring) - 1
+    for i in range(len(ring)):
+        area += (ring[j][0] + ring[i][0]) * (ring[j][1] - ring[i][1])
+        j = i
+    return abs(area) / 2
+
+
+_POLY_CACHE: dict[str, list[tuple[list[tuple[float, float]], bool]] | None] = {}
+
+
+def _poly_url(pbf_url: str) -> str | None:
+    if "download.geofabrik.de" not in (pbf_url or ""):
+        return None
+    if not pbf_url.endswith("-latest.osm.pbf"):
+        return None
+    return pbf_url[: -len("-latest.osm.pbf")] + ".poly"
+
+
+def _load_poly(pbf_url: str) -> list[tuple[list[tuple[float, float]], bool]] | None:
+    url = _poly_url(pbf_url)
+    if not url:
+        return None
+    if url in _POLY_CACHE:
+        return _POLY_CACHE[url]
+    cache_dir = Path(os.environ.get("DATA_ROOT") or "/tmp") / "geofabrik-polys"
+    cache_file = cache_dir / (re.sub(r"[^a-z0-9]+", "-", url.lower()).strip("-") + ".poly")
+    text = ""
+    if cache_file.is_file():
+        text = cache_file.read_text(encoding="utf-8")
+    else:
+        req = urllib.request.Request(url, headers={"User-Agent": "globalskiatlas-one-resort/1.0"})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                text = resp.read().decode("utf-8", "replace")
+        except Exception as exc:
+            print("poly", url, exc, flush=True)
+            _POLY_CACHE[url] = None
+            return None
+        try:
+            cache_file.parent.mkdir(parents=True, exist_ok=True)
+            cache_file.write_text(text, encoding="utf-8")
+        except OSError:
+            pass
+    rings = _parse_poly(text)
+    _POLY_CACHE[url] = rings or None
+    return _POLY_CACHE[url]
+
+
+def region_containing(country: str, lat: float, lon: float) -> str | None:
+    """Pick the existing Geofabrik extract whose outline contains this resort."""
+    country_slug = _country_slug(country)
+    if not country_slug:
+        return None
+    hits = []
+    for path, pbf_url in _region_rows():
+        if country_slug not in path.split("/"):
+            continue
+        rings = _load_poly(pbf_url)
+        if not rings or not _rings_contain(lon, lat, rings):
+            continue
+        area = sum(_ring_area(ring) for ring, is_hole in rings if not is_hole)
+        hits.append((area, path))
+    if not hits:
+        return None
+    hits.sort()
+    return hits[0][1]
+
+
+def _url_exists(url: str) -> bool:
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "globalskiatlas-one-resort/1.0", "Range": "bytes=0-0"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return resp.status in (200, 206)
+    except Exception:
+        return False
+
+
+def _continent_slug(lat: float, lon: float, boundaries: Path) -> str | None:
+    shp = boundaries / "ne_10m_admin_0_countries.shp"
+    if not shp.is_file():
+        return None
+    try:
+        import geopandas as gpd
+        from shapely.geometry import Point
+    except ImportError:
+        return None
+    try:
+        gdf = gpd.read_file(shp)
+        if not gdf.crs:
+            gdf.set_crs("EPSG:4326", inplace=True)
+        gdf = gdf.to_crs("EPSG:4326")
+        joined = gpd.sjoin(
+            gpd.GeoDataFrame([{"geometry": Point(lon, lat)}], crs="EPSG:4326"),
+            gdf,
+            how="left",
+            predicate="within",
+        )
+        idx = joined["index_right"].iloc[0]
+        if idx is None or (isinstance(idx, float) and math.isnan(idx)):
+            return None
+        name = str(gdf.loc[idx].get("CONTINENT") or "").lower()
+        return _CONTINENT_SLUG.get(name)
+    except Exception as exc:
+        print("continent lookup", exc, flush=True)
+        return None
+
+
+def _extra_region_files() -> list[Path]:
+    paths = [REPO / "config" / "extra-regions.yaml"]
+    root = os.environ.get("DATA_ROOT")
+    if root:
+        paths.append(Path(root) / "extra-regions.yaml")
+    return paths
+
+
+def _append_extra_region(region: str, pbf_url: str) -> None:
+    import yaml
+
+    item = {"region": region, "pbf_url": pbf_url}
+    wrote = False
+    for path in _extra_region_files():
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            current = yaml.safe_load(path.read_text(encoding="utf-8")) if path.is_file() else []
+            current = current or []
+            if isinstance(current, dict):
+                current = current.get("regions") or []
+            if any(str(row.get("region")) == region for row in current):
+                wrote = True
+                continue
+            current.append(item)
+            path.write_text(yaml.safe_dump(current, sort_keys=False), encoding="utf-8")
+            wrote = True
+            print("added pipeline region", region, pbf_url, flush=True)
+        except OSError as exc:
+            print("could not write", path, exc, flush=True)
+    if not wrote:
+        raise SystemExit(f"could not store new region {region}")
+
+
+def add_country_region(country: str, lat: float, lon: float, boundaries: Path) -> str | None:
+    """Add a Geofabrik country extract when the pipeline has no region for it."""
+    slug = _country_slug(country)
+    if not slug or slug in _EXCLUDED_COUNTRY_SLUGS:
+        return None
+    paths = _region_paths()
+    if any(slug in path.split("/") for path in paths):
+        return None
+    continent = _continent_slug(lat, lon, boundaries)
+    if continent in _FULL_CONTINENTS and continent in paths:
+        print("region", continent, "full continent for", country, flush=True)
+        return continent
+    tries = []
+    if continent:
+        tries.append(continent)
+    if continent == "north-america":
+        tries.append("central-america")
+    for name in ("europe", "asia", "north-america", "south-america", "africa", "australia-oceania", "central-america"):
+        if name not in tries:
+            tries.append(name)
+    for name in tries:
+        url = f"https://download.geofabrik.de/{name}/{slug}-latest.osm.pbf"
+        if not _url_exists(url):
+            continue
+        region = f"{name}/{slug}"
+        _append_extra_region(region, url)
+        return region
+    return None
+
+
+def region_for_resort(country: str, state: str, lat: float, lon: float, boundaries: Path) -> str:
+    """Region path for a newly found resort, adding a country extract when needed."""
+    try:
+        return region_for_place(country, state)
+    except SystemExit as exc:
+        reason = exc
+    found = region_containing(country, lat, lon)
+    if found:
+        print("region from extract outline", found, flush=True)
+        return found
+    added = add_country_region(country, lat, lon, boundaries)
+    if added:
+        return added
+    raise SystemExit(reason)
 
 
 def _centroid(el: dict) -> tuple[float, float]:
@@ -438,17 +753,17 @@ def _read_json_key(s3, bucket: str, key: str) -> dict | None:
         return None
 
 
-def _inbox_keys(s3, bucket: str) -> list[str]:
+def _inbox_keys(s3, bucket: str, folder: str = "inbox") -> list[str]:
     root = _local_root()
     if root:
-        inbox = root / "resort-jobs" / "inbox"
+        inbox = root / "resort-jobs" / folder
         if not inbox.is_dir():
             return []
-        return [f"resort-jobs/inbox/{path.name}" for path in sorted(inbox.glob("*.json"))]
+        return [f"resort-jobs/{folder}/{path.name}" for path in sorted(inbox.glob("*.json"))]
     keys = []
     token = None
     while True:
-        kw = {"Bucket": bucket, "Prefix": "resort-jobs/inbox/"}
+        kw = {"Bucket": bucket, "Prefix": f"resort-jobs/{folder}/"}
         if token:
             kw["ContinuationToken"] = token
         page = s3.list_objects_v2(**kw)
@@ -559,14 +874,66 @@ def patch_prefix(s3, bucket: str, prefix: str, work: Path, wid: str, publish: bo
         _store_file(s3, bucket, f"{prefix.strip('/')}/{rel}", dem)
 
 
+def write_run_status(s3, bucket: str) -> None:
+    """One file to check: resort-jobs/status.json."""
+    root = _local_root()
+    if root is None or s3:
+        return
+    jobs = root / "resort-jobs"
+    jobs.mkdir(parents=True, exist_ok=True)
+    recent = []
+    counts = {"succeeded": 0, "failed": 0, "running": 0, "queued": 0}
+    for path in jobs.glob("*.json"):
+        if path.name in ("status.json", "region-cursor.json") or path.name.startswith("lock-"):
+            continue
+        try:
+            body = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        status = str(body.get("status") or "unknown")
+        counts[status] = counts.get(status, 0) + 1
+        recent.append({
+            "jobId": body.get("jobId") or path.stem,
+            "status": status,
+            "message": body.get("message") or "",
+            "winter_sports_id": body.get("winter_sports_id") or "",
+            "updated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(path.stat().st_mtime)),
+        })
+    recent.sort(key=lambda row: row["updated"], reverse=True)
+    cursor = {}
+    cursor_path = jobs / "region-cursor.json"
+    if cursor_path.is_file():
+        try:
+            cursor = json.loads(cursor_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            cursor = {}
+    paths = _region_paths()
+    index = int(cursor.get("index") or 0)
+    summary = {
+        "updated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "lastRegion": cursor.get("region") or "",
+        "nextRegion": paths[index % len(paths)] if paths else "",
+        "regionIndex": index,
+        "regionCount": len(paths),
+        "counts": counts,
+        "running": [row for row in recent if row["status"] == "running"][:5],
+        "recent": recent[:20],
+    }
+    (jobs / "status.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    print("status", jobs / "status.json", flush=True)
+
+
 def _put_job(s3, bucket: str, job_id: str, status: str, message: str, extra: dict | None = None) -> None:
     body = {"jobId": job_id, "status": status, "message": message}
     if extra:
         body.update(extra)
+    if os.environ.get("WINTER_SPORTS_ID") and "winter_sports_id" not in body:
+        body["winter_sports_id"] = os.environ.get("WINTER_SPORTS_ID")
     raw = json.dumps(body).encode()
     print(body, flush=True)
     if job_id and (s3 or _local_root()):
         _store_bytes(s3, bucket, f"resort-jobs/{job_id}.json", raw)
+        write_run_status(s3, bucket)
 
 
 def _slug(text: str) -> str:
@@ -1039,20 +1406,32 @@ def discover_named_resorts(s3, bucket: str, work: Path) -> int:
     return len(fresh)
 
 
-def sweep_region(s3, bucket: str, work: Path) -> int:
-    """Queue updates for the next resorts in one state or territory.
+def _resort_ids(frame: pd.DataFrame, region: str) -> list[str]:
+    hit = frame.loc[frame["region"].astype(str) == region]
+    ids: list[str] = []
+    seen: set[str] = set()
+    for col in ID_COLUMNS:
+        if col not in hit.columns:
+            continue
+        for raw in hit[col].dropna().astype(str):
+            if raw and raw != "nan" and raw not in seen:
+                seen.add(raw)
+                ids.append(raw)
+    return ids
 
-    A cursor in resort-jobs/region-cursor.json walks the pipeline regions.
-    UPDATE_MAX (default 1) is how many resorts this half hour refreshes.
+
+def sweep_region(s3, bucket: str, work: Path) -> int:
+    """Queue an update for every resort in the next state or province.
+
+    Empty regions are skipped in the same pass. The cursor then moves to the
+    following region, so one pass covers one populated region.
     """
     paths = _region_paths()
     if not paths:
         print("sweep: no regions", flush=True)
         return 0
     cursor = _read_json_key(s3, bucket, "resort-jobs/region-cursor.json") or {}
-    index = int(cursor.get("index") or 0) % len(paths)
-    offset = int(cursor.get("offset") or 0)
-    limit = int(os.environ.get("UPDATE_MAX", "1"))
+    start = int(cursor.get("index") or 0) % len(paths)
     known_path = work / "sweep_ski_areas.parquet"
     if not _download(s3, bucket, "combined/ski_areas.parquet", known_path):
         print("sweep: combined/ski_areas.parquet is missing, not queueing", flush=True)
@@ -1061,28 +1440,21 @@ def sweep_region(s3, bucket: str, work: Path) -> int:
     if frame is None or "region" not in frame.columns:
         print("sweep: ski areas have no region column", flush=True)
         return 0
-    queued = 0
-    while queued < limit and paths:
+    index = start
+    ids: list[str] = []
+    region = paths[index]
+    for _ in range(len(paths)):
         region = paths[index]
-        hit = frame.loc[frame["region"].astype(str) == region]
-        ids: list[str] = []
-        seen: set[str] = set()
-        for col in ID_COLUMNS:
-            if col not in hit.columns:
-                continue
-            for raw in hit[col].dropna().astype(str):
-                if raw and raw != "nan" and raw not in seen:
-                    seen.add(raw)
-                    ids.append(raw)
-        if offset >= len(ids):
-            index = (index + 1) % len(paths)
-            offset = 0
-            if index == int(cursor.get("index") or 0) % len(paths) and queued == 0 and offset == 0 and not ids:
-                break
-            continue
-        wid = ids[offset]
-        offset += 1
-        _store_bytes(s3, bucket, f"resort-jobs/inbox/sweep-{region.replace('/', '-')}-{wid}.json", json.dumps({
+        ids = _resort_ids(frame, region)
+        if ids:
+            break
+        print("sweep: skip empty", region, flush=True)
+        index = (index + 1) % len(paths)
+    else:
+        print("sweep: no resorts in any region", flush=True)
+        return 0
+    for wid in ids:
+        _store_bytes(s3, bucket, f"resort-jobs/region-inbox/sweep-{region.replace('/', '-')}-{wid}.json", json.dumps({
             "action": "update",
             "winter_sports_id": wid,
             "region": region,
@@ -1093,11 +1465,11 @@ def sweep_region(s3, bucket: str, work: Path) -> int:
             "lon": "",
             "jobId": f"sweep-{wid}",
         }).encode())
-        print("sweep queued", region, wid, flush=True)
-        queued += 1
-    _store_bytes(s3, bucket, "resort-jobs/region-cursor.json", json.dumps({"index": index, "offset": offset}).encode())
-    print(f"sweep: next {paths[index]} offset {offset}", flush=True)
-    return queued
+    nxt = (index + 1) % len(paths)
+    _store_bytes(s3, bucket, "resort-jobs/region-cursor.json", json.dumps({"index": nxt, "region": region}).encode())
+    print(f"sweep: queued {len(ids)} in {region}; next {paths[nxt]}", flush=True)
+    write_run_status(s3, bucket)
+    return len(ids)
 
 
 def run_batch() -> int:
@@ -1106,8 +1478,10 @@ def run_batch() -> int:
     s3 = None if _local_root() else _s3()
     work = Path(os.environ.get("WORK_DIR", "/tmp/one_resort"))
     work.mkdir(parents=True, exist_ok=True)
-    discover_named_resorts(s3, bucket, work / "discover")
-    keys = _inbox_keys(s3, bucket)
+    folder = "region-inbox" if os.environ.get("ACTION") == "sweep" else "inbox"
+    if folder == "inbox":
+        discover_named_resorts(s3, bucket, work / "discover")
+    keys = _inbox_keys(s3, bucket, folder)
     if not keys:
         print("batch: nothing queued", flush=True)
         return 0
@@ -1127,15 +1501,22 @@ def run_batch() -> int:
         os.environ["LON"] = str(body.get("lon") or "")
         os.environ["JOB_ID"] = str(body.get("jobId") or "")
         os.environ["WORK_DIR"] = str(Path("/tmp/one_resort") / os.environ["JOB_ID"])
-        code = main()
-        if code in (0, 3):
+        try:
+            code = main()
+        except Exception as exc:
+            print(f"batch: {key} failed ({exc}); continuing", flush=True)
+            code = 1
+        if code in (0, 1, 3):
             _remove_key(s3, bucket, key)
-            if code == 3:
+            if code == 0:
+                last_work = Path(os.environ["WORK_DIR"])
+                yaml = _resort_yaml(os.environ["WINTER_SPORTS_ID"])
+                if yaml:
+                    stems.append(yaml.stem)
+            elif code == 3:
                 print("batch: skipped unmapped", key, flush=True)
-            last_work = Path(os.environ["WORK_DIR"])
-            yaml = _resort_yaml(os.environ["WINTER_SPORTS_ID"])
-            if yaml:
-                stems.append(yaml.stem)
+            else:
+                print("batch: failed, continuing", key, flush=True)
         else:
             print("batch: left queued", key, flush=True)
     os.environ.pop("SKIP_PMTILES", None)
@@ -1198,8 +1579,12 @@ def main() -> int:
                 country, state = _lookup_country_state_from_boundaries(lat, lon, Path(boundaries))
                 os.environ["COUNTRY"] = str(country or "")
                 os.environ["STATE"] = str(state or "")
+                os.environ["LAT"] = str(lat)
+                os.environ["LON"] = str(lon)
                 try:
-                    region = region_for_place(os.environ["COUNTRY"], os.environ["STATE"])
+                    region = region_for_resort(
+                        os.environ["COUNTRY"], os.environ["STATE"], lat, lon, Path(boundaries)
+                    )
                 except SystemExit as exc:
                     _put_job(s3, bucket, job_id, "failed", str(exc))
                     return 3
@@ -1276,13 +1661,16 @@ def main() -> int:
         return 0
     except Exception as exc:
         _put_job(s3, bucket, job_id, "failed", str(exc))
-        raise
+        return 1
     finally:
         if wid and (s3 or _local_root()):
             _remove_key(s3, bucket, f"resort-jobs/lock-{wid}.json")
 
 
 if __name__ == "__main__":
+    if os.environ.get("WRITE_STATUS") == "1":
+        write_run_status(None, os.environ.get("S3_BUCKET", ""))
+        raise SystemExit(0)
     if os.environ.get("RUN_CHECK") == "1":
         existing = pd.DataFrame({"winter_sports_id": ["1", "45096232"], "name": ["Other", "Old"]})
         incoming = pd.DataFrame({"winter_sports_id": ["45096232"], "name": ["Montage"]})
@@ -1295,6 +1683,15 @@ if __name__ == "__main__":
         assert list(again["name"]) == ["Keep", "New"], again
         assert new_named_ids(["9", "1", "9", "2"], {"1"}, {"2"}, set(), 8) == ["9"]
         assert new_named_ids(["3", "4"], set(), set(), set(), 1) == ["3"]
+        assert region_for_place("Japan", "Shizuoka") == "asia/japan/chubu"
+        assert region_for_place("Japan", "Nagano") == "asia/japan/chubu"
+        assert region_for_place("Japan", "Hyōgo") == "asia/japan/kansai"
+        assert region_for_place("Japan", "Hokkaido") == "asia/japan/hokkaido"
+        assert region_for_place("France", "Savoie") == "europe/france/rhone-alpes"
+        box = _parse_poly("box\n1\n0 0\n4 0\n4 4\n0 4\nEND\n!hole\n1 1\n2 1\n2 2\n1 2\nEND\nEND\n")
+        assert _rings_contain(3, 3, box)
+        assert not _rings_contain(1.5, 1.5, box)
+        assert not _rings_contain(9, 9, box)
         print("check ok")
         raise SystemExit(0)
     raise SystemExit(main())

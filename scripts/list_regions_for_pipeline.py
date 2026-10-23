@@ -13,6 +13,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -46,6 +47,29 @@ def load_region_rows():
             config = {k: v for k, v in r.items() if k not in ("slug", "pbf_url")}
             region_path = f"{continent_key}/{slug}" if slug != continent_key else continent_key
             rows.append((region_path, r["pbf_url"], config.get("cluster_dist_m")))
+    have = {region for region, _, _ in rows}
+    for region, pbf_url, cluster in _extra_rows():
+        if region not in have:
+            rows.append((region, pbf_url, cluster))
+            have.add(region)
+    return rows
+
+
+def _extra_rows():
+    """Regions added when a new resort falls outside config/regions.yaml."""
+    paths = [REPO_ROOT / "config" / "extra-regions.yaml"]
+    data_root = os.environ.get("DATA_ROOT")
+    if data_root:
+        paths.append(Path(data_root) / "extra-regions.yaml")
+    rows = []
+    for path in paths:
+        if not path.is_file():
+            continue
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or []
+        if isinstance(data, dict):
+            data = data.get("regions") or []
+        for item in data:
+            rows.append((item["region"], item["pbf_url"], item.get("cluster_dist_m")))
     return rows
 
 
