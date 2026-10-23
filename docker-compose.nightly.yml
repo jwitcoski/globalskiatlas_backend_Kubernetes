@@ -1,0 +1,89 @@
+# Two jobs on the local Docker host. Both use /data (combined/*.parquet).
+# A lock file keeps them from running the pipeline at the same time.
+#
+# state-updates: every 30 minutes, refresh the next resort in the current
+# state or territory, then move on. UPDATE_MAX defaults to 1.
+# nightly-resorts: once at start and every day at 07:00 UTC, add named
+# landuse=winter_sports that are not in the catalog.
+
+x-lock: &lock
+  mkdir -p /data/resort-jobs
+  while ! mkdir /data/resort-jobs/runner.lock 2>/dev/null; do sleep 20; done
+  trap 'rmdir /data/resort-jobs/runner.lock' EXIT
+
+services:
+  state-updates:
+    image: globalskiatlas-pipeline
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        while true; do
+          mkdir -p /data/resort-jobs
+          while ! mkdir /data/resort-jobs/runner.lock 2>/dev/null; do sleep 20; done
+          python scripts/run_one_resort.py || echo "state update failed"
+          rmdir /data/resort-jobs/runner.lock
+          sleep 1800
+        done
+    environment:
+      ACTION: sweep
+      DATA_ROOT: /data
+      SKIP_S3: "1"
+      SKIP_WIKI: "1"
+      SKIP_PMTILES: "1"
+      SKIP_INVALIDATE: "1"
+      SKIP_DISCOVER: "1"
+      CLOUDFRONT_DISTRIBUTION_ID: ""
+      BOUNDARIES: /app/boundaries
+      JOB_ID: sweep
+      UPDATE_MAX: ${UPDATE_MAX:-1}
+    volumes:
+      - ${SKI_DATA:-/home/lola/globalskiatlas/output}:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 6G
+
+  nightly-resorts:
+    image: globalskiatlas-pipeline
+    build:
+      context: .
+      dockerfile: Dockerfile.aws
+    restart: unless-stopped
+    command:
+        - sh
+        - -c
+        - |
+        set -e
+        while true; do
+          python scripts/run_one_resort.py || echo "nightly run failed"
+          python - <<'PY'
+        import datetime, time
+        now = datetime.datetime.now(datetime.timezone.utc)
+        nxt = now.replace(hour=7, minute=0, second=0, microsecond=0)
+        if nxt <= now:
+            nxt += datetime.timedelta(days=1)
+        time.sleep((nxt - now).total_seconds())
+        PY
+        done
+    environment:
+      ACTION: batch
+      DATA_ROOT: /data
+      SKIP_S3: "1"
+      SKIP_WIKI: "1"
+      SKIP_PMTILES: "1"
+      SKIP_INVALIDATE: "1"
+      CLOUDFRONT_DISTRIBUTION_ID: ""
+      BOUNDARIES: /app/boundaries
+      JOB_ID: nightly
+      DISCOVER_MAX: ${DISCOVER_MAX:-8}
+    volumes:
+      - ${SKI_DATA:-/opt/globalskiatlas/output}:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 6G

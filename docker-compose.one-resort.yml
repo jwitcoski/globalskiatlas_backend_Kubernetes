@@ -4,8 +4,10 @@
 #   $env:ACTION="update"; $env:WINTER_SPORTS_ID="29785325"; $env:REGION="north-america/us/massachusetts"
 #   docker compose -f docker-compose.one-resort.yml run --rm one-resort
 #
-# ACTION is update, add, or delete. Add needs NAME (and STATE, COUNTRY, LAT, LON
-# when the name search needs them). Delete and update need WINTER_SPORTS_ID and REGION.
+# ACTION is update, add, delete, or batch. Add needs WINTER_SPORTS_ID (region is
+# filled from the boundary lookup). On the local server, use
+# docker-compose.nightly.yml (DATA_ROOT, no AWS). Delete and update need
+# WINTER_SPORTS_ID and REGION.
 
 services:
   one-resort:

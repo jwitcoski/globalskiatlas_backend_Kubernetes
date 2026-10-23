@@ -1,8 +1,16 @@
 #!/usr/bin/env python3
 """One resort: live Overpass, existing pipeline scripts, patch region + combined parquet.
 
-Env: ACTION (update|add|delete), WINTER_SPORTS_ID, REGION, NAME, COUNTRY, STATE,
+Env: ACTION (update|add|delete|batch), WINTER_SPORTS_ID, REGION, NAME, COUNTRY, STATE,
 LAT, LON, JOB_ID, S3_BUCKET, BOUNDARIES, OVERPASS_URL.
+
+ACTION=batch first asks Overpass for named landuse=winter_sports ways and
+relations. Any id missing from combined/ski_areas.parquet, the delete skip list,
+and the job inbox is queued as an add. DISCOVER_MAX (default 8) caps how many
+new resorts one night starts.
+
+Set DATA_ROOT to a local output directory (the Docker host volume) to read and
+write that catalog with no S3, DynamoDB, or CloudFront calls.
 """
 from __future__ import annotations
 
@@ -16,6 +24,7 @@ import sys
 import time
 import urllib.parse
 import urllib.request
+import uuid
 from pathlib import Path
 
 import pandas as pd
@@ -159,6 +168,8 @@ def fetch_winter_sports(wid: str) -> dict | None:
 _COUNTRY_REGION_SLUG = {
     "united states of america": "us",
     "united states": "us",
+    "israel": "israel-and-palestine",
+    "palestine": "israel-and-palestine",
 }
 
 
@@ -177,11 +188,52 @@ def _region_paths() -> list[str]:
     return [row[0] for row in mod.load_region_rows()]
 
 
+# Natural Earth often names a French department. Pipeline regions are the older regions.
+_FRANCE_DEPT = {
+    "ain": "rhone-alpes", "ardeche": "rhone-alpes", "drome": "rhone-alpes", "isere": "rhone-alpes",
+    "loire": "rhone-alpes", "rhone": "rhone-alpes", "savoie": "rhone-alpes", "haute-savoie": "rhone-alpes",
+    "bas-rhin": "alsace", "haut-rhin": "alsace",
+    "dordogne": "aquitaine", "gironde": "aquitaine", "landes": "aquitaine", "lot-et-garonne": "aquitaine",
+    "pyrenees-atlantiques": "aquitaine",
+    "allier": "auvergne", "cantal": "auvergne", "haute-loire": "auvergne", "puy-de-dome": "auvergne",
+    "calvados": "basse-normandie", "manche": "basse-normandie", "orne": "basse-normandie",
+    "cote-d-or": "bourgogne", "nievre": "bourgogne", "saone-et-loire": "bourgogne", "yonne": "bourgogne",
+    "cotes-d-armor": "bretagne", "finistere": "bretagne", "ille-et-vilaine": "bretagne", "morbihan": "bretagne",
+    "cher": "centre", "eure-et-loir": "centre", "indre": "centre", "indre-et-loire": "centre",
+    "loir-et-cher": "centre", "loiret": "centre",
+    "ardennes": "champagne-ardenne", "aube": "champagne-ardenne", "marne": "champagne-ardenne",
+    "haute-marne": "champagne-ardenne",
+    "corse-du-sud": "corse", "haute-corse": "corse",
+    "doubs": "franche-comte", "jura": "franche-comte", "haute-saone": "franche-comte",
+    "territoire-de-belfort": "franche-comte",
+    "eure": "haute-normandie", "seine-maritime": "haute-normandie",
+    "paris": "ile-de-france", "seine-et-marne": "ile-de-france", "yvelines": "ile-de-france",
+    "essonne": "ile-de-france", "hauts-de-seine": "ile-de-france", "seine-saint-denis": "ile-de-france",
+    "val-de-marne": "ile-de-france", "val-d-oise": "ile-de-france",
+    "aude": "languedoc-roussillon", "gard": "languedoc-roussillon", "herault": "languedoc-roussillon",
+    "lozere": "languedoc-roussillon", "pyrenees-orientales": "languedoc-roussillon",
+    "correze": "limousin", "creuse": "limousin", "haute-vienne": "limousin",
+    "meurthe-et-moselle": "lorraine", "meuse": "lorraine", "moselle": "lorraine", "vosges": "lorraine",
+    "ariege": "midi-pyrenees", "aveyron": "midi-pyrenees", "haute-garonne": "midi-pyrenees",
+    "gers": "midi-pyrenees", "lot": "midi-pyrenees", "hautes-pyrenees": "midi-pyrenees",
+    "tarn": "midi-pyrenees", "tarn-et-garonne": "midi-pyrenees",
+    "nord": "nord-pas-de-calais", "pas-de-calais": "nord-pas-de-calais",
+    "loire-atlantique": "pays-de-la-loire", "maine-et-loire": "pays-de-la-loire",
+    "mayenne": "pays-de-la-loire", "sarthe": "pays-de-la-loire", "vendee": "pays-de-la-loire",
+    "aisne": "picardie", "oise": "picardie", "somme": "picardie",
+    "charente": "poitou-charentes", "charente-maritime": "poitou-charentes",
+    "deux-sevres": "poitou-charentes", "vienne": "poitou-charentes",
+    "alpes-de-haute-provence": "provence-alpes-cote-d-azur", "hautes-alpes": "provence-alpes-cote-d-azur",
+    "alpes-maritimes": "provence-alpes-cote-d-azur", "bouches-du-rhone": "provence-alpes-cote-d-azur",
+    "var": "provence-alpes-cote-d-azur", "vaucluse": "provence-alpes-cote-d-azur",
+}
+
+
 def region_for_place(country: str, state: str) -> str:
     """Match Natural Earth country and state names to a pipeline region path."""
     paths = _region_paths()
     country_slug = _COUNTRY_REGION_SLUG.get((country or "").lower(), _hyphen(country))
-    state_slug = _hyphen(state)
+    state_slug = _FRANCE_DEPT.get(_hyphen(state), _hyphen(state)) if country_slug == "france" else _hyphen(state)
     if state_slug:
         hits = [
             path for path in paths
@@ -330,15 +382,96 @@ def _write_table(df: pd.DataFrame, path: Path) -> None:
     out.to_parquet(path, index=False)
 
 
+def _local_root() -> Path | None:
+    raw = os.environ.get("DATA_ROOT", "").strip()
+    return Path(raw) if raw else None
+
+
 def _s3():
     import boto3
     return boto3.client("s3")
+
+
+def _store_bytes(s3, bucket: str, key: str, body: bytes, content_type: str = "application/json") -> None:
+    root = _local_root()
+    if root:
+        dest = root / key
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(body)
+        return
+    if s3:
+        s3.put_object(Bucket=bucket, Key=key, Body=body, ContentType=content_type)
+
+
+def _store_file(s3, bucket: str, key: str, src: Path) -> None:
+    root = _local_root()
+    if root:
+        dest = root / key
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest)
+        return
+    if s3:
+        s3.upload_file(str(src), bucket, key)
+
+
+def _remove_key(s3, bucket: str, key: str) -> None:
+    root = _local_root()
+    if root:
+        (root / key).unlink(missing_ok=True)
+        return
+    if s3:
+        s3.delete_object(Bucket=bucket, Key=key)
+
+
+def _read_json_key(s3, bucket: str, key: str) -> dict | None:
+    root = _local_root()
+    if root:
+        path = root / key
+        if not path.is_file():
+            return None
+        return json.loads(path.read_text(encoding="utf-8"))
+    if not s3:
+        return None
+    try:
+        return json.loads(s3.get_object(Bucket=bucket, Key=key)["Body"].read().decode())
+    except Exception:
+        return None
+
+
+def _inbox_keys(s3, bucket: str) -> list[str]:
+    root = _local_root()
+    if root:
+        inbox = root / "resort-jobs" / "inbox"
+        if not inbox.is_dir():
+            return []
+        return [f"resort-jobs/inbox/{path.name}" for path in sorted(inbox.glob("*.json"))]
+    keys = []
+    token = None
+    while True:
+        kw = {"Bucket": bucket, "Prefix": "resort-jobs/inbox/"}
+        if token:
+            kw["ContinuationToken"] = token
+        page = s3.list_objects_v2(**kw)
+        keys.extend(obj["Key"] for obj in page.get("Contents") or [] if obj["Key"].endswith(".json"))
+        if not page.get("IsTruncated"):
+            break
+        token = page.get("NextContinuationToken")
+    return keys
 
 
 def _download(s3, bucket: str, key: str, dest: Path) -> bool:
     from botocore.exceptions import ClientError
 
     dest.parent.mkdir(parents=True, exist_ok=True)
+    root = _local_root()
+    if root:
+        src = root / key
+        if not src.is_file():
+            return False
+        shutil.copy2(src, dest)
+        return True
+    if s3 is None:
+        return False
     try:
         s3.download_file(bucket, key, str(dest))
         return True
@@ -396,36 +529,34 @@ def patch_prefix(s3, bucket: str, prefix: str, work: Path, wid: str, publish: bo
             continue
         remote = scratch / name
         key = f"{prefix.strip('/')}/{name}"
-        had = _download(s3, bucket, key, remote) if s3 else False
+        had = _download(s3, bucket, key, remote)
         existing = _read_table(remote) if had else None
         if publish and existing is None and prefix.strip("/") == "combined":
             raise SystemExit(f"refusing to replace s3://{bucket}/{key} with a single resort")
         merged = replace_resort_rows(existing, incoming if publish else None, wid)
         out = scratch / f"out_{name}"
         _write_table(merged, out)
-        if s3:
-            s3.upload_file(str(out), bucket, key)
+        _store_file(s3, bucket, key, out)
     csv_name = "ski_areas_analyzed.csv"
     local_csv = work / csv_name
     if publish and local_csv.is_file():
         remote = scratch / csv_name
         key = f"{prefix.strip('/')}/{csv_name}"
-        had = _download(s3, bucket, key, remote) if s3 else False
+        had = _download(s3, bucket, key, remote)
         merged = replace_resort_rows(_read_table(remote) if had else None, pd.read_csv(local_csv), wid)
         out = scratch / f"out_{csv_name}"
         _write_table(merged, out)
-        if s3:
-            s3.upload_file(str(out), bucket, key)
-    if prefix.strip("/") == "combined" and s3:
+        _store_file(s3, bucket, key, out)
+    if prefix.strip("/") == "combined" and s3 and not _local_root():
         merged_analyzed = scratch / "out_ski_areas_analyzed.parquet"
         if merged_analyzed.is_file():
             _upload_dot_catalog(s3, bucket, merged_analyzed)
     dem = work / "dems" / prefix / f"{wid}.tif"
     if not dem.is_file():
         dem = next((work / "dems").rglob(f"{wid}.tif"), None) if (work / "dems").is_dir() else None
-    if publish and dem and dem.is_file() and s3:
+    if publish and dem and dem.is_file():
         rel = dem.relative_to(work).as_posix()
-        s3.upload_file(str(dem), bucket, f"{prefix.strip('/')}/{rel}")
+        _store_file(s3, bucket, f"{prefix.strip('/')}/{rel}", dem)
 
 
 def _put_job(s3, bucket: str, job_id: str, status: str, message: str, extra: dict | None = None) -> None:
@@ -434,8 +565,8 @@ def _put_job(s3, bucket: str, job_id: str, status: str, message: str, extra: dic
         body.update(extra)
     raw = json.dumps(body).encode()
     print(body, flush=True)
-    if s3 and job_id:
-        s3.put_object(Bucket=bucket, Key=f"resort-jobs/{job_id}.json", Body=raw, ContentType="application/json")
+    if job_id and (s3 or _local_root()):
+        _store_bytes(s3, bucket, f"resort-jobs/{job_id}.json", raw)
 
 
 def _slug(text: str) -> str:
@@ -530,7 +661,7 @@ def _geom_changed(s3, bucket: str, region: str, wid: str, work: Path) -> bool:
     if new is None or "geometry" not in getattr(new, "columns", []):
         return False
     old_path = work / "old_ski.geoparquet"
-    if not s3 or not _download(s3, bucket, f"{region}/ski_areas.parquet", old_path):
+    if not _download(s3, bucket, f"{region}/ski_areas.parquet", old_path):
         return True
     old = _read_table(old_path)
     if old is None:
@@ -548,24 +679,24 @@ def _append_skip(s3, bucket: str, wid: str, work: Path) -> None:
     key = "combined/resort_skip.json"
     dest = work / "resort_skip.json"
     ids: list[str] = []
-    if s3 and _download(s3, bucket, key, dest):
+    if _download(s3, bucket, key, dest):
         ids = [str(x) for x in json.loads(dest.read_text(encoding="utf-8")).get("winter_sports_ids") or []]
     if str(wid) not in ids:
         ids.append(str(wid))
     body = json.dumps({"winter_sports_ids": ids}).encode()
     dest.write_bytes(body)
-    if s3:
-        s3.put_object(Bucket=bucket, Key=key, Body=body, ContentType="application/json")
+    if s3 or _local_root():
+        _store_bytes(s3, bucket, key, body)
 
 
 def _drop_skip(s3, bucket: str, wid: str, work: Path) -> None:
     key = "combined/resort_skip.json"
     dest = work / "resort_skip.json"
-    if not s3 or not _download(s3, bucket, key, dest):
+    if not _download(s3, bucket, key, dest):
         return
     ids = [str(x) for x in json.loads(dest.read_text(encoding="utf-8")).get("winter_sports_ids") or [] if str(x) != str(wid)]
     body = json.dumps({"winter_sports_ids": ids}).encode()
-    s3.put_object(Bucket=bucket, Key=key, Body=body, ContentType="application/json")
+    _store_bytes(s3, bucket, key, body)
 
 
 def _delete_prefix(s3, bucket: str, prefix: str) -> None:
@@ -605,7 +736,7 @@ def stage_scene_inputs(work: Path, region: str, wid: str) -> None:
 
 def _state_dots() -> None:
     state = os.environ.get("STATE", "")
-    if not state:
+    if not state or _local_root():
         return
     country = os.environ.get("COUNTRY") or "United States of America"
     from atlas.map_gen.wiki_page_id import wiki_state_page_id
@@ -822,21 +953,161 @@ def _invalidate_site(s3, wid: str) -> None:
     print("invalidated", paths, flush=True)
 
 
-def run_batch() -> int:
-    """Apply every queued resort, then rebuild the shared tiles once."""
-    bucket = os.environ.get("S3_BUCKET", "globalskiatlas-backend-k8s-output")
-    s3 = _s3()
-    keys = []
-    token = None
-    while True:
-        kw = {"Bucket": bucket, "Prefix": "resort-jobs/inbox/"}
-        if token:
-            kw["ContinuationToken"] = token
-        page = s3.list_objects_v2(**kw)
-        keys.extend(obj["Key"] for obj in page.get("Contents") or [] if obj["Key"].endswith(".json"))
-        if not page.get("IsTruncated"):
+def ids_in_frame(df: pd.DataFrame | None) -> set[str]:
+    found: set[str] = set()
+    if df is None or len(df) == 0:
+        return found
+    for col in ID_COLUMNS:
+        if col in df.columns:
+            found.update(x for x in df[col].dropna().astype(str) if x and x != "nan")
+    return found
+
+
+def new_named_ids(osm_ids: list[str], known: set[str], skipped: set[str], queued: set[str], limit: int) -> list[str]:
+    """Named OSM winter_sports ids that this catalog has never ingested."""
+    fresh = []
+    for wid in osm_ids:
+        wid = str(wid)
+        if wid in known or wid in skipped or wid in queued or wid in fresh:
+            continue
+        fresh.append(wid)
+        if len(fresh) >= limit:
             break
-        token = page.get("NextContinuationToken")
+    return fresh
+
+
+def _named_winter_sports_ids() -> list[str]:
+    query = (
+        "[out:json][timeout:180];"
+        '(way["landuse"="winter_sports"]["name"];'
+        'relation["landuse"="winter_sports"]["name"];);'
+        "out ids;"
+    )
+    ids = []
+    for el in overpass(query).get("elements") or []:
+        if el.get("type") in ("way", "relation") and el.get("id") is not None:
+            ids.append(str(el["id"]))
+    return ids
+
+
+def _queue_add(s3, bucket: str, wid: str) -> str:
+    job_id = uuid.uuid4().hex
+    queued = {"jobId": job_id, "status": "queued", "message": "add", "winter_sports_id": wid}
+    _store_bytes(s3, bucket, f"resort-jobs/{job_id}.json", json.dumps(queued).encode())
+    _store_bytes(s3, bucket, f"resort-jobs/lock-{wid}.json", json.dumps({"jobId": job_id}).encode())
+    request = {
+        "action": "add",
+        "winter_sports_id": wid,
+        "region": "",
+        "name": "",
+        "country": "",
+        "state": "",
+        "lat": "",
+        "lon": "",
+        "jobId": job_id,
+    }
+    _store_bytes(s3, bucket, f"resort-jobs/inbox/{job_id}.json", json.dumps(request).encode())
+    print("queued add", wid, job_id, flush=True)
+    return job_id
+
+
+def discover_named_resorts(s3, bucket: str, work: Path) -> int:
+    """Queue add jobs for named landuse=winter_sports that are not in the catalog."""
+    if os.environ.get("SKIP_DISCOVER") == "1":
+        return 0
+    limit = int(os.environ.get("DISCOVER_MAX", "8"))
+    known_path = work / "known_ski_areas.parquet"
+    known: set[str] = set()
+    if not _download(s3, bucket, "combined/ski_areas.parquet", known_path):
+        print("discover: combined/ski_areas.parquet is missing, not queueing", flush=True)
+        return 0
+    known = ids_in_frame(_read_table(known_path))
+    skip_path = work / "resort_skip.json"
+    skipped: set[str] = set()
+    if _download(s3, bucket, "combined/resort_skip.json", skip_path):
+        skipped = {str(x) for x in json.loads(skip_path.read_text(encoding="utf-8")).get("winter_sports_ids") or []}
+    queued: set[str] = set()
+    for key in _inbox_keys(s3, bucket):
+        body = _read_json_key(s3, bucket, key) or {}
+        if body.get("winter_sports_id"):
+            queued.add(str(body["winter_sports_id"]))
+    osm_ids = _named_winter_sports_ids()
+    fresh = new_named_ids(osm_ids, known, skipped, queued, limit)
+    print(f"discover: {len(osm_ids)} named in OSM, {len(fresh)} new (cap {limit})", flush=True)
+    for wid in fresh:
+        _queue_add(s3, bucket, wid)
+    return len(fresh)
+
+
+def sweep_region(s3, bucket: str, work: Path) -> int:
+    """Queue updates for the next resorts in one state or territory.
+
+    A cursor in resort-jobs/region-cursor.json walks the pipeline regions.
+    UPDATE_MAX (default 1) is how many resorts this half hour refreshes.
+    """
+    paths = _region_paths()
+    if not paths:
+        print("sweep: no regions", flush=True)
+        return 0
+    cursor = _read_json_key(s3, bucket, "resort-jobs/region-cursor.json") or {}
+    index = int(cursor.get("index") or 0) % len(paths)
+    offset = int(cursor.get("offset") or 0)
+    limit = int(os.environ.get("UPDATE_MAX", "1"))
+    known_path = work / "sweep_ski_areas.parquet"
+    if not _download(s3, bucket, "combined/ski_areas.parquet", known_path):
+        print("sweep: combined/ski_areas.parquet is missing, not queueing", flush=True)
+        return 0
+    frame = _read_table(known_path)
+    if frame is None or "region" not in frame.columns:
+        print("sweep: ski areas have no region column", flush=True)
+        return 0
+    queued = 0
+    while queued < limit and paths:
+        region = paths[index]
+        hit = frame.loc[frame["region"].astype(str) == region]
+        ids: list[str] = []
+        seen: set[str] = set()
+        for col in ID_COLUMNS:
+            if col not in hit.columns:
+                continue
+            for raw in hit[col].dropna().astype(str):
+                if raw and raw != "nan" and raw not in seen:
+                    seen.add(raw)
+                    ids.append(raw)
+        if offset >= len(ids):
+            index = (index + 1) % len(paths)
+            offset = 0
+            if index == int(cursor.get("index") or 0) % len(paths) and queued == 0 and offset == 0 and not ids:
+                break
+            continue
+        wid = ids[offset]
+        offset += 1
+        _store_bytes(s3, bucket, f"resort-jobs/inbox/sweep-{region.replace('/', '-')}-{wid}.json", json.dumps({
+            "action": "update",
+            "winter_sports_id": wid,
+            "region": region,
+            "name": "",
+            "country": "",
+            "state": "",
+            "lat": "",
+            "lon": "",
+            "jobId": f"sweep-{wid}",
+        }).encode())
+        print("sweep queued", region, wid, flush=True)
+        queued += 1
+    _store_bytes(s3, bucket, "resort-jobs/region-cursor.json", json.dumps({"index": index, "offset": offset}).encode())
+    print(f"sweep: next {paths[index]} offset {offset}", flush=True)
+    return queued
+
+
+def run_batch() -> int:
+    """Find new named resorts, apply every queued resort, then rebuild the shared tiles once."""
+    bucket = os.environ.get("S3_BUCKET", "globalskiatlas-backend-k8s-output")
+    s3 = None if _local_root() else _s3()
+    work = Path(os.environ.get("WORK_DIR", "/tmp/one_resort"))
+    work.mkdir(parents=True, exist_ok=True)
+    discover_named_resorts(s3, bucket, work / "discover")
+    keys = _inbox_keys(s3, bucket)
     if not keys:
         print("batch: nothing queued", flush=True)
         return 0
@@ -845,7 +1116,7 @@ def run_batch() -> int:
     last_work = None
     stems: list[str] = []
     for key in keys:
-        body = json.loads(s3.get_object(Bucket=bucket, Key=key)["Body"].read().decode())
+        body = _read_json_key(s3, bucket, key) or {}
         os.environ["ACTION"] = body.get("action") or "update"
         os.environ["WINTER_SPORTS_ID"] = str(body.get("winter_sports_id") or "")
         os.environ["REGION"] = str(body.get("region") or "")
@@ -857,8 +1128,10 @@ def run_batch() -> int:
         os.environ["JOB_ID"] = str(body.get("jobId") or "")
         os.environ["WORK_DIR"] = str(Path("/tmp/one_resort") / os.environ["JOB_ID"])
         code = main()
-        if code == 0:
-            s3.delete_object(Bucket=bucket, Key=key)
+        if code in (0, 3):
+            _remove_key(s3, bucket, key)
+            if code == 3:
+                print("batch: skipped unmapped", key, flush=True)
             last_work = Path(os.environ["WORK_DIR"])
             yaml = _resort_yaml(os.environ["WINTER_SPORTS_ID"])
             if yaml:
@@ -867,7 +1140,7 @@ def run_batch() -> int:
             print("batch: left queued", key, flush=True)
     os.environ.pop("SKIP_PMTILES", None)
     os.environ.pop("SKIP_INVALIDATE", None)
-    if last_work:
+    if last_work and s3:
         _publish_pmtiles(s3, bucket, last_work)
         os.environ["JOB_ID"] = "batch"
         paths = ["/clay_scenes/catalog.json", "/scripts/map-config.js"]
@@ -887,6 +1160,14 @@ def run_batch() -> int:
 
 def main() -> int:
     action = os.environ.get("ACTION", "update")
+    if action == "sweep":
+        os.environ["SKIP_DISCOVER"] = "1"
+        bucket = os.environ.get("S3_BUCKET", "globalskiatlas-backend-k8s-output")
+        s3 = None if _local_root() else _s3()
+        work = Path(os.environ.get("WORK_DIR", "/tmp/one_resort"))
+        work.mkdir(parents=True, exist_ok=True)
+        sweep_region(s3, bucket, work / "sweep")
+        return run_batch()
     if action == "batch":
         return run_batch()
     wid = os.environ.get("WINTER_SPORTS_ID", "")
@@ -896,7 +1177,7 @@ def main() -> int:
     boundaries = os.environ.get("BOUNDARIES", "/boundaries")
     work = Path(os.environ.get("WORK_DIR", "/tmp/one_resort"))
     work.mkdir(parents=True, exist_ok=True)
-    s3 = _s3() if os.environ.get("SKIP_S3") != "1" else None
+    s3 = None if _local_root() or os.environ.get("SKIP_S3") == "1" else _s3()
     try:
         _put_job(s3, bucket, job_id, "running", action)
         resort = None
@@ -917,7 +1198,11 @@ def main() -> int:
                 country, state = _lookup_country_state_from_boundaries(lat, lon, Path(boundaries))
                 os.environ["COUNTRY"] = str(country or "")
                 os.environ["STATE"] = str(state or "")
-                region = region_for_place(os.environ["COUNTRY"], os.environ["STATE"])
+                try:
+                    region = region_for_place(os.environ["COUNTRY"], os.environ["STATE"])
+                except SystemExit as exc:
+                    _put_job(s3, bucket, job_id, "failed", str(exc))
+                    return 3
                 print("region", region, flush=True)
         if not wid or not region:
             _put_job(s3, bucket, job_id, "failed", "winter_sports_id and region are required")
@@ -955,19 +1240,25 @@ def main() -> int:
             "--data-root", str(work), "--fetch-skadi", "--force",
         ])
         scenes = work / "game_scenes"
-        if (scenes / "catalog.json").is_file():
+        if (scenes / "catalog.json").is_file() and s3 and not _local_root():
             _run([sys.executable, "scripts/upload_game_scenes.py", "--scenes-dir", str(scenes), "--bucket", bucket])
             _merge_game_catalog(s3, bucket, scenes / "catalog.json")
+        elif _local_root() and scenes.is_dir():
+            shutil.copytree(scenes, _local_root() / "game_scenes", dirs_exist_ok=True)
         _run([
             sys.executable, "-m", "game_export", "--clay-scene", "--resort", yaml.stem,
             "--data-root", str(work), "--fetch-skadi", "--force",
         ])
-        _run([
-            sys.executable, "scripts/upload_clay_scenes.py",
-            "--scenes-dir", str(work / "clay_scenes"),
-            "--only", yaml.stem, "--bucket", bucket,
-        ])
-        if action == "add":
+        clay = work / "clay_scenes"
+        if s3 and not _local_root():
+            _run([
+                sys.executable, "scripts/upload_clay_scenes.py",
+                "--scenes-dir", str(clay),
+                "--only", yaml.stem, "--bucket", bucket,
+            ])
+        elif _local_root() and clay.is_dir():
+            shutil.copytree(clay, _local_root() / "clay_scenes", dirs_exist_ok=True)
+        if action == "add" and not _local_root():
             wiki_path = work / "wiki.json"
             _run([
                 sys.executable, "scripts/generate_resort_copy_bedrock.py",
@@ -987,8 +1278,8 @@ def main() -> int:
         _put_job(s3, bucket, job_id, "failed", str(exc))
         raise
     finally:
-        if s3 and wid:
-            s3.delete_object(Bucket=bucket, Key=f"resort-jobs/lock-{wid}.json")
+        if wid and (s3 or _local_root()):
+            _remove_key(s3, bucket, f"resort-jobs/lock-{wid}.json")
 
 
 if __name__ == "__main__":
@@ -1002,6 +1293,8 @@ if __name__ == "__main__":
         lifts = pd.DataFrame({"osm_uid": ["way/1", "way/2"], "name": ["Keep", "Old"]})
         again = replace_resort_rows(lifts, pd.DataFrame({"osm_uid": ["way/2"], "name": ["New"]}), "45096232")
         assert list(again["name"]) == ["Keep", "New"], again
+        assert new_named_ids(["9", "1", "9", "2"], {"1"}, {"2"}, set(), 8) == ["9"]
+        assert new_named_ids(["3", "4"], set(), set(), set(), 1) == ["3"]
         print("check ok")
         raise SystemExit(0)
     raise SystemExit(main())
