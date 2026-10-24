@@ -1,9 +1,8 @@
 # Two jobs on the local Docker host. Both use /data (combined/*.parquet).
 # A lock file keeps them from running the pipeline at the same time.
 #
-# state-updates: every 30 minutes, refresh every resort in one state or
-# province, then move to the next. There are 373 regions, so a full pass is
-# about 5 to 8 days. Empty regions are skipped inside the same pass.
+# state-updates: keep updating. An empty inbox queues the next region immediately.
+# Empty regions are skipped inside the same pass.
 # nightly-resorts: once at start and every day at 07:00 UTC, add named
 # landuse=winter_sports that are not in the catalog.
 
@@ -24,13 +23,8 @@ services:
         while true; do
           mkdir -p /data/resort-jobs
           while ! mkdir /data/resort-jobs/runner.lock 2>/dev/null; do sleep 20; done
-          start=$(date +%s)
           python scripts/run_one_resort.py || echo "state update failed"
           rmdir /data/resort-jobs/runner.lock
-          elapsed=$(( $(date +%s) - start ))
-          if [ "$elapsed" -lt 1800 ]; then
-            sleep $((1800 - elapsed))
-          fi
         done
     environment:
       ACTION: sweep

@@ -897,6 +897,7 @@ def write_run_status(s3, bucket: str) -> None:
             "status": status,
             "message": body.get("message") or "",
             "winter_sports_id": body.get("winter_sports_id") or "",
+            "region": body.get("region") or "",
             "updated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(path.stat().st_mtime)),
         })
     recent.sort(key=lambda row: row["updated"], reverse=True)
@@ -909,14 +910,17 @@ def write_run_status(s3, bucket: str) -> None:
             cursor = {}
     paths = _region_paths()
     index = int(cursor.get("index") or 0)
+    running = [row for row in recent if row["status"] == "running"][:5]
+    processing = next((row.get("region") for row in running if row.get("region")), "")
     summary = {
         "updated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "lastRegion": cursor.get("region") or "",
+        "lastRegion": processing or cursor.get("region") or "",
+        "queuedThrough": cursor.get("region") or "",
         "nextRegion": paths[index % len(paths)] if paths else "",
         "regionIndex": index,
         "regionCount": len(paths),
         "counts": counts,
-        "running": [row for row in recent if row["status"] == "running"][:5],
+        "running": running,
         "recent": recent[:20],
     }
     (jobs / "status.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
@@ -929,6 +933,8 @@ def _put_job(s3, bucket: str, job_id: str, status: str, message: str, extra: dic
         body.update(extra)
     if os.environ.get("WINTER_SPORTS_ID") and "winter_sports_id" not in body:
         body["winter_sports_id"] = os.environ.get("WINTER_SPORTS_ID")
+    if os.environ.get("REGION") and "region" not in body:
+        body["region"] = os.environ.get("REGION")
     raw = json.dumps(body).encode()
     print(body, flush=True)
     if job_id and (s3 or _local_root()):
@@ -1472,6 +1478,31 @@ def sweep_region(s3, bucket: str, work: Path) -> int:
     return len(ids)
 
 
+def _disk_full(exc) -> bool:
+    if isinstance(exc, OSError) and exc.errno == 28:
+        return True
+    return "No space left on device" in str(exc)
+
+
+def _clear_resort_work() -> None:
+    """Drop scratch files for the region that just finished.
+
+    Published parquet and scenes already live on the data volume. The next
+    region starts only after this returns.
+    """
+    for path in (
+        Path("/tmp/one_resort"),
+        Path("/app/cache/game_export_dems"),
+        Path("/app/cache/skadi"),
+    ):
+        if path.is_dir():
+            shutil.rmtree(path, ignore_errors=True)
+        if path.name != "one_resort":
+            path.mkdir(parents=True, exist_ok=True)
+    Path("/tmp/one_resort").mkdir(parents=True, exist_ok=True)
+    print("sweep: deleted region work files", flush=True)
+
+
 def run_batch() -> int:
     """Find new named resorts, apply every queued resort, then rebuild the shared tiles once."""
     bucket = os.environ.get("S3_BUCKET", "globalskiatlas-backend-k8s-output")
@@ -1501,15 +1532,29 @@ def run_batch() -> int:
         os.environ["LON"] = str(body.get("lon") or "")
         os.environ["JOB_ID"] = str(body.get("jobId") or "")
         os.environ["WORK_DIR"] = str(Path("/tmp/one_resort") / os.environ["JOB_ID"])
+        work_dir = Path(os.environ.get("WORK_DIR") or "")
+        stop_for_disk = False
         try:
             code = main()
-        except Exception as exc:
-            print(f"batch: {key} failed ({exc}); continuing", flush=True)
-            code = 1
-        if code in (0, 1, 3):
+        except (Exception, SystemExit) as exc:
+            detail = exc.code if isinstance(exc, SystemExit) else exc
+            if _disk_full(detail):
+                _put_job(s3, bucket, os.environ.get("JOB_ID", ""), "queued", "disk full, will retry")
+                stop_for_disk = True
+                code = 28
+            else:
+                print(f"batch: {key} failed ({detail}); continuing", flush=True)
+                code = 1
+        if code == 28:
+            stop_for_disk = True
+            print(f"batch: disk full, left queued {key}", flush=True)
+        elif code in (0, 1, 2, 3):
             _remove_key(s3, bucket, key)
             if code == 0:
-                last_work = Path(os.environ["WORK_DIR"])
+                if last_work and last_work != work_dir:
+                    shutil.rmtree(last_work, ignore_errors=True)
+                last_work = work_dir
+                work_dir = Path()
                 yaml = _resort_yaml(os.environ["WINTER_SPORTS_ID"])
                 if yaml:
                     stems.append(yaml.stem)
@@ -1519,6 +1564,10 @@ def run_batch() -> int:
                 print("batch: failed, continuing", key, flush=True)
         else:
             print("batch: left queued", key, flush=True)
+        if work_dir.is_dir() and work_dir.parent == Path("/tmp/one_resort"):
+            shutil.rmtree(work_dir, ignore_errors=True)
+        if stop_for_disk:
+            break
     os.environ.pop("SKIP_PMTILES", None)
     os.environ.pop("SKIP_INVALIDATE", None)
     if last_work and s3:
@@ -1536,6 +1585,7 @@ def run_batch() -> int:
                 },
             )
             print("invalidated", paths, flush=True)
+    _clear_resort_work()
     return 0
 
 
@@ -1547,8 +1597,15 @@ def main() -> int:
         s3 = None if _local_root() else _s3()
         work = Path(os.environ.get("WORK_DIR", "/tmp/one_resort"))
         work.mkdir(parents=True, exist_ok=True)
-        sweep_region(s3, bucket, work / "sweep")
-        return run_batch()
+        if _inbox_keys(s3, bucket, "region-inbox"):
+            print("sweep: inbox still has resorts, not queueing another region", flush=True)
+        else:
+            _clear_resort_work()
+            sweep_region(s3, bucket, work / "sweep")
+        code = run_batch()
+        _clear_resort_work()
+        print("sweep: region finished, work files deleted, next region starts now", flush=True)
+        return code
     if action == "batch":
         return run_batch()
     wid = os.environ.get("WINTER_SPORTS_ID", "")
@@ -1659,7 +1716,16 @@ def main() -> int:
         _invalidate_site(s3, wid)
         _put_job(s3, bucket, job_id, "succeeded", f"{action} {wid}")
         return 0
+    except SystemExit as exc:
+        if _disk_full(exc):
+            _put_job(s3, bucket, job_id, "queued", "disk full, will retry")
+            return 28
+        _put_job(s3, bucket, job_id, "failed", str(exc.code or exc))
+        return 1
     except Exception as exc:
+        if _disk_full(exc):
+            _put_job(s3, bucket, job_id, "queued", "disk full, will retry")
+            return 28
         _put_job(s3, bucket, job_id, "failed", str(exc))
         return 1
     finally:
