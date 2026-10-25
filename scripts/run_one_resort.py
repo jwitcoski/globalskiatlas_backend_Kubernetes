@@ -657,13 +657,83 @@ def build_local(work: Path, wid: str, region: str, boundaries: str) -> None:
         "-o", str(work / "ski_areas_analyzed.parquet"),
         "--cache", str(work / "name_translations.json"),
     ])
+    _write_analyzed_csv(work)
+
+
+def _write_analyzed_csv(work: Path) -> None:
+    pd.read_parquet(work / "ski_areas_analyzed.parquet").to_csv(
+        work / "ski_areas_analyzed.csv", index=False
+    )
+
+
+def _downhill_trail_count(work: Path) -> int:
+    """Downhill piste count from the OSM analysis. Elevation waits on this."""
+    path = work / "ski_areas_analyzed.parquet"
+    if not path.is_file():
+        raise SystemExit("ski area analysis missing")
+    frame = pd.read_parquet(path)
+    if frame.empty or "downhill_trails" not in frame.columns:
+        raise SystemExit("ski area analysis has no downhill_trails")
+    value = frame.iloc[0]["downhill_trails"]
+    try:
+        if pd.isna(value):
+            return 0
+        return int(float(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _write_osm_hull_dem(work: Path, wid: str, region: str) -> Path:
+    """One Skadi mosaic covering the ski area plus its pistes and lifts.
+
+    Contour generation already cached the tiles. Game and clay exports read this
+    file instead of downloading those tiles again.
+    """
+    import geopandas as gpd
+    from shapely.ops import unary_union
+
+    from game_export.inputs import _mosaic_from_skadi_cache, _write_temp_dem, osm_feature_hull
+
+    def _load(name: str):
+        path = work / name
+        if not path.is_file():
+            return None
+        frame = gpd.read_parquet(path)
+        if "winter_sports_id" in frame.columns:
+            frame = frame[frame["winter_sports_id"].astype(str) == str(wid)]
+        return frame
+
+    pistes = _load("pistes.parquet")
+    lifts = _load("lifts.parquet")
+    ski = _load("ski_areas.parquet")
+    coverage = osm_feature_hull(pistes, lifts)
+    polygon = None
+    if ski is not None and not ski.empty:
+        polygon = ski.geometry.iloc[0]
+    if coverage is not None and polygon is not None and not polygon.is_empty:
+        coverage = unary_union([coverage, polygon]).convex_hull
+    elif coverage is None:
+        coverage = polygon
+    if coverage is None or coverage.is_empty:
+        raise FileNotFoundError(f"no OSM coverage geometry for {wid}")
+    crop, west, south, east, north = _mosaic_from_skadi_cache(coverage, work / "cache", fetch=True)
+    dest = work / "dems" / "scene" / f"{wid}.tif"
+    _write_temp_dem(crop, west, south, east, north, dest)
+    print("scene dem: wrote one skadi mosaic", dest, flush=True)
+    return dest
+
+
+def _fetch_elevation(work: Path, wid: str, region: str) -> None:
     _run([
-        py, "scripts/ski_area_elevation_contours.py",
+        sys.executable, "scripts/ski_area_elevation_contours.py",
         "-i", str(work / "ski_areas.parquet"), "-o", str(work),
         "--cache-dir", str(work / "cache"), "--save-dem", "--ids-file", _ids_file(work, wid),
     ])
-    csv = work / "ski_areas_analyzed.csv"
-    pd.read_parquet(work / "ski_areas_analyzed.parquet").to_csv(csv, index=False)
+    _write_analyzed_csv(work)
+    try:
+        _write_osm_hull_dem(work, wid, region)
+    except Exception as exc:
+        print("scene dem: mosaic failed, scene export may fetch skadi", exc, flush=True)
 
 
 def _ids_file(work: Path, wid: str) -> str:
@@ -867,8 +937,11 @@ def patch_prefix(s3, bucket: str, prefix: str, work: Path, wid: str, publish: bo
         if merged_analyzed.is_file():
             _upload_dot_catalog(s3, bucket, merged_analyzed)
     dem = work / "dems" / prefix / f"{wid}.tif"
-    if not dem.is_file():
-        dem = next((work / "dems").rglob(f"{wid}.tif"), None) if (work / "dems").is_dir() else None
+    if not dem.is_file() and (work / "dems").is_dir():
+        dem = next(
+            (path for path in (work / "dems").rglob(f"{wid}.tif") if "scene" not in path.parts),
+            None,
+        )
     if publish and dem and dem.is_file():
         rel = dem.relative_to(work).as_posix()
         _store_file(s3, bucket, f"{prefix.strip('/')}/{rel}", dem)
@@ -1097,8 +1170,14 @@ def stage_scene_inputs(work: Path, region: str, wid: str) -> None:
         src = work / name
         if src.is_file():
             shutil.copy2(src, dest / name)
+    scene_dem = work / "dems" / "scene" / f"{wid}.tif"
     dem_root = work / "dems"
-    dem = next(dem_root.rglob(f"{wid}.tif"), None) if dem_root.is_dir() else None
+    if scene_dem.is_file():
+        dem = scene_dem
+    elif dem_root.is_dir():
+        dem = next((path for path in dem_root.rglob(f"{wid}.tif") if "scene" not in path.parts), None)
+    else:
+        dem = None
     if dem is None:
         return
     parts = [p for p in region.split("/") if p]
@@ -1485,10 +1564,10 @@ def _disk_full(exc) -> bool:
 
 
 def _clear_resort_work() -> None:
-    """Drop scratch files for the region that just finished.
+    """Drop scratch files before another region starts.
 
-    Published parquet and scenes already live on the data volume. The next
-    region starts only after this returns.
+    Published parquet and scenes already live on the data volume. A new region
+    is queued only after this returns.
     """
     for path in (
         Path("/tmp/one_resort"),
@@ -1503,6 +1582,230 @@ def _clear_resort_work() -> None:
     print("sweep: deleted region work files", flush=True)
 
 
+_RUNNER_LOCK_FD = None
+
+
+def _hold_runner_lock() -> None:
+    """Block until this process owns the shared pipeline lock.
+
+    The nightly add and the region sweep both call this. The lock is released
+    when the process exits, including when it is killed.
+    """
+    global _RUNNER_LOCK_FD
+    root = _local_root()
+    if root is None or _RUNNER_LOCK_FD is not None:
+        return
+    import fcntl
+
+    path = root / "resort-jobs" / "runner.flock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = open(path, "a+", encoding="utf-8")
+    print("sweep: waiting for runner lock", flush=True)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    fd.seek(0)
+    fd.truncate()
+    fd.write(str(os.getpid()))
+    fd.flush()
+    _RUNNER_LOCK_FD = fd
+    print("sweep: runner lock acquired", flush=True)
+
+
+def _publish_hold_dir() -> Path | None:
+    root = _local_root()
+    if root is None:
+        return None
+    return root / "resort-jobs" / "region-publish"
+
+
+def _hold_resort_publish(work: Path, wid: str, region: str) -> None:
+    """Keep this resort's tables until the region is written once."""
+    root = _publish_hold_dir()
+    if root is None:
+        return
+    dest = root / str(wid)
+    if dest.exists():
+        shutil.rmtree(dest)
+    dest.mkdir(parents=True)
+    for name in TABLES:
+        src = work / name
+        if src.is_file():
+            shutil.copy2(src, dest / name)
+    csv_path = work / "ski_areas_analyzed.csv"
+    if csv_path.is_file():
+        shutil.copy2(csv_path, dest / csv_path.name)
+    dem_root = work / "dems"
+    if dem_root.is_dir():
+        for dem in dem_root.rglob(f"{wid}.tif"):
+            if "scene" in dem.parts:
+                continue
+            rel = dem.relative_to(work)
+            target = dest / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(dem, target)
+    (dest / "meta.json").write_text(
+        json.dumps({"wid": str(wid), "region": region}),
+        encoding="utf-8",
+    )
+    print("publish: held", wid, region, flush=True)
+
+
+def _arrow_without_wid(table, wid: str):
+    """Drop rows for this resort without turning geometries into Shapely objects."""
+    import pyarrow as pa
+    import pyarrow.compute as pc
+
+    try:
+        wid_int = int(str(wid))
+    except ValueError:
+        wid_int = None
+    mask = None
+    for col in ID_COLUMNS:
+        if col not in table.column_names:
+            continue
+        column = table[col]
+        if pa.types.is_integer(column.type) and wid_int is not None:
+            part = pc.equal(column, wid_int)
+        else:
+            part = pc.equal(pc.cast(column, pa.string()), str(wid))
+        part = pc.fill_null(part, False)
+        mask = part if mask is None else pc.or_(mask, part)
+    if mask is None:
+        return table
+    return table.filter(pc.invert(mask))
+
+
+def _align_arrow_table(table, schema):
+    import pyarrow as pa
+    import pyarrow.compute as pc
+
+    columns = []
+    for field in schema:
+        if field.name in table.column_names:
+            column = table[field.name]
+            if column.type != field.type:
+                column = pc.cast(column, field.type, safe=False)
+            columns.append(column)
+        else:
+            columns.append(pa.nulls(table.num_rows, type=field.type))
+    return pa.Table.from_arrays(columns, schema=schema)
+
+
+def _merge_parquet_light(existing: Path, incoming: Path, wid: str, dest: Path) -> None:
+    """Replace one resort's rows without loading the whole GeoParquet.
+
+    The national nearby-OSM table is about 5 million rows. Reading it in one
+    shot expands past the memory limit and the process is killed. One row
+    group at a time stays near 2 GB.
+    """
+    import pyarrow.compute as pc
+    import pyarrow.parquet as pq
+
+    source = pq.ParquetFile(existing)
+    schema = source.schema_arrow
+    added = _align_arrow_table(pq.read_table(incoming), schema)
+    uids = None
+    if "osm_uid" in schema.names and "osm_uid" in added.column_names:
+        uids = added["osm_uid"].drop_null()
+        if len(uids) == 0:
+            uids = None
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    writer = pq.ParquetWriter(dest, schema)
+    try:
+        for index in range(source.num_row_groups):
+            group = _arrow_without_wid(source.read_row_group(index), wid)
+            if uids is not None and "osm_uid" in group.column_names and group.num_rows:
+                hit = pc.fill_null(pc.is_in(group["osm_uid"], value_set=uids), False)
+                group = group.filter(pc.invert(hit))
+            if group.num_rows:
+                writer.write_table(group)
+        if added.num_rows:
+            writer.write_table(added)
+    finally:
+        writer.close()
+
+
+def _patch_prefix_light(s3, bucket: str, prefix: str, work: Path, wid: str) -> None:
+    """Merge one resort into a published prefix using Arrow, not GeoPandas."""
+    scratch = work / "_publish"
+    for name in TABLES:
+        local = work / name
+        if not local.is_file():
+            continue
+        key = f"{prefix.strip('/')}/{name}"
+        remote = scratch / "in" / name
+        had = _download(s3, bucket, key, remote)
+        out = scratch / "out" / name
+        if not had:
+            if prefix.strip("/") == "combined":
+                raise SystemExit(f"refusing to replace {key} with a single resort")
+            out.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(local, out)
+        else:
+            _merge_parquet_light(remote, local, wid, out)
+        _store_file(s3, bucket, key, out)
+    csv_name = "ski_areas_analyzed.csv"
+    local_csv = work / csv_name
+    if local_csv.is_file():
+        key = f"{prefix.strip('/')}/{csv_name}"
+        remote = scratch / "in" / csv_name
+        had = _download(s3, bucket, key, remote)
+        merged = replace_resort_rows(_read_table(remote) if had else None, pd.read_csv(local_csv), wid)
+        out = scratch / "out" / csv_name
+        _write_table(merged, out)
+        _store_file(s3, bucket, key, out)
+    dem_root = work / "dems"
+    if dem_root.is_dir():
+        for dem in dem_root.rglob(f"{wid}.tif"):
+            if "scene" in dem.parts:
+                continue
+            rel = dem.relative_to(work).as_posix()
+            _store_file(s3, bucket, f"{prefix.strip('/')}/{rel}", dem)
+    shutil.rmtree(scratch, ignore_errors=True)
+
+
+def _flush_region_publish(s3, bucket: str) -> None:
+    """Write held resorts one at a time.
+
+    Each resort is removed from the hold after it lands, so a killed pass
+    continues with whoever is left. The national files stay in Arrow so the
+    geometry column is not expanded into Shapely objects.
+    """
+    import gc
+
+    root = _publish_hold_dir()
+    if root is None or not root.is_dir():
+        return
+    items = []
+    for path in sorted(p for p in root.iterdir() if p.is_dir()):
+        meta_path = path / "meta.json"
+        if not meta_path.is_file():
+            continue
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        region = str(meta.get("region") or "")
+        wid = str(meta.get("wid") or path.name)
+        if region and wid:
+            items.append((wid, region, path))
+    if not items:
+        return
+    print(f"publish: writing {len(items)} resorts one at a time", flush=True)
+    for index, (wid, region, path) in enumerate(items, start=1):
+        print(f"publish: {index}/{len(items)} {wid} {region}", flush=True)
+        for prefix in (region, "combined"):
+            _patch_prefix_light(s3, bucket, prefix, path, wid)
+        shutil.rmtree(path, ignore_errors=True)
+        gc.collect()
+    shutil.rmtree(root, ignore_errors=True)
+    print("publish: region tables written", flush=True)
+
+
+def _publish_resort_tables(s3, bucket: str, work: Path, wid: str, region: str) -> None:
+    if os.environ.get("HOLD_PUBLISH") == "1" and _local_root() and os.environ.get("ACTION") != "delete":
+        _hold_resort_publish(work, wid, region)
+        return
+    for prefix in (region, "combined"):
+        patch_prefix(s3, bucket, prefix, work, wid, publish=True)
+
+
 def run_batch() -> int:
     """Find new named resorts, apply every queued resort, then rebuild the shared tiles once."""
     bucket = os.environ.get("S3_BUCKET", "globalskiatlas-backend-k8s-output")
@@ -1512,8 +1815,12 @@ def run_batch() -> int:
     folder = "region-inbox" if os.environ.get("ACTION") == "sweep" else "inbox"
     if folder == "inbox":
         discover_named_resorts(s3, bucket, work / "discover")
+    _clear_resort_work()
+    if _local_root():
+        os.environ["HOLD_PUBLISH"] = "1"
     keys = _inbox_keys(s3, bucket, folder)
     if not keys:
+        _flush_region_publish(s3, bucket)
         print("batch: nothing queued", flush=True)
         return 0
     os.environ["SKIP_PMTILES"] = "1"
@@ -1585,6 +1892,7 @@ def run_batch() -> int:
                 },
             )
             print("invalidated", paths, flush=True)
+    _flush_region_publish(s3, bucket)
     _clear_resort_work()
     return 0
 
@@ -1593,20 +1901,23 @@ def main() -> int:
     action = os.environ.get("ACTION", "update")
     if action == "sweep":
         os.environ["SKIP_DISCOVER"] = "1"
+        _hold_runner_lock()
         bucket = os.environ.get("S3_BUCKET", "globalskiatlas-backend-k8s-output")
         s3 = None if _local_root() else _s3()
+        _clear_resort_work()
         work = Path(os.environ.get("WORK_DIR", "/tmp/one_resort"))
         work.mkdir(parents=True, exist_ok=True)
         if _inbox_keys(s3, bucket, "region-inbox"):
             print("sweep: inbox still has resorts, not queueing another region", flush=True)
         else:
-            _clear_resort_work()
+            _flush_region_publish(s3, bucket)
             sweep_region(s3, bucket, work / "sweep")
         code = run_batch()
         _clear_resort_work()
         print("sweep: region finished, work files deleted, next region starts now", flush=True)
         return code
     if action == "batch":
+        _hold_runner_lock()
         return run_batch()
     wid = os.environ.get("WINTER_SPORTS_ID", "")
     region = os.environ.get("REGION", "")
@@ -1672,14 +1983,21 @@ def main() -> int:
             return 2
         write_extracts(work, resort, fetch_nearby(resort, wid))
         build_local(work, wid, region, boundaries)
-        for prefix in (region, "combined"):
-            patch_prefix(s3, bucket, prefix, work, wid, publish=True)
+        if _downhill_trail_count(work) < 1:
+            _publish_resort_tables(s3, bucket, work, wid, region)
+            _drop_skip(s3, bucket, wid, work)
+            print("skip elevation, no downhill pistes", wid, flush=True)
+            _put_job(s3, bucket, job_id, "failed", "no downhill pistes")
+            return 3
+        _fetch_elevation(work, wid, region)
+        _publish_resort_tables(s3, bucket, work, wid, region)
         _drop_skip(s3, bucket, wid, work)
         yaml = _ensure_resort_yaml(wid, region, work)
         stage_scene_inputs(work, region, wid)
         _run([
             sys.executable, "-m", "game_export", "--resort", yaml.stem,
-            "--data-root", str(work), "--fetch-skadi", "--force",
+            "--data-root", str(work), "--cache-dir", str(work / "cache"),
+            "--fetch-skadi", "--force",
         ])
         scenes = work / "game_scenes"
         if (scenes / "catalog.json").is_file() and s3 and not _local_root():
@@ -1689,7 +2007,8 @@ def main() -> int:
             shutil.copytree(scenes, _local_root() / "game_scenes", dirs_exist_ok=True)
         _run([
             sys.executable, "-m", "game_export", "--clay-scene", "--resort", yaml.stem,
-            "--data-root", str(work), "--fetch-skadi", "--force",
+            "--data-root", str(work), "--cache-dir", str(work / "cache"),
+            "--fetch-skadi", "--force",
         ])
         clay = work / "clay_scenes"
         if s3 and not _local_root():

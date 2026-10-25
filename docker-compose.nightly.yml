@@ -20,9 +20,14 @@ services:
       - -c
       - |
         set -e
+        clear_region_work() {
+          rm -rf /tmp/one_resort /app/cache/game_export_dems /app/cache/skadi
+          mkdir -p /tmp/one_resort /app/cache/game_export_dems /app/cache/skadi
+        }
         while true; do
           mkdir -p /data/resort-jobs
           while ! mkdir /data/resort-jobs/runner.lock 2>/dev/null; do sleep 20; done
+          clear_region_work
           python scripts/run_one_resort.py || echo "state update failed"
           rmdir /data/resort-jobs/runner.lock
         done
@@ -56,7 +61,12 @@ services:
         - -c
         - |
         set -e
+        clear_region_work() {
+          rm -rf /tmp/one_resort /app/cache/game_export_dems /app/cache/skadi
+          mkdir -p /tmp/one_resort /app/cache/game_export_dems /app/cache/skadi
+        }
         while true; do
+          clear_region_work
           python scripts/run_one_resort.py || echo "nightly run failed"
           python - <<'PY'
         import datetime, time
