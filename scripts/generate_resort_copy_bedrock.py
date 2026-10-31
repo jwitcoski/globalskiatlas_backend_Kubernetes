@@ -22,7 +22,7 @@ Usage:
   # Fetch research only (no Bedrock); good for Eagle Rock–style spots with no wiki article
   python scripts/generate_resort_copy_bedrock.py --research-only --demo-query "Eagle Rock ski resort Pennsylvania"
 
-  # All four print plates (small → mega) in one run; optional JSON file
+  # All three print plates (small, medium, large) in one run; optional JSON file
   python scripts/generate_resort_copy_bedrock.py --demo-query "Jay Peak" --demo-state Vermont --all-plate-tiers --out-json output/jay_peak_copy.json
 
   # One row from combined parquet: layout tier from resort size (--tier auto) or fixed --tier
@@ -41,6 +41,7 @@ Requires: boto3, ddgs (or legacy duckduckgo-search), pandas (parquet mode only).
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import json
 import os
 import re
@@ -85,20 +86,42 @@ except ImportError:
         pass
 
 # ---------------------------------------------------------------------------
-# Layout tier -> word targets (align with atlas print plates; see plan docs)
+# Print plates: three sizes, all 6 pt body type, 7 pt line spacing.
+# Small is a third of a page (Castle Hill column). Medium is one page
+# (Middlebury column). Large is that column on each of two pages (Stratton).
+# Counts exclude the title, location line, and stats. A blank line between
+# paragraphs counts as a line. Character counts include spaces and exclude newlines.
 # ---------------------------------------------------------------------------
 
-TIER_WORD_BANDS: dict[str, tuple[int, int]] = {
-    "small": (90, 100),
-    "medium": (140, 175),
-    "large": (180, 220),
-    "mega": (520, 680),
-    "small_medium": (90, 100),
-    "small_landscape": (90, 100),
-    "medium_landscape": (140, 175),
-    "large_landscape": (180, 220),
-    "mega_landscape": (520, 680),
+@dataclass(frozen=True)
+class CopyGoal:
+    paragraphs: tuple[int, int]
+    lines: tuple[int, int]
+    characters: tuple[int, int]
+    chars_per_line: int
+
+
+TIER_COPY_GOALS: dict[str, CopyGoal] = {
+    "small": CopyGoal((2, 3), (20, 22), (1450, 1650), 81),
+    "medium": CopyGoal((5, 7), (55, 60), (3700, 4050), 75),
+    "large": CopyGoal((10, 14), (110, 120), (7400, 8100), 75),
 }
+
+# Older CLI names. mega was the fourth plate; it now uses the large (two-page) goal.
+_TIER_ALIASES: dict[str, str] = {
+    "mega": "large",
+    "mega_landscape": "large",
+    "small_medium": "small",
+    "small_landscape": "small",
+    "medium_landscape": "medium",
+    "large_landscape": "large",
+}
+
+# Kept so older imports still resolve. Values are character bounds, not words.
+TIER_WORD_BANDS: dict[str, tuple[int, int]] = {
+    name: goal.characters for name, goal in TIER_COPY_GOALS.items()
+}
+TIER_WORD_BANDS.update({alias: TIER_COPY_GOALS[canon].characters for alias, canon in _TIER_ALIASES.items()})
 
 DEFAULT_CHEAP_MODEL = "amazon.nova-lite-v1:0"
 DEFAULT_WRITER_MODEL = "amazon.nova-pro-v1:0"
@@ -143,18 +166,20 @@ def strip_banned_travel_cliches(text: str) -> str:
     return s.strip()
 
 
-# Print plate tiers for multi-output runs (word bands from TIER_WORD_BANDS).
-PLATE_TIERS: list[str] = ["small", "medium", "large", "mega"]
+# Print plate tiers for multi-output runs.
+PLATE_TIERS: list[str] = ["small", "medium", "large"]
 
-# Country / state wiki overview pages (~half a print page; same word band as "large" resort plates).
-REGION_WIKI_LAYOUT_TIER: str = "large"
+# Country / state wiki overviews keep their own research depth. Not a resort plate.
+REGION_WIKI_LAYOUT_TIER: str = "region"
 
-# Wiki ingest (trails/lifts/acres) -> one atlas layout tier for copy length / research depth.
+# Wiki size bucket -> one of the three print plates.
+# small_hill is a third of a page. ski_mountain is one page.
+# multiple_mountains and mega_resort share the two-page plate.
 SIZE_CATEGORY_TO_LAYOUT_TIER: dict[str, str] = {
     "small_hill": "small",
     "ski_mountain": "medium",
     "multiple_mountains": "large",
-    "mega_resort": "mega",
+    "mega_resort": "large",
     "unknown": "medium",
 }
 
@@ -163,39 +188,17 @@ SIZE_CATEGORY_TO_LAYOUT_TIER: dict[str, str] = {
 # season_calendar = typical months / year-round; reviews_sentiment = praise + critique from review-like snippets.
 TIER_RESEARCH_SPEC: dict[str, dict[str, int]] = {
     "small": {
-        "history_max": 1,
-        "landform_max": 1,
-        "ops_max": 0,
-        "access_max": 0,
-        "pass_max": 0,
-        "economy_max": 0,
-        "season_max": 0,
-        "reviews_max": 0,
-        "curator_max_bullets": 2,
-    },
-    "medium": {
         "history_max": 2,
         "landform_max": 2,
-        "ops_max": 2,
-        "access_max": 0,
-        "pass_max": 1,
-        "economy_max": 1,
-        "season_max": 2,
+        "ops_max": 1,
+        "access_max": 1,
+        "pass_max": 0,
+        "economy_max": 0,
+        "season_max": 1,
         "reviews_max": 1,
-        "curator_max_bullets": 6,
+        "curator_max_bullets": 5,
     },
-    "large": {
-        "history_max": 3,
-        "landform_max": 3,
-        "ops_max": 2,
-        "access_max": 2,
-        "pass_max": 2,
-        "economy_max": 2,
-        "season_max": 2,
-        "reviews_max": 2,
-        "curator_max_bullets": 8,
-    },
-    "mega": {
+    "medium": {
         "history_max": 4,
         "landform_max": 4,
         "ops_max": 3,
@@ -206,29 +209,159 @@ TIER_RESEARCH_SPEC: dict[str, dict[str, int]] = {
         "reviews_max": 3,
         "curator_max_bullets": 12,
     },
+    "large": {
+        "history_max": 5,
+        "landform_max": 5,
+        "ops_max": 4,
+        "access_max": 4,
+        "pass_max": 4,
+        "economy_max": 4,
+        "season_max": 4,
+        "reviews_max": 4,
+        "curator_max_bullets": 16,
+    },
+    # Region overviews are not resort plates. Keep the previous half-page research depth.
+    "region": {
+        "history_max": 3,
+        "landform_max": 3,
+        "ops_max": 2,
+        "access_max": 2,
+        "pass_max": 2,
+        "economy_max": 2,
+        "season_max": 2,
+        "reviews_max": 2,
+        "curator_max_bullets": 8,
+    },
 }
+
+
+def canonical_tier(tier: str) -> str:
+    """Map CLI aliases and the retired mega plate onto small, medium, or large."""
+    k = str(tier or "").strip().lower()
+    k = _TIER_ALIASES.get(k, k)
+    if k in TIER_COPY_GOALS:
+        return k
+    return "medium"
+
+
+def copy_goal_for_tier(tier: str) -> CopyGoal:
+    return TIER_COPY_GOALS[canonical_tier(tier)]
+
+
+def layout_instruction(tier: str) -> str:
+    """The length brief given to the writer, editor, and trim passes."""
+    goal = copy_goal_for_tier(tier)
+    p0, p1 = goal.paragraphs
+    l0, l1 = goal.lines
+    c0, c1 = goal.characters
+    text = (
+        f"Body type is 6 point with 7 point line spacing. "
+        f"Write {p0} to {p1} paragraphs, with one blank line between paragraphs. "
+        f"The essay must be {l0} to {l1} lines and {c0} to {c1} characters. "
+        "A blank line between paragraphs counts as a line. "
+        "Count characters with spaces included and newline characters excluded. "
+        f"About {goal.chars_per_line} characters fit on one line. "
+        "Do not include a title, the location line, or the stats. "
+        "End on a complete sentence inside all three ranges. "
+        "Never exceed the maximum characters, lines, or paragraphs."
+    )
+    if canonical_tier(tier) == "large":
+        text += (
+            " The essay fills two pages. End page 1 at a paragraph break after "
+            "3,700 to 4,050 characters (5 to 7 paragraphs, 55 to 60 lines), then continue."
+        )
+    return text
 
 
 def research_spec_for_layout_tier(tier: str) -> dict[str, int]:
     k = str(tier).strip().lower()
-    if k == "small_medium":
-        k = "small"
-    elif k.endswith("_landscape"):
-        k = k.removesuffix("_landscape")
+    if k not in TIER_RESEARCH_SPEC:
+        k = canonical_tier(k)
     if k not in TIER_RESEARCH_SPEC:
         k = "medium"
     return TIER_RESEARCH_SPEC[k].copy()
 
 
 def _writer_max_tokens(tier: str) -> int:
-    k = str(tier).strip().lower()
-    if k.endswith("_landscape"):
-        k = k.removesuffix("_landscape")
-    return {"small": 420, "medium": 960, "large": 1500, "mega": 3600, "small_medium": 420}.get(k, 960)
+    return {"small": 1400, "medium": 3200, "large": 5600}.get(canonical_tier(tier), 3200)
 
 
 def _word_count(text: str) -> int:
     return len(text.split())
+
+
+def _char_count(text: str) -> int:
+    """Spaces count. Newlines do not. Matches the print-column budgets."""
+    return len((text or "").replace("\n", "").strip())
+
+
+def _paragraphs(text: str) -> list[str]:
+    return [p.strip() for p in re.split(r"\n\s*\n", (text or "").strip()) if p.strip()]
+
+
+def _paragraph_count(text: str) -> int:
+    return len(_paragraphs(text))
+
+
+def _estimate_lines(text: str, chars_per_line: int) -> int:
+    """Wrap each paragraph, and count the blank line between paragraphs."""
+    paras = _paragraphs(text)
+    if not paras:
+        return 0
+    width = max(8, int(chars_per_line))
+    total = 0
+    for i, para in enumerate(paras):
+        if i:
+            total += 1
+        line = ""
+        n = 0
+        for word in para.split():
+            trial = word if not line else f"{line} {word}"
+            if len(trial) <= width:
+                line = trial
+            else:
+                n += 1
+                line = word
+        if line:
+            n += 1
+        total += max(1, n)
+    return total
+
+
+def measure_copy(text: str, tier: str) -> dict[str, int]:
+    goal = copy_goal_for_tier(tier)
+    return {
+        "characters": _char_count(text),
+        "lines": _estimate_lines(text, goal.chars_per_line),
+        "paragraphs": _paragraph_count(text),
+        "words": _word_count(text),
+    }
+
+
+def _copy_over_max(measured: dict[str, int], goal: CopyGoal) -> bool:
+    return (
+        measured["characters"] > goal.characters[1]
+        or measured["lines"] > goal.lines[1]
+        or measured["paragraphs"] > goal.paragraphs[1]
+    )
+
+
+def _copy_under_min(measured: dict[str, int], goal: CopyGoal) -> bool:
+    return (
+        measured["characters"] < goal.characters[0]
+        or measured["lines"] < goal.lines[0]
+        or measured["paragraphs"] < goal.paragraphs[0]
+    )
+
+
+def _measured_brief(measured: dict[str, int], goal: CopyGoal) -> str:
+    return (
+        f"This draft is {measured['paragraphs']} paragraphs, {measured['lines']} lines, "
+        f"and {measured['characters']} characters. "
+        f"Required: {goal.paragraphs[0]}-{goal.paragraphs[1]} paragraphs, "
+        f"{goal.lines[0]}-{goal.lines[1]} lines, "
+        f"{goal.characters[0]}-{goal.characters[1]} characters."
+    )
 
 
 def _strip_json_fence(raw: str) -> str:
@@ -995,7 +1128,7 @@ def curator_merge(
         "Output JSON only. No new factual claims beyond miner inputs. "
         'Schema: {"bullets":[{"text":"string","snippet_ids":["W1","D2"]}],'
         '"use_in_lead_index":0,"coverage_gaps":["optional"],'
-        f'"tier":"{tier}","word_min":{wmin},"word_max":{wmax}}}. '
+        f'"tier":"{canonical_tier(tier)}","char_min":{wmin},"char_max":{wmax}}}. '
         f"At most {cap} bullets total. Each bullet must introduce a distinct theme "
         "(setting, pass products, trip cost/transport, season timing, access, operations, "
         "terrain/snow, history, visitor praise, visitor caution); "
@@ -1025,9 +1158,7 @@ def writer_draft(
     region: str,
     model_id: str,
 ) -> str:
-    wmin = int(curator.get("word_min", 140))
-    wmax = int(curator.get("word_max", 175))
-    plate_hi = TIER_WORD_BANDS.get(tier, (wmin, wmax))[1]
+    goal = copy_goal_for_tier(tier)
     system = (
         "You write differentiation-first ski atlas prose in a confident guidebook voice. "
         "Rules: Do not recap statistics (vertical, lift counts, acreage, trail counts). "
@@ -1036,8 +1167,8 @@ def writer_draft(
         "Multi-resort passes: name ONLY pass products explicitly stated in curator bullets for THIS resort. "
         "Never write 'Epic and Ikon' (or pair Epic with Ikon) unless one bullet explicitly says both include this resort; "
         "if bullets only name Ikon, say Ikon only; if only Indy, say Indy only; do not pad with a second pass brand. "
-        f"Target {wmin}-{wmax} words inclusive — never exceed {wmax} words. "
-        "Anti-padding: if evidence is thin, write a shorter honest piece inside the band "
+        f"{layout_instruction(tier)} "
+        "Anti-padding: if evidence is thin, stay inside the range by using every distinct bullet once "
         "rather than repeating the same theme in new sentences. "
         "Each sentence must add a new angle from the bullets; do not restate the same "
         "fact with different wording. Use any distinctive place phrase (e.g. a range name, "
@@ -1046,7 +1177,7 @@ def writer_draft(
         "Also avoid: well-kept secret, hidden gem, world-class, cozy (unless one use is essential). "
         f"{_ATLAS_PROSE_LEADIN_RULE} "
     )
-    if plate_hi >= 220:
+    if goal.characters[1] >= 3000:
         system += (
             "When bullets cover pass products, ground transport from airports or cities, "
             "lodging or lift price hints, season length, or visitor praise/caution, give each its own sentence or "
@@ -1066,22 +1197,25 @@ def writer_draft(
     return raw.strip()
 
 
-def trim_to_word_max(
+def trim_to_layout(
     text: str,
     *,
-    wmax: int,
+    tier: str,
     region: str,
     model_id: str,
 ) -> str:
-    """Cut-only pass when prose exceeds layout tier maximum."""
-    wc = _word_count(text)
-    if wc <= wmax:
+    """Cut-only pass when prose exceeds the plate maximum."""
+    goal = copy_goal_for_tier(tier)
+    measured = measure_copy(text, tier)
+    if not _copy_over_max(measured, goal):
         return text
     system = (
-        f"The following text is {wc} words. Hard maximum is {wmax} words. "
-        "Delete whole sentences (or redundant clauses) only until at or below the maximum. "
+        f"{_measured_brief(measured, goal)} "
+        "Delete whole sentences or a whole extra paragraph until every count is at or below its maximum. "
         "Do not add new facts, synonyms for padding, or new sentences. "
         "Remove sentences that repeat the same theme before cutting unique detail. "
+        "Keep one blank line between the paragraphs that remain. "
+        f"{layout_instruction(tier)} "
         f"{_ATLAS_PROSE_LEADIN_RULE} "
         f"{_BANNED_TRAVEL_CLICHES_RULE} "
         "Output plain paragraphs only."
@@ -1091,39 +1225,40 @@ def trim_to_word_max(
         model_id=model_id,
         system_text=system,
         user_text=text,
-        max_tokens=min(4000, max(700, wmax * 6)),
+        max_tokens=min(6000, _writer_max_tokens(tier)),
         temperature=0.15,
     )
     return raw.strip()
 
 
-def expand_to_word_min(
+def expand_to_layout(
     text: str,
     *,
     curator: dict[str, Any],
     resort_label: str,
-    wmin: int,
-    wmax: int,
     tier: str,
     region: str,
     model_id: str,
 ) -> str:
-    """Add curator-grounded material when final copy is below layout word_min."""
-    wc = _word_count(text)
-    if wc >= wmin:
+    """Add curator-grounded material when final copy is under the plate minimum."""
+    goal = copy_goal_for_tier(tier)
+    measured = measure_copy(text, tier)
+    if not _copy_under_min(measured, goal):
         return text
     system = (
-        f"The following prose is {wc} words. You must reach at least {wmin} words and never exceed {wmax}. "
-        "Add sentences and short paragraphs using ONLY distinct angles from CURATOR_JSON bullets that are "
+        f"{_measured_brief(measured, goal)} "
+        "Add sentences and paragraphs until every count is at least its minimum, and none is over its maximum. "
+        "Use ONLY distinct angles from CURATOR_JSON bullets that are "
         "not already expressed in the draft (re-read both; no thematic repetition). "
         "Prioritize unused bullets on pass products (only as each bullet states them), trip costs/transport/lodging/dining when present, "
         "season timing, review praise and cautions, access, operations, landform, history. "
         "If economy bullets contain dollar figures, keep them approximate as in snippets and add one clause "
         "that current lift, lodging, and pass prices change by season and must be verified on official sites. "
         "Do not recap trail counts, vertical, or lift totals as a stat block. "
+        f"{layout_instruction(tier)} "
         f"{_ATLAS_PROSE_LEADIN_RULE} "
         f"{_BANNED_TRAVEL_CLICHES_RULE} "
-        "Plain paragraphs only."
+        "Plain paragraphs only. One blank line between paragraphs."
     )
     user = (
         f"Resort: {resort_label}\n\nCURATOR_JSON:\n{json.dumps(curator, ensure_ascii=False)}\n\n"
@@ -1138,34 +1273,38 @@ def expand_to_word_min(
         temperature=0.38,
     )
     out = raw.strip()
-    if _word_count(out) > wmax:
-        out = trim_to_word_max(out, wmax=wmax, region=region, model_id=model_id)
+    if _copy_over_max(measure_copy(out, tier), goal):
+        out = trim_to_layout(out, tier=tier, region=region, model_id=model_id)
     return out
 
 
 def critic_json(
     draft: str,
     *,
-    wmin: int,
-    wmax: int,
+    tier: str,
     region: str,
     model_id: str,
 ) -> dict[str, Any]:
-    wc = _word_count(draft)
+    goal = copy_goal_for_tier(tier)
+    measured = measure_copy(draft, tier)
+    in_band = not _copy_over_max(measured, goal) and not _copy_under_min(measured, goal)
     system = (
         "You are a strict copy desk critic. Output JSON only, no prose rewrite. "
         "Schema: {"
         '"violated_rule_ids":["string"],'
         '"cliches":["string"],'
         '"stat_dump_suspected":false,'
-        f'"word_count":{wc},'
+        f'"char_count":{measured["characters"]},'
+        f'"line_count":{measured["lines"]},'
+        f'"paragraph_count":{measured["paragraphs"]},'
         '"tier_band_ok":true,'
         '"repeated_phrases":[{"phrase":"string","count":2}],'
         '"theme_repetition":false,'
         '"suggested_fixes":["imperative bullet instructions"]'
         "}. "
-        f"word_count is {wc} for this draft. Set tier_band_ok true only if {wmin} <= {wc} <= {wmax}; "
-        "otherwise false (including when below word_min). "
+        f"{_measured_brief(measured, goal)} "
+        f"Set tier_band_ok to {'true' if in_band else 'false'}. "
+        "Set violated_rule_ids to include layout_length when tier_band_ok is false. "
         "Detect thematic stutter: set theme_repetition true if multiple sentences re-express "
         "the same idea (e.g. private/community/cozy/welcome repeated without new detail). "
         "List repeated_phrases for distinctive n-grams (2-4 words) or key words "
@@ -1199,28 +1338,27 @@ def editor_finalize(
     critic: dict[str, Any],
     *,
     resort_label: str,
-    wmin: int,
-    wmax: int,
     tier: str,
     region: str,
     model_id: str,
 ) -> str:
-    if wmax >= 400:
+    goal = copy_goal_for_tier(tier)
+    if goal.characters[1] >= 3000:
         expand_rule = (
-            "If the draft is shorter than word_min, add compact sentences that each introduce "
-            "new detail from distinct CURATOR_JSON bullets until you reach at least word_min "
-            "(cap roughly 10 new short sentences; never repeat an angle already stated)."
+            "If any count is under its minimum, add compact sentences that each introduce "
+            "new detail from distinct CURATOR_JSON bullets until every count is in range "
+            "(never repeat an angle already stated)."
         )
     else:
         expand_rule = (
-            "If the draft is shorter than word_min, add at most two sentences that pull "
+            "If any count is under its minimum, add sentences that pull "
             "only new detail from CURATOR_JSON bullets — never repeat an angle already stated."
         )
     system = (
         "You are the finishing editor. Apply critic fixes for style and structure only. "
         "Ignore any critic suggestion that would introduce new factual claims not in CURATOR_JSON. "
-        f"Final word count must be between {wmin} and {wmax} inclusive — never above {wmax}. "
-        "If over word_max: delete whole redundant sentences first (especially repeated themes), "
+        f"{layout_instruction(tier)} "
+        "If any count is over its maximum: delete whole redundant sentences first (especially repeated themes), "
         "then tighten; do not swap repetition for new padding. "
         "If theme_repetition or repeated_phrases in CRITIC_JSON: merge to one mention each "
         "unless bullets require two distinct uses. "
@@ -1245,7 +1383,7 @@ def editor_finalize(
         model_id=model_id,
         system_text=system,
         user_text=user,
-        max_tokens=min(4000, _writer_max_tokens(tier) + 400),
+        max_tokens=min(6000, _writer_max_tokens(tier) + 400),
         temperature=0.35,
     )
     return raw.strip()
@@ -1394,7 +1532,7 @@ def layout_tier_for_parquet_row(row: dict[str, Any]) -> str:
 
 def resolve_layout_tier(cli_tier: str, row: dict[str, Any] | None) -> str:
     if cli_tier != "auto":
-        return cli_tier
+        return canonical_tier(cli_tier)
     if row is None:
         raise SystemExit("--tier auto requires a parquet row (use -i/--name with --input)")
     return layout_tier_for_parquet_row(row)
@@ -1452,9 +1590,10 @@ def run_pipeline(
     writer_model: str,
     include_snippets_in_output: bool = True,
 ) -> dict[str, Any]:
+    tier = canonical_tier(tier)
     spec = research_spec_for_layout_tier(tier)
-    band = TIER_WORD_BANDS.get(tier, TIER_WORD_BANDS["medium"])
-    wmin, wmax = band
+    goal = copy_goal_for_tier(tier)
+    cmin, cmax = goal.characters
     block = format_snippets_for_prompt(snippets)
     if not block:
         raise SystemExit(
@@ -1491,8 +1630,8 @@ def run_pipeline(
     curator = curator_merge(
         miner_results,
         tier=tier,
-        wmin=wmin,
-        wmax=wmax,
+        wmin=cmin,
+        wmax=cmax,
         curator_max_bullets=spec["curator_max_bullets"],
         region=bedrock_region,
         model_id=writer_model,
@@ -1504,62 +1643,68 @@ def run_pipeline(
         region=bedrock_region,
         model_id=writer_model,
     )
-    critic = critic_json(draft, wmin=wmin, wmax=wmax, region=bedrock_region, model_id=cheap_model)
+    critic = critic_json(draft, tier=tier, region=bedrock_region, model_id=cheap_model)
     final_before = editor_finalize(
         draft,
         curator,
         critic,
         resort_label=resort_label,
-        wmin=wmin,
-        wmax=wmax,
         tier=tier,
         region=bedrock_region,
         model_id=writer_model,
     )
-    trimmed = trim_to_word_max(
+    trimmed = trim_to_layout(
         final_before,
-        wmax=wmax,
+        tier=tier,
         region=bedrock_region,
         model_id=cheap_model,
     )
-    if _word_count(trimmed) > wmax:
-        trimmed = trim_to_word_max(
+    if _copy_over_max(measure_copy(trimmed, tier), goal):
+        trimmed = trim_to_layout(
             trimmed,
-            wmax=wmax,
+            tier=tier,
             region=bedrock_region,
             model_id=cheap_model,
         )
-    expanded = expand_to_word_min(
+    expanded = expand_to_layout(
         trimmed,
         curator=curator,
         resort_label=resort_label,
-        wmin=wmin,
-        wmax=wmax,
         tier=tier,
         region=bedrock_region,
         model_id=writer_model,
     )
-    if _word_count(expanded) > wmax:
-        expanded = trim_to_word_max(
+    if _copy_over_max(measure_copy(expanded, tier), goal):
+        expanded = trim_to_layout(
             expanded,
-            wmax=wmax,
+            tier=tier,
             region=bedrock_region,
             model_id=cheap_model,
         )
     expanded = strip_banned_travel_cliches(expanded)
-    trim_applied = _word_count(final_before.strip()) > wmax or trimmed.strip() != final_before.strip()
-    expand_applied = _word_count(expanded) > _word_count(trimmed) or _word_count(trimmed) < wmin
+    final_measure = measure_copy(expanded, tier)
+    before_measure = measure_copy(final_before, tier)
+    trim_applied = _copy_over_max(before_measure, goal) or trimmed.strip() != final_before.strip()
+    expand_applied = _copy_under_min(measure_copy(trimmed, tier), goal) or final_measure["characters"] > measure_copy(trimmed, tier)["characters"]
     out: dict[str, Any] = {
         "resort_label": resort_label,
         "tier": tier,
-        "word_band": [wmin, wmax],
+        "layout_goal": {
+            "paragraphs": list(goal.paragraphs),
+            "lines": list(goal.lines),
+            "characters": list(goal.characters),
+        },
+        "word_band": [cmin, cmax],
         "research_spec": spec,
         "miner_results": miner_results,
         "curator": curator,
         "draft": draft,
         "critic": critic,
         "final": expanded,
-        "final_word_count": _word_count(expanded),
+        "final_word_count": final_measure["words"],
+        "final_char_count": final_measure["characters"],
+        "final_line_count": final_measure["lines"],
+        "final_paragraph_count": final_measure["paragraphs"],
         "trim_pass_applied": trim_applied,
         "expand_pass_applied": expand_applied,
     }
@@ -1576,7 +1721,7 @@ def run_all_plate_tiers(
     cheap_model: str,
     writer_model: str,
 ) -> dict[str, Any]:
-    """Run small, medium, large, mega once each (shared snippets; escalating fact depth)."""
+    """Run small, medium, and large once each (shared snippets; escalating fact depth)."""
     by_tier: dict[str, Any] = {}
     for t in PLATE_TIERS:
         by_tier[t] = run_pipeline(
@@ -1993,7 +2138,7 @@ def main() -> int:
     ap.add_argument(
         "--all-plate-tiers",
         action="store_true",
-        help="Emit all four plate tiers (small→mega) in one run; batch writes by_tier. Default is one tier from resort size",
+        help="Emit all three plate tiers (small, medium, large) in one run; batch writes by_tier. Default is one tier from resort size",
     )
     ap.add_argument(
         "--out-json",
@@ -2056,7 +2201,7 @@ def main() -> int:
         choices=PLATE_TIERS,
         default=None,
         metavar="TIER",
-        help="Batch: use this layout tier for every row instead of size-derived small/medium/large/mega",
+        help="Batch: use this layout tier for every row instead of size-derived small/medium/large",
     )
     ap.add_argument(
         "--batch-out-combined",
@@ -2080,8 +2225,8 @@ def main() -> int:
     ap.add_argument(
         "--wiki-regions-tier",
         default=REGION_WIKI_LAYOUT_TIER,
-        choices=["small", "medium", "large", "mega"],
-        help="Word band / research depth for country & state pages (default: large ~ half page)",
+        choices=["region", "small", "medium", "large"],
+        help="Research depth for country and state pages (default: region, the previous half-page depth)",
     )
     ap.add_argument(
         "--wiki-regions-delay-seconds",
@@ -2469,10 +2614,20 @@ def main() -> int:
             else:
                 for t in PLATE_TIERS:
                     r = bundle["by_tier"][t]
-                    lo, hi = r["word_band"]
-                    print(f"\n=== {t.upper()} ({lo}-{hi} words) ===")
+                    goal_out = r["layout_goal"]
+                    print(
+                        f"\n=== {t.upper()} "
+                        f"({goal_out['characters'][0]}-{goal_out['characters'][1]} characters, "
+                        f"{goal_out['lines'][0]}-{goal_out['lines'][1]} lines, "
+                        f"{goal_out['paragraphs'][0]}-{goal_out['paragraphs'][1]} paragraphs) ==="
+                    )
                     print(r["final"])
-                    print(f"--- word count: {r['final_word_count']}", file=sys.stderr)
+                    print(
+                        f"--- {r['final_char_count']} characters, "
+                        f"{r['final_line_count']} lines, "
+                        f"{r['final_paragraph_count']} paragraphs",
+                        file=sys.stderr,
+                    )
             return 0
 
         result = run_pipeline(
@@ -2497,7 +2652,13 @@ def main() -> int:
             if args.demo_massanutten or args.demo_query:
                 print("--- FINAL COPY ---")
             print(result["final"])
-            print("--- word count:", result["final_word_count"], file=sys.stderr)
+            print(
+                f"--- {result['final_char_count']} characters, "
+                f"{result['final_line_count']} lines, "
+                f"{result['final_paragraph_count']} paragraphs "
+                f"(goal {result['layout_goal']['characters'][0]}-{result['layout_goal']['characters'][1]} characters)",
+                file=sys.stderr,
+            )
             if parquet_row is not None:
                 print(
                     f"--- layout tier: {eff_tier} (resort_size_category={resort_size_category(parquet_row)})",

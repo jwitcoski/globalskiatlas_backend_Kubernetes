@@ -11,11 +11,11 @@ RESORT_FACT_MAX_RANK: dict[str, int] = {
 }
 
 RESORT_TEXT_LIMIT: dict[str, int] = {
-    "small_hill": 1500,
-    "ski_mountain": 3000,
-    "multiple_mountains": 5500,
-    "mega_resort": 11000,
-    "unknown": 1500,
+    "small_hill": 1650,
+    "ski_mountain": 4050,
+    "multiple_mountains": 8100,
+    "mega_resort": 8100,
+    "unknown": 4050,
 }
 
 RESORT_CATEGORY_LABEL: dict[str, str] = {
@@ -56,10 +56,10 @@ SLOT_NAMES = ("quarter", "half", "full", "spread")
 
 # Max characters rendered per book slot (tune in book.yaml before regenerating Bedrock copy).
 DEFAULT_SLOT_BODY_CHAR_LIMIT: dict[str, int | None] = {
-    "quarter": 400,
-    "half": 900,
-    "full": None,
-    "spread": None,
+    "quarter": 1650,
+    "half": 4050,
+    "full": 8100,
+    "spread": 8100,
 }
 
 # Book chapter order: small → medium → large → mega, then A–Z by title within each tier.

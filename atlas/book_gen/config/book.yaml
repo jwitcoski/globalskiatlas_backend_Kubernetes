@@ -50,11 +50,13 @@ region_facts_charts: true
 # Facts page: top half elevation; bottom 2×2 scatter, trail difficulty, resorts by size, lift types.
 region_facts_elevation_only: false
 
-# Max characters shown per layout slot (tune, then regenerate Bedrock copy to match).
+# Max characters shown per layout slot. Matches the 6 pt writer goals:
+# small 1,450–1,650, medium 3,700–4,050, large 7,400–8,100.
 slot_body_char_limit:
-  quarter: 400   # small_hill — ¼ page row
-  half: 900      # ski_mountain — ½ page
-  # full/spread: use full RESORT_TEXT_LIMIT from resortSizeCategory
+  quarter: 1650  # small_hill — third of a page, 6 pt column
+  half: 4050     # ski_mountain — one page, 6 pt column
+  full: 8100     # multiple_mountains — two pages
+  spread: 8100   # mega_resort — same two-page essay as full
 
 # Bedrock-generated wiki copy (merged into resort pages and regional overview text)
 resort_wiki_content_file: output/resort_wiki_content_full.json

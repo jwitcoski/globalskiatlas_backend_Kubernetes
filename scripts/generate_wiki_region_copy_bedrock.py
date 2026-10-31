@@ -37,7 +37,6 @@ from generate_resort_copy_bedrock import (
     DEFAULT_CHEAP_MODEL,
     DEFAULT_WRITER_MODEL,
     REGION_WIKI_LAYOUT_TIER,
-    TIER_WORD_BANDS,
     _BANNED_TRAVEL_CLICHES_RULE,
     _ATLAS_PROSE_LEADIN_RULE,
     _parse_json_object,
@@ -53,7 +52,8 @@ from generate_resort_copy_bedrock import (
 )
 
 REGION_TIER = REGION_WIKI_LAYOUT_TIER
-REGION_WMIN, REGION_WMAX = TIER_WORD_BANDS[REGION_TIER]
+# Region overviews stay on the previous half-page word band. Resort plates use character goals.
+REGION_WMIN, REGION_WMAX = 180, 220
 
 _REGION_SCOPE_RULE = (
     "SCOPE: This is a country or state/province OVERVIEW for skiers planning a trip across "
