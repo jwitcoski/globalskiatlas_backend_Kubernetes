@@ -451,10 +451,12 @@ def fetch_duckduckgo_snippets(
     for q in queries:
         if not q.strip() or n >= max_total:
             break
+        query = q.strip()
         try:
-            with DDGS() as ddgs:
-                rows = list(ddgs.text(q.strip(), max_results=max_per_query))  # type: ignore[misc]
-        except Exception:
+            with DDGS(timeout=20) as ddgs:
+                rows = list(ddgs.text(query, max_results=max_per_query))  # type: ignore[misc]
+        except Exception as exc:
+            print(f"  web search failed ({query!r}): {exc}", file=sys.stderr, flush=True)
             continue
         for row in rows:
             if n >= max_total:
