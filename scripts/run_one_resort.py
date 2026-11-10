@@ -684,10 +684,9 @@ def _downhill_trail_count(work: Path) -> int:
 
 
 def _write_osm_hull_dem(work: Path, wid: str, region: str) -> Path:
-    """One Skadi mosaic covering the ski area plus its pistes and lifts.
+    """One Mapterhorn mosaic covering the ski area plus its pistes and lifts.
 
-    Contour generation already cached the tiles. Game and clay exports read this
-    file instead of downloading those tiles again.
+    Game and clay exports read this file instead of sampling those tiles again.
     """
     import geopandas as gpd
     from shapely.ops import unary_union
@@ -719,7 +718,7 @@ def _write_osm_hull_dem(work: Path, wid: str, region: str) -> Path:
     crop, west, south, east, north = _mosaic_from_skadi_cache(coverage, work / "cache", fetch=True)
     dest = work / "dems" / "scene" / f"{wid}.tif"
     _write_temp_dem(crop, west, south, east, north, dest)
-    print("scene dem: wrote one skadi mosaic", dest, flush=True)
+    print("scene dem: wrote one Mapterhorn mosaic", dest, flush=True)
     return dest
 
 
@@ -1674,20 +1673,64 @@ def _arrow_without_wid(table, wid: str):
     return table.filter(pc.invert(mask))
 
 
-def _align_arrow_table(table, schema):
+def _cast_to_field(column, field):
+    """Cast one resort column onto the national type.
+
+    OSM uses yes/no in fields that the national file stored as numbers.
+    A strict cast of 'yes' to double aborts the whole region publish.
+    """
     import pyarrow as pa
     import pyarrow.compute as pc
+
+    if column.type == field.type:
+        return column
+    if pa.types.is_null(column.type) or pa.types.is_null(field.type):
+        return pa.nulls(len(column), type=field.type)
+    try:
+        return pc.cast(column, field.type, safe=False)
+    except (pa.ArrowInvalid, pa.ArrowNotImplementedError):
+        if not (pa.types.is_floating(field.type) or pa.types.is_integer(field.type)):
+            raise
+    text = pc.utf8_lower(pc.cast(column, pa.string(), safe=False))
+    text = pc.if_else(pc.is_in(text, value_set=pa.array(["yes", "true", "y"])), "1", text)
+    text = pc.if_else(pc.is_in(text, value_set=pa.array(["no", "false", "n"])), "0", text)
+    text = pc.if_else(pc.equal(text, ""), None, text)
+    numeric = pc.match_substring_regex(text, r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$")
+    text = pc.if_else(pc.fill_null(numeric, False), text, None)
+    return pc.cast(text, field.type, safe=False)
+
+
+def _align_arrow_table(table, schema):
+    import pyarrow as pa
 
     columns = []
     for field in schema:
         if field.name in table.column_names:
-            column = table[field.name]
-            if column.type != field.type:
-                column = pc.cast(column, field.type, safe=False)
-            columns.append(column)
+            columns.append(_cast_to_field(table[field.name], field))
         else:
             columns.append(pa.nulls(table.num_rows, type=field.type))
     return pa.Table.from_arrays(columns, schema=schema)
+
+
+def _schema_for_merge(source_schema, incoming):
+    """Widen all-null national columns so a later resort can fill them.
+
+    Parquet stores a column that has never held a value as the null type.
+    Casting a real string onto that type aborts the publish.
+    """
+    import pyarrow as pa
+
+    fields = []
+    for field in source_schema:
+        if pa.types.is_null(field.type) and field.name in incoming.schema.names:
+            incoming_field = incoming.schema.field(field.name)
+            if not pa.types.is_null(incoming_field.type):
+                fields.append(
+                    pa.field(field.name, incoming_field.type, nullable=True, metadata=field.metadata)
+                )
+                continue
+        fields.append(field)
+    return pa.schema(fields, metadata=source_schema.metadata)
 
 
 def _merge_parquet_light(existing: Path, incoming: Path, wid: str, dest: Path) -> None:
@@ -1701,8 +1744,9 @@ def _merge_parquet_light(existing: Path, incoming: Path, wid: str, dest: Path) -
     import pyarrow.parquet as pq
 
     source = pq.ParquetFile(existing)
-    schema = source.schema_arrow
-    added = _align_arrow_table(pq.read_table(incoming), schema)
+    incoming_table = pq.read_table(incoming)
+    schema = _schema_for_merge(source.schema_arrow, incoming_table)
+    added = _align_arrow_table(incoming_table, schema)
     uids = None
     if "osm_uid" in schema.names and "osm_uid" in added.column_names:
         uids = added["osm_uid"].drop_null()
@@ -1712,7 +1756,7 @@ def _merge_parquet_light(existing: Path, incoming: Path, wid: str, dest: Path) -
     writer = pq.ParquetWriter(dest, schema)
     try:
         for index in range(source.num_row_groups):
-            group = _arrow_without_wid(source.read_row_group(index), wid)
+            group = _align_arrow_table(_arrow_without_wid(source.read_row_group(index), wid), schema)
             if uids is not None and "osm_uid" in group.column_names and group.num_rows:
                 hit = pc.fill_null(pc.is_in(group["osm_uid"], value_set=uids), False)
                 group = group.filter(pc.invert(hit))
@@ -1787,10 +1831,16 @@ def _flush_region_publish(s3, bucket: str) -> None:
             items.append((wid, region, path))
     if not items:
         return
+    publish_combined = os.environ.get("PUBLISH_COMBINED") == "1" or not _local_root()
     print(f"publish: writing {len(items)} resorts one at a time", flush=True)
+    if not publish_combined:
+        print("publish: leaving combined for a later merge", flush=True)
     for index, (wid, region, path) in enumerate(items, start=1):
         print(f"publish: {index}/{len(items)} {wid} {region}", flush=True)
-        for prefix in (region, "combined"):
+        prefixes = [region]
+        if publish_combined:
+            prefixes.append("combined")
+        for prefix in prefixes:
             _patch_prefix_light(s3, bucket, prefix, path, wid)
         shutil.rmtree(path, ignore_errors=True)
         gc.collect()
