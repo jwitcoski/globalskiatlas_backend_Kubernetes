@@ -59,8 +59,8 @@ def write_homepage_manifest(
         },
         "attribution": {
             "osm": "© OpenStreetMap contributors",
-            "dem": "Mapzen Skadi / AWS Terrain Tiles",
-            "license_notes": "OSM data ODbL; DEM from Mapzen Skadi. See attribution/ATTRIBUTION.md",
+            "dem": "© Mapterhorn",
+            "license_notes": "OSM data ODbL; DEM from Mapterhorn. See attribution/ATTRIBUTION.md",
         },
         "disclaimer": (
             "Decorative homepage terrain derived from open data. Not an official resort map, "

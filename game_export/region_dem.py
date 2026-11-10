@@ -1,12 +1,10 @@
-"""Coarse DEM mosaics for wiki region clay (Skadi 1° or AWS Terrarium tiles)."""
+"""Coarse DEM mosaics for wiki region clay (Mapterhorn Terrarium tiles)."""
 from __future__ import annotations
 
 import logging
 import math
 from pathlib import Path
 from typing import Optional
-from urllib.request import urlopen
-
 import geopandas as gpd
 import numpy as np
 from shapely.geometry import box
@@ -15,7 +13,6 @@ from shapely.prepared import prep
 
 log = logging.getLogger("game_export")
 
-TERRARIUM_URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
 MAX_SKADI_TILES = 80
 MAX_TERRARIUM_ZOOM = 7
 MIN_TERRARIUM_ZOOM = 4
@@ -84,45 +81,23 @@ def _wrap_lon(lon: float) -> float:
 
 
 def _choose_terrarium_zoom(res_m: float) -> int:
-    # Equator pixel size ≈ 40075016 / (256 * 2^z) meters.
-    z = int(round(math.log2(max(1.0, 40075016.0 / (256.0 * max(res_m, 500.0))))))
-    return int(min(MAX_TERRARIUM_ZOOM, max(MIN_TERRARIUM_ZOOM, z)))
+    # Mapterhorn tiles are 512 px, so the same z is twice as fine as the old 256 px AWS tiles.
+    from game_export.mapterhorn import choose_zoom
 
-
-def _decode_terrarium(png_bytes: bytes) -> np.ndarray:
-    import rasterio
-    from rasterio.io import MemoryFile
-
-    with MemoryFile(png_bytes) as mem:
-        with mem.open() as ds:
-            rgb = ds.read()
-    r = rgb[0].astype(np.float32)
-    g = rgb[1].astype(np.float32)
-    b = rgb[2].astype(np.float32)
-    return (r * 256.0 + g + b / 256.0) - 32768.0
+    return choose_zoom(0.0, max(res_m, 500.0), min_zoom=MIN_TERRARIUM_ZOOM, max_zoom=MAX_TERRARIUM_ZOOM)
 
 
 def _fetch_terrarium_tile(z: int, x: int, y: int, cache_dir: Path) -> Optional[np.ndarray]:
-    del cache_dir
-    url = TERRARIUM_URL.format(z=z, x=x, y=y)
-    try:
-        with urlopen(url, timeout=60) as resp:
-            data = resp.read()
-    except Exception as exc:
-        log.warning("Terrarium tile %s/%s/%s failed: %s", z, x, y, exc)
-        return None
-    try:
-        return _decode_terrarium(data)
-    except Exception as exc:
-        log.warning("Terrarium decode %s/%s/%s failed: %s", z, x, y, exc)
-        return None
+    from game_export.mapterhorn import fetch_tile
+
+    return fetch_tile(z, x, y, cache_dir)
 
 
 def purge_region_dem_scratch(cache_dir: Path) -> None:
     """Delete DEM download scratch so overnight country bakes do not fill the disk."""
     import shutil
 
-    for name in ("terrarium", "skadi"):
+    for name in ("terrarium", "skadi", "mapterhorn"):
         root = cache_dir / name
         if root.is_dir():
             shutil.rmtree(root, ignore_errors=True)
@@ -136,7 +111,7 @@ def mosaic_terrarium_for_boundary(
     pad_deg: float = 0.2,
     max_cells: int = 200_000,
 ):
-    """Resample AWS Terrarium PNG tiles onto a coarse WGS84 grid (country scale)."""
+    """Resample Mapterhorn Terrarium tiles onto a coarse WGS84 grid (country scale)."""
     from rasterio.crs import CRS
     from rasterio.transform import from_bounds
     from rasterio.warp import Resampling, reproject
@@ -164,7 +139,7 @@ def mosaic_terrarium_for_boundary(
     z = _choose_terrarium_zoom(min(cell_m, 8000.0))
     z = max(z, 6)
     log.info(
-        "Terrarium mosaic z=%s %s×%s cells (~%.0fm) bbox=[%.2f,%.2f,%.2f,%.2f]",
+        "Mapterhorn mosaic z=%s %s×%s cells (~%.0fm) bbox=[%.2f,%.2f,%.2f,%.2f]",
         z,
         width,
         height,
@@ -259,6 +234,6 @@ def mosaic_terrarium_for_boundary(
             del arr
 
     if got == 0 or not np.any(np.isfinite(dst)):
-        raise RuntimeError(f"No Terrarium tiles for bbox {miny},{minx},{maxy},{maxx}")
-    log.info("Terrarium mosaic used %s land-intersecting tiles at z=%s", got, z)
+        raise RuntimeError(f"No Mapterhorn tiles for bbox {miny},{minx},{maxy},{maxx}")
+    log.info("Mapterhorn mosaic used %s land-intersecting tiles at z=%s", got, z)
     return dst, float(minx), float(miny), float(maxx), float(maxy), np.nan

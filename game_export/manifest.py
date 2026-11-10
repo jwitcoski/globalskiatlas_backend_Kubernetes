@@ -25,13 +25,11 @@ If you use these vector layers, you must provide OSM attribution as required by 
 
 ## Elevation (DEM)
 
-Mapzen Skadi tiles (AWS Terrain Tiles / Mapzen elevation), SRTM-style 1 arc-second HGT.
+Mapterhorn Terrarium terrain tiles. Where national lidar is in the pyramid this is finer than SRTM; elsewhere it is about 30 m.
 
-Source used by this repository's existing elevation stage:
+`https://mapterhorn.com/data-access/`
 
-`https://elevation-tiles-prod.s3.amazonaws.com/skadi`
-
-See also AWS Terrain Tiles terms: https://registry.opendata.aws/terrain-tiles/
+Underlying open-data licenses: https://mapterhorn.com/attribution
 
 ## Affiliation
 
@@ -78,9 +76,9 @@ def write_attribution(out: Path) -> None:
                     "url": "https://www.openstreetmap.org/copyright",
                 },
                 "dem": {
-                    "provider": "Mapzen Skadi / AWS Terrain Tiles",
-                    "url": "https://elevation-tiles-prod.s3.amazonaws.com/skadi",
-                    "license_notes": "Public elevation tiles; see AWS Open Data Terrain Tiles registry",
+                    "provider": "Mapterhorn",
+                    "url": "https://mapterhorn.com/data-access/",
+                    "license_notes": "Terrain is mixed open data. See https://mapterhorn.com/attribution",
                 },
             },
             indent=2,
@@ -139,8 +137,8 @@ def write_manifest(out: Path, cfg, local: LocalCRS, terrain_meta: dict, build_se
         },
         "attribution": {
             "osm": "© OpenStreetMap contributors",
-            "dem": "Mapzen Skadi / AWS Terrain Tiles",
-            "license_notes": "OSM data ODbL; DEM from Mapzen Skadi. See attribution/ATTRIBUTION.md",
+            "dem": "© Mapterhorn",
+            "license_notes": "OSM data ODbL; DEM from Mapterhorn. See attribution/ATTRIBUTION.md",
         },
         "disclaimer": (
             "Prototype terrain scene derived from open data. Not an official resort map, "

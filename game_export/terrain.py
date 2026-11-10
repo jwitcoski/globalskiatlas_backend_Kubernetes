@@ -463,7 +463,7 @@ def export_terrain(
         ax.text(
             0.01,
             0.01,
-            "© OpenStreetMap contributors · Mapzen Skadi DEM\nPrototype — not a navigation product",
+            "© OpenStreetMap contributors · © Mapterhorn\nPrototype — not a navigation product",
             transform=ax.transAxes,
             fontsize=7,
             color="white",

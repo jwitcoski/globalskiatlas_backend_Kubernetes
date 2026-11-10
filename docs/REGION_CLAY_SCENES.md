@@ -62,7 +62,7 @@ Equivalent:
 python -m game_export --region-clay --state "West Virginia" --country "United States of America" --force --data-root output --no-from-s3
 ```
 
-(`--fetch-skadi` is implied: region DEM always mosaics Mapzen Skadi tiles.)
+(`--fetch-skadi` is implied: region DEM is sampled from Mapterhorn terrain tiles.)
 
 ## Punch out every state / province
 

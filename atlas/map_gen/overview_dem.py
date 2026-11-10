@@ -1,4 +1,4 @@
-"""Fetch Mapzen Skadi DEM and build a winter hillshade for regional overview maps."""
+"""Sample a Mapterhorn DEM and build a winter hillshade for regional overview maps."""
 
 from __future__ import annotations
 

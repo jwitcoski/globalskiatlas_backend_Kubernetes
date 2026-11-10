@@ -163,11 +163,28 @@ def _mosaic_from_skadi_cache(
     cache_dir: Path,
     fetch: bool,
 ) -> tuple[np.ndarray, float, float, float, float]:
-    """Reuse existing elevation helpers. fetch=False refuses network."""
+    """Build an int16 DEM for ``geom``.
+
+    ``fetch=False`` reuses cached 1° HGT only. ``fetch=True`` samples Mapterhorn
+    at about 5 m (finer than those 1° cells) and returns that crop.
+    """
     elev_mod = _load_elevation_module()
+    from game_export.mapterhorn import RESORT_MAX_CELLS, RESORT_TARGET_M, elevations_to_hgt, mosaic_bbox
 
     buffered = elev_mod._buffer_geom_meters(geom, elev_mod.CONTOUR_BUFFER_METERS)
     minlon, minlat, maxlon, maxlat = buffered.bounds
+    if fetch:
+        dem, west, south, east, north = mosaic_bbox(
+            minlon,
+            minlat,
+            maxlon,
+            maxlat,
+            cache_dir,
+            target_m=RESORT_TARGET_M,
+            max_cells=RESORT_MAX_CELLS,
+        )
+        return elevations_to_hgt(dem), west, south, east, north
+
     tiles = elev_mod.tiles_for_bbox(minlat, minlon, maxlat, maxlon)
     tiles_data = []
     for lat_sw, lon_sw in tiles:
@@ -175,19 +192,16 @@ def _mosaic_from_skadi_cache(
         ns = "N" if lat_sw >= 0 else "S"
         subdir = f"{ns}{abs(lat_sw)}"
         hgt = cache_dir / "skadi" / subdir / f"{name}.hgt"
-        if not fetch and not hgt.is_file():
+        if not hgt.is_file():
             continue
-        if not fetch:
-            arr = elev_mod._read_hgt_file(hgt, lat_sw, lon_sw)
-        else:
-            arr = elev_mod.fetch_skadi_tile(lat_sw, lon_sw, cache_dir)
+        arr = elev_mod._read_hgt_file(hgt, lat_sw, lon_sw)
         if arr is not None:
             tiles_data.append((lat_sw, lon_sw, arr))
     if not tiles_data:
         raise FileNotFoundError(
-            "DEM GeoTIFF not found and Skadi cache has no covering tiles. "
+            "DEM GeoTIFF not found and no cached 1° HGT covers this hull. "
             "Place a cropped GeoTIFF under output/<region>/dems/ or cache/skadi/, "
-            "or re-run with --fetch-skadi (same Mapzen source as the existing elevation stage). "
+            "or re-run with --fetch-skadi to sample Mapterhorn. "
             f"cache_dir={cache_dir}"
         )
     dem, west, south, east, north = elev_mod._mosaic_tiles(tiles_data)
@@ -339,11 +353,12 @@ def resolve_dem(
             log.info("Using DEM GeoTIFF covering OSM hull %s", p)
             return p, f"GeoTIFF covering OSM hull {p}"
         log.info("Skipping DEM that does not cover OSM hull (likely ski-AOI mask): %s", p)
-    log.info("Mosaicking Skadi DEM to OSM-feature hull (fetch=%s)", fetch_skadi)
+    log.info("Mosaicking Mapterhorn DEM to OSM-feature hull (fetch=%s)", fetch_skadi)
     crop, w, s, e, n = _mosaic_from_skadi_cache(cover, cache_dir, fetch=fetch_skadi)
     _write_temp_dem(crop, w, s, e, n, hull_cache)
+    source = "Mapterhorn" if fetch_skadi else "cached 1° HGT"
     return hull_cache, (
-        "Mapzen Skadi mosaic cropped to OSM-feature convex hull "
+        f"{source} mosaic cropped to OSM-feature convex hull "
         f"(written only to {hull_cache}, pipeline dems/ untouched)"
     )
 

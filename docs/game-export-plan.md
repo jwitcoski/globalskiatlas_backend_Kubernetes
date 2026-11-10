@@ -11,7 +11,7 @@ Additive, optional stage. Does **not** change OSM/PBF download, nearby extract, 
 | Nearby OSM | `scripts/extract_nearby_from_pbf.py` | `osm_near_winter_sports.parquet` |
 | Lifts/pistes | `scripts/extract_lifts_and_pistes_from_pbf.py` | `lifts.parquet`, `pistes.parquet` |
 | Buffer / contours / extrema | `scripts/ski_area_1000ft_buffer.py`, `scripts/ski_area_elevation_contours.py` | buffer, contours, elevation points; DEM CRS **EPSG:4326** int16 GeoTIFF **only if** `--save-dem` |
-| DEM source | Mapzen Skadi (`https://elevation-tiles-prod.s3.amazonaws.com/skadi`), 1″ HGT, nodata `-32768` | `cache/skadi/` |
+| DEM source | Mapterhorn Terrarium WebP (`https://tiles.mapterhorn.com/{z}/{x}/{y}.webp`). Resort hulls are sampled near 5 m. 1° contour/overview cells stay 1″ and are cached as HGT. Nodata `-32768` | `cache/mapterhorn/`, `cache/skadi/` |
 
 Canonical Montage Mountain (already documented in `atlas/map_gen/templates/README.md`):
 

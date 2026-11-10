@@ -56,7 +56,7 @@ python scripts/test_game_export_smoke.py
 docker build -f Dockerfile.aws -t globalskiatlas-pipeline .
 docker compose -f docker-compose.game-export.yml run --rm game-export --resort montage_mountain_pa --dry-run
 docker compose -f docker-compose.game-export.yml run --rm game-export --picked-batch
-# If no cropped DEM GeoTIFF exists on S3, fetch Mapzen Skadi like the elevation stage:
+# If no cropped DEM GeoTIFF exists on S3, sample Mapterhorn for the resort hull:
 docker compose -f docker-compose.game-export.yml run --rm game-export --fetch-skadi
 ```
 

@@ -450,7 +450,7 @@ def parse_args(argv=None):
         "--fetch-skadi",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Download Mapzen Skadi DEM tiles when local DEM is missing (default: on)",
+        help="Sample a Mapterhorn DEM when no local GeoTIFF covers the resort (default: on)",
     )
     p.add_argument("--pick-only", action="store_true", help="Print selection and exit")
     p.add_argument("--dry-run", action="store_true")

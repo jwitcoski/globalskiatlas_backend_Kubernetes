@@ -126,7 +126,7 @@ Input: `output/combined/ski_areas_analyzed.parquet`. Adds or fills `english_name
 
 ## Elevation and contours
 
-After combining regions, you can add elevation (min/max) and contour lines per ski area for atlas maps. Uses Mapzen Skadi DEM on AWS S3 (free, no account). Tiles are cached under `cache/skadi/`.
+After combining regions, you can add elevation (min/max) and contour lines per ski area for atlas maps. Uses Mapterhorn terrain tiles. Cells are cached as HGT under `cache/skadi/`; raw tiles under `cache/mapterhorn/`.
 
 ```powershell
 # Requires: pip install -r requirements.txt (geopandas, rasterio, matplotlib, etc.)

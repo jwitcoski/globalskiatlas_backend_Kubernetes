@@ -8,7 +8,7 @@ from game_export.config import default_config_path, load_resort_config
 from game_export.jsonutil import dumps
 
 CATALOG_DISCLAIMER = (
-    "Prototype scenes from OpenStreetMap + Mapzen Skadi. "
+    "Prototype scenes from OpenStreetMap + Mapterhorn terrain. "
     "Not official maps, not for navigation or safety."
 )
 

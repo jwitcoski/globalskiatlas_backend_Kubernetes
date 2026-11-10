@@ -80,7 +80,7 @@ def parse_args(argv=None):
     p.add_argument(
         "--fetch-skadi",
         action="store_true",
-        help="If no GeoTIFF exists, download Mapzen Skadi tiles using the existing elevation helper",
+        help="If no GeoTIFF exists, sample a Mapterhorn DEM for the resort hull",
     )
     p.add_argument(
         "--catalog-only",

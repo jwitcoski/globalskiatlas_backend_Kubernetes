@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Compute elevation min/max and contour lines per ski area using Mapzen Skadi DEM on AWS S3.
+Compute elevation min/max and contour lines per ski area using Mapterhorn terrain tiles.
 
-Reads output/combined/ski_areas.parquet (polygon geometry), fetches only the 1° Skadi tiles
-that intersect each area, caches tiles locally, and writes:
+Reads output/combined/ski_areas.parquet (polygon geometry), samples the 1° cells
+that intersect each area from Mapterhorn, caches them as HGT, and writes:
   - output/combined/ski_areas_elevation.parquet (winter_sports_id, region, elevation_low_m, elevation_high_m, ski_north_angle)
   - output/combined/ski_area_contours.geojson (contour lines with elevation_m and ski area id)
   - output/combined/ski_area_elevation_points.geojson (base + summit points per ski area)
@@ -21,7 +21,6 @@ stay inside the resort polygon.
 
 import argparse
 import gc
-import gzip
 import json
 import math
 import os
@@ -29,7 +28,6 @@ import shutil
 import sys
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
-from urllib.request import urlopen
 
 import geopandas as gpd
 import numpy as np
@@ -40,8 +38,8 @@ from rasterio.crs import CRS
 from rasterio.transform import from_bounds
 from shapely.geometry import LineString, Point
 
-# Mapzen Skadi: 1°×1° tiles, SRTM-style HGT (1 arc-second = 3601×3601)
-SKADI_BASE = "https://elevation-tiles-prod.s3.amazonaws.com/skadi"
+# 1°×1° cells, 1 arc-second (3601×3601). Cached as HGT; a miss is filled from Mapterhorn.
+SKADI_BASE = "https://tiles.mapterhorn.com"
 HGT_NO_DATA = -32768
 # 1 arc-second in degrees
 DEG_PER_PIXEL_1AS = 1.0 / 3600.0
@@ -78,9 +76,13 @@ def fetch_skadi_tile(
     keep_cache: bool = True,
 ) -> Optional[np.ndarray]:
     """
-    Fetch one Skadi tile, decompress, return 2D array (row = north->south, col = west->east).
-    Caches to cache_dir unless keep_cache=False (region clay: do not fill the disk).
+    Return one 1° elevation cell (row = north->south, col = west->east).
+
+    Reads a cached HGT when present. Otherwise samples Mapterhorn Terrarium
+    tiles onto the same 3601×3601 grid. ``base_url`` is ignored; it remains
+    so older callers keep working. ``keep_cache=False`` drops the HGT after read.
     """
+    del base_url, timeout
     name = _skadi_tile_name(lat_sw, lon_sw)
     ns = "N" if lat_sw >= 0 else "S"
     subdir = f"{ns}{abs(lat_sw)}"
@@ -98,24 +100,26 @@ def fetch_skadi_tile(
             if arr is not None:
                 return arr
 
-    url = f"{base_url}/{subdir}/{name}.hgt.gz"
-    try:
-        with urlopen(url, timeout=timeout) as resp:
-            data = gzip.decompress(resp.read())
-    except Exception as e:
-        print(f"  Warning: could not fetch {url}: {e}", file=sys.stderr)
-        return None
+    root = Path(__file__).resolve().parents[1]
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    from game_export.mapterhorn import sample_degree_cell
 
-    if keep_cache:
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            cache_path.write_bytes(data)
-        except OSError as e:
-            if e.errno == 28:  # No space left on device
-                print(f"  Warning: disk full, skipping cache write for {name}", file=sys.stderr)
-            else:
-                raise
-    return _read_hgt_array(data, lat_sw, lon_sw)
+    arr = sample_degree_cell(lat_sw, lon_sw, cache_dir)
+    if arr is None:
+        print(f"  Warning: could not build Mapterhorn cell {name}", file=sys.stderr)
+        return None
+    if not keep_cache:
+        return arr
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        cache_path.write_bytes(np.ascontiguousarray(arr.astype(np.int16)).astype(">i2").tobytes())
+    except OSError as e:
+        if e.errno == 28:  # No space left on device
+            print(f"  Warning: disk full, skipping cache write for {name}", file=sys.stderr)
+        else:
+            raise
+    return arr
 
 
 def _read_hgt_file(path: Path, lat_sw: int, lon_sw: int) -> np.ndarray:
@@ -635,7 +639,7 @@ def process_ski_area(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Compute elevation min/max and contours per ski area from Mapzen Skadi DEM",
+        description="Compute elevation min/max and contours per ski area from Mapterhorn DEM",
     )
     parser.add_argument(
         "-i", "--input",
@@ -929,14 +933,12 @@ def main() -> None:
         n_processed_since_clear += 1
         every = int(args.clear_cache_every or 0)
         if every > 0 and n_processed_since_clear >= every:
-            skadi_dir = cache_dir / "skadi"
-            if skadi_dir.exists():
-                try:
-                    shutil.rmtree(skadi_dir)
-                    skadi_dir.mkdir(parents=True, exist_ok=True)
-                    print(f"  Cleared tile cache (every {every} areas)", file=sys.stderr)
-                except Exception as e:
-                    print(f"  Warning: could not clear cache: {e}", file=sys.stderr)
+            for cache_name in ("skadi", "mapterhorn"):
+                tile_dir = cache_dir / cache_name
+                if tile_dir.exists():
+                    shutil.rmtree(tile_dir, ignore_errors=True)
+                    tile_dir.mkdir(parents=True, exist_ok=True)
+            print(f"  Cleared tile cache (every {every} areas)", file=sys.stderr)
             n_processed_since_clear = 0
         gc.collect()
         elevation_rows.append({
@@ -945,7 +947,7 @@ def main() -> None:
             "name": str(name),
             "elevation_low_m": round(elev_lo, 1) if elev_lo is not None else None,
             "elevation_high_m": round(elev_hi, 1) if elev_hi is not None else None,
-            "elevation_source": "Mapzen Skadi",
+            "elevation_source": "Mapterhorn",
             "ski_north_angle": ski_north_angle,
         })
         all_contour_features.extend(features)

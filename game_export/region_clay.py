@@ -10,9 +10,8 @@ from typing import Any, Optional
 
 import geopandas as gpd
 import numpy as np
-from shapely.geometry import box, mapping, shape
+from shapely.geometry import mapping
 from shapely.ops import unary_union
-from shapely.prepared import prep
 
 from atlas.book_gen.resort_category import is_not_downhill, resort_size_category
 from atlas.map_gen.regional_overview import (
@@ -106,9 +105,9 @@ https://www.openstreetmap.org/copyright
 
 ## Elevation (DEM)
 
-Mapzen Skadi tiles (AWS Terrain Tiles), resampled to a coarse grid and clipped to the admin polygon.
+Mapterhorn terrain tiles, resampled to a coarse grid and clipped to the admin polygon.
 
-`https://elevation-tiles-prod.s3.amazonaws.com/skadi`
+`https://mapterhorn.com/data-access/`
 
 ## Context layers (highways, water, places)
 
@@ -311,22 +310,17 @@ def _unit_from_args(*, page_id: Optional[str], state: Optional[str], country: Op
     raise ValueError("Need --state and --country, or --page-id")
 
 
-def _mosaic_skadi_for_boundary(
+def _mosaic_mapterhorn_for_boundary(
     boundary_wgs: gpd.GeoDataFrame,
     cache_dir: Path,
     target_res_m: float,
     pad_deg: float = 0.05,
 ):
-    """Fetch Skadi tiles one at a time and resample onto a coarse WGS84 grid.
+    """Sample Mapterhorn onto a coarse WGS84 grid.
 
-    Never mosaics full 1-arc-second statewide arrays (that OOM'd BC/Ontario).
+    Output stays at least 250 m so a state island does not allocate a lidar grid.
     """
-    from rasterio.crs import CRS
-    from rasterio.transform import from_bounds
-    from rasterio.warp import Resampling, reproject
-
-    from atlas.map_gen.overview_dem import HGT_NO_DATA
-    from scripts.ski_area_elevation_contours import _skadi_tile_name, fetch_skadi_tile, tiles_for_bbox
+    from game_export.mapterhorn import mosaic_bbox
 
     geom = unary_union(list(boundary_wgs.geometry))
     minx, miny, maxx, maxy = geom.bounds
@@ -334,82 +328,18 @@ def _mosaic_skadi_for_boundary(
     miny -= pad_deg
     maxx += pad_deg
     maxy += pad_deg
-    clat = (miny + maxy) / 2.0
-    lat_m = 111_320.0
-    lon_m = max(1.0, 111_320.0 * math.cos(math.radians(clat)))
     res_m = max(float(target_res_m), 250.0)
-    res_deg_x = res_m / lon_m
-    res_deg_y = res_m / lat_m
-    width = max(2, int(math.ceil((maxx - minx) / res_deg_x)))
-    height = max(2, int(math.ceil((maxy - miny) / res_deg_y)))
-    while width * height > MAX_DEM_CELLS:
-        res_deg_x *= 1.25
-        res_deg_y *= 1.25
-        width = max(2, int(math.ceil((maxx - minx) / res_deg_x)))
-        height = max(2, int(math.ceil((maxy - miny) / res_deg_y)))
-
-    log.info(
-        "Skadi coarse mosaic %s×%s cells (~%.0fm) bbox=[%.2f,%.2f,%.2f,%.2f]",
-        width,
-        height,
-        res_m,
+    dem, west, south, east, north = mosaic_bbox(
         minx,
         miny,
         maxx,
         maxy,
+        cache_dir,
+        target_m=res_m,
+        max_cells=MAX_DEM_CELLS,
+        max_zoom=12,
     )
-    dst = np.full((height, width), np.nan, dtype=np.float32)
-    dst_transform = from_bounds(minx, miny, maxx, maxy, width, height)
-    dst_crs = CRS.from_epsg(4326)
-    tile_coords = tiles_for_bbox(miny, minx, maxy, maxx)
-    prepared = prep(geom.buffer(0.02))
-    tile_coords = [
-        (lat_sw, lon_sw)
-        for lat_sw, lon_sw in tile_coords
-        if prepared.intersects(box(float(lon_sw), float(lat_sw), float(lon_sw + 1), float(lat_sw + 1)))
-    ]
-    got = 0
-    for lat_sw, lon_sw in tile_coords:
-        arr = fetch_skadi_tile(lat_sw, lon_sw, cache_dir, keep_cache=False)
-        if arr is None:
-            continue
-        try:
-            side = int(arr.shape[0])
-            src = arr.astype(np.float32, copy=True)
-            src[arr == HGT_NO_DATA] = np.nan
-            src_transform = from_bounds(
-                float(lon_sw), float(lat_sw), float(lon_sw + 1), float(lat_sw + 1), side, side
-            )
-            tmp = np.full((height, width), np.nan, dtype=np.float32)
-            reproject(
-                source=src,
-                destination=tmp,
-                src_transform=src_transform,
-                src_crs=dst_crs,
-                dst_transform=dst_transform,
-                dst_crs=dst_crs,
-                resampling=Resampling.average,
-                src_nodata=np.nan,
-                dst_nodata=np.nan,
-            )
-            hit = np.isfinite(tmp)
-            dst[hit] = tmp[hit]
-            got += 1
-        finally:
-            del arr
-            name = _skadi_tile_name(lat_sw, lon_sw)
-            ns = "N" if lat_sw >= 0 else "S"
-            hgt = cache_dir / "skadi" / f"{ns}{abs(lat_sw)}" / f"{name}.hgt"
-            hgt.unlink(missing_ok=True)
-    if got == 0 or not np.any(np.isfinite(dst)):
-        raise RuntimeError(f"No Skadi tiles for bbox {miny},{minx},{maxy},{maxx}")
-    log.info("Skadi mosaic used %s/%s tiles (source HGT not kept on disk)", got, len(tile_coords))
-    skadi_root = cache_dir / "skadi"
-    if skadi_root.is_dir() and not any(skadi_root.rglob("*.hgt")):
-        import shutil
-
-        shutil.rmtree(skadi_root, ignore_errors=True)
-    return dst, float(minx), float(miny), float(maxx), float(maxy), np.nan
+    return dem, west, south, east, north, np.nan
 
 
 def _warp_clip_dem(
@@ -713,8 +643,9 @@ def _write_region_attribution(out: Path) -> None:
                     "layers": ["resorts", "ski_area_footprints"],
                 },
                 "dem": {
-                    "provider": "Mapzen Skadi / AWS Terrain Tiles",
-                    "url": "https://elevation-tiles-prod.s3.amazonaws.com/skadi",
+                    "provider": "Mapterhorn",
+                    "url": "https://mapterhorn.com/data-access/",
+                    "license_notes": "Terrain is mixed open data. See https://mapterhorn.com/attribution",
                 },
             }
         ),
@@ -852,7 +783,7 @@ def export_region_scene(
             max_cells=COUNTRY_MAX_DEM_CELLS if country else MAX_DEM_CELLS,
         )
     else:
-        dem, west, south, east, north, nodata = _mosaic_skadi_for_boundary(
+        dem, west, south, east, north, nodata = _mosaic_mapterhorn_for_boundary(
             boundary_wgs, cache_dir, target_res_m=res
         )
 
@@ -1096,7 +1027,7 @@ def export_region_scene(
         },
         "attribution": {
             "osm": "© OpenStreetMap contributors",
-            "dem": "Mapzen Skadi / AWS Terrain Tiles",
+            "dem": "© Mapterhorn",
             "admin_boundary": "Natural Earth 10m admin 1 / admin 0",
             "highways": "Natural Earth 10m roads",
             "water": "Natural Earth 10m rivers and lakes",

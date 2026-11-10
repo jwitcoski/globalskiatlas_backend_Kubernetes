@@ -160,7 +160,7 @@ def validation_payload(
             "region_dir": str(inputs.region_dir),
             "dem_path": str(inputs.dem_path),
             "dem_note": inputs.dem_source_note,
-            "dem_provider": "Mapzen Skadi / AWS Terrain Tiles (SRTM-style 1 arc-second)",
+            "dem_provider": "Mapterhorn terrain tiles",
             "osm_attribution": "© OpenStreetMap contributors",
             "warnings": inputs.warnings + [r.get("reason") for r in repairs],
         },
@@ -189,7 +189,7 @@ def validation_payload(
         "geometry_repairs": repairs,
         "attribution": {
             "osm": "© OpenStreetMap contributors — https://www.openstreetmap.org/copyright (ODbL)",
-            "dem": "Mapzen Skadi elevation tiles",
+            "dem": "© Mapterhorn — https://mapterhorn.com/attribution",
         },
     }
 
