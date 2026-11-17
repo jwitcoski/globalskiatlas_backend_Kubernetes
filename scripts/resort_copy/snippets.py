@@ -9,6 +9,8 @@ from . import bedrock
 from .config import (
     PAGE_EXCERPT_CHARS,
 )
+from .entity import mentions_name
+from .validators import country_conflict, is_marketing
 
 
 def _trim_snippets(snippets: list[dict[str, Any]], *, limit: int, chars: int) -> list[dict[str, Any]]:
@@ -237,18 +239,33 @@ def _page_is_this_resort(blob: str, name: str, state: str | None) -> bool:
 
 
 def _drop_pages_about_other_places(
-    snippets: list[dict[str, Any]], name: str, state: str | None = None
-) -> list[dict[str, Any]]:
-    """A national Epic-vs-Ikon roundup is not evidence this hill is on either pass."""
+    snippets: list[dict[str, Any]],
+    name: str,
+    state: str | None = None,
+    country: str | None = None,
+    aliases: list[str] | None = None,
+) -> tuple[list[dict[str, Any]], int]:
+    """Drop a snippet that does not name this resort or that sits in another country.
+
+    A fetched page is held to the same test. That is what kept an AfriSki / Lesotho
+    sentence off a Malbun page.
+    """
     kept: list[dict[str, Any]] = []
+    dropped = 0
+    names = [name, *(aliases or [])]
     for snippet in snippets:
         blob = f"{snippet.get('title') or ''} {snippet.get('text') or ''}"
-        # A fetched page was checked on its search blurb. Its excerpt can name other states.
-        if snippet.get("fetched") or _page_is_this_resort(blob, name, state):
-            kept.append(dict(snippet))
+        named = any(mentions_name(blob, candidate) for candidate in names if candidate)
+        if not named or not _page_is_this_resort(blob, name, state) or country_conflict(blob, country, state):
+            dropped += 1
+            continue
+        if is_marketing(blob) and not named:
+            dropped += 1
+            continue
+        kept.append(dict(snippet))
     if kept:
         bedrock._renumber_snippet_ids(kept)
-    return kept
+    return kept, dropped
 
 
 # One reserved slot each, so a late About page is not pushed out by the first ten hits.
@@ -300,6 +317,14 @@ def _snippet_score(snippet: dict[str, Any], name: str) -> int:
     score = sum(1 for word in _DOSSIER_WORDS if word in blob)
     if _DIRECTORY_PAGE.search(url) or "find the perfect" in blob:
         score -= 8
+    if is_marketing(blob):
+        score -= 6
+    if any(host in url for host in ("liftopia.", "tripadvisor.", "booking.com", "sknowed", "expedia.")):
+        score -= 8
+    if "wikipedia.org" in url:
+        score += 8
+    if url.endswith(".gov") or ".gov/" in url or "tourism" in url:
+        score += 3
     if any(needle in url for needle in _name_needles(name)):
         score += 5
     title = str(snippet.get("title") or "").lower()
@@ -320,10 +345,19 @@ def _trim_snippet(snippet: dict[str, Any], chars: int) -> dict[str, Any]:
 
 
 def _select_snippets(
-    snippets: list[dict[str, Any]], *, limit: int, chars: int, name: str, state: str | None = None
-) -> list[dict[str, Any]]:
+    snippets: list[dict[str, Any]],
+    *,
+    limit: int,
+    chars: int,
+    name: str,
+    state: str | None = None,
+    country: str | None = None,
+    aliases: list[str] | None = None,
+) -> tuple[list[dict[str, Any]], int]:
     """Keep one strong page per fact, then fill. Fetch order must not decide."""
-    snippets = _drop_pages_about_other_places(snippets, name, state)
+    snippets, dropped = _drop_pages_about_other_places(
+        snippets, name, state, country=country, aliases=aliases
+    )
     ranked = sorted(snippets, key=lambda snippet: _snippet_score(snippet, name), reverse=True)
     chosen: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -360,4 +394,4 @@ def _select_snippets(
         if _snippet_score(snippet, name) <= 0:
             continue
         take(snippet)
-    return chosen[:limit]
+    return chosen[:limit], dropped

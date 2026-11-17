@@ -9,15 +9,34 @@ from . import bedrock
 
 from .config import (
     _tier_key,
+    section_writing_for,
 )
 from .grounding import (
     _GROUNDING_RULE,
     _strip_ungrounded,
 )
 from .ollama_client import (
+    OllamaJsonError,
     _chat_json,
     _num_predict,
     ollama_chat,
+)
+from .validators import (
+    assign_sections,
+    deterministic_critique,
+    drop_foreign_sentences,
+    paragraph_budgets,
+    reconcile_distances,
+    short_reason_for,
+    unused_notes,
+)
+
+
+_STYLE = (
+    "The page title is already the resort name. Do not start the page or a paragraph with that name. "
+    "Do not use nestled, hidden gem, world-class, or other brochure cliches. "
+    "Use only facts from NOTES. If a fact is missing, leave it out. "
+    "Do not state superlatives or review-style praise as fact. "
 )
 
 
@@ -58,16 +77,19 @@ def outline_beats(
         "If notes name linked villages, a race, or which base to stay in, give those their own beats. "
         "This is not an essay outline. No headings like Historically or Overall."
     )
-    payload = _chat_json(
-        base_url=base_url,
-        model=model,
-        system_text=system,
-        user_text=f"Resort: {resort_label}\n\nNOTES:\n{json.dumps(notes, ensure_ascii=False)}\n",
-        temperature=0.2,
-        num_predict=max(400, beat_cap * 40),
-        num_ctx=num_ctx,
-        timeout=timeout,
-    )
+    try:
+        payload = _chat_json(
+            base_url=base_url,
+            model=model,
+            system_text=system,
+            user_text=f"Resort: {resort_label}\n\nNOTES:\n{json.dumps(notes, ensure_ascii=False)}\n",
+            temperature=0.2,
+            num_predict=max(400, beat_cap * 40),
+            num_ctx=num_ctx,
+            timeout=timeout,
+        )
+    except (json.JSONDecodeError, OllamaJsonError):
+        return [n["text"] for n in notes[:beat_cap]]
     raw = payload.get("beats")
     if not isinstance(raw, list):
         return [n["text"] for n in notes[:beat_cap]]
@@ -156,6 +178,7 @@ def write_draft(
         + "The resort name, the lifts, the trails, and the vertical drop are already printed on the page from the database. "
         + "Do not open with the resort name, the state, or the country. Do not repeat those database facts. "
         + "Start with who the hill is for, how a person gets there, what a day costs, or what the place is like. "
+        + _STYLE
         + "One blank line between paragraphs. No title, no bullets, no markdown. "
         + _GROUNDING_RULE
         + " "
@@ -201,9 +224,9 @@ def critique_draft(
         length_fix = "The length is in range. Do not ask for a cut or an addition. "
     system = (
         "You are the critic and fact checker. Compare DRAFT to NOTES. "
-        "Output one JSON object and nothing else. Schema: "
-        '{"unsupported":["claim in the draft that NOTES do not support"],'
-        '"cliches":["banned or empty phrase"],'
+        "Output one JSON object and nothing else. No extra keys. Schema: "
+        '{"unsupported":["exact wording from the draft that NOTES do not support"],'
+        '"cliches":["banned phrase that appears in the draft"],'
         '"fixes":["one imperative fix"]}. '
         f"{bedrock._measured_brief(measured, goal)} "
         f"{length_fix}"
@@ -240,9 +263,23 @@ def critique_draft(
     out["unsupported"] = [
         claim
         for claim in out["unsupported"]
-        if claim.lower() not in {"claim in the draft that notes do not support"}
+        if _claim_in_draft(claim, draft)
     ]
+    out["checker"] = "llm"
     return out
+
+
+def _claim_in_draft(claim: str, draft: str) -> bool:
+    """Drop critic items that are not phrases from the draft ('sentence about mood')."""
+    if claim.lower() in {"claim in the draft that notes do not support"}:
+        return False
+    blob = draft.lower()
+    if claim.lower() in blob:
+        return True
+    words = [w for w in re.findall(r"[a-z0-9']+", claim.lower()) if len(w) > 3]
+    if not words:
+        return False
+    return sum(w in blob for w in words) >= max(2, int(0.6 * len(words)))
 
 
 def edit_draft(
@@ -336,3 +373,176 @@ def extend_draft(
     if bedrock._char_count(longer) <= bedrock._char_count(draft):
         return draft
     return longer
+
+
+def write_by_section(
+    notes: list[dict[str, Any]],
+    *,
+    resort_label: str,
+    tier: str,
+    base_url: str,
+    model: str,
+    num_ctx: int,
+    timeout: float,
+    name: str = "",
+) -> str:
+    """One paragraph per topic group, each with a character budget from layout_goal."""
+    budgets = paragraph_budgets(tier)
+    grouped = assign_sections(notes, [key for key, _budget in budgets])
+    parts: list[str] = []
+    for section, budget in budgets:
+        group = grouped.get(section) or []
+        if not group:
+            continue
+        system = (
+            f"You are the writer. Write one paragraph of about {budget} characters "
+            f"(stay between {max(180, budget - 80)} and {budget + 80}). "
+            f"The paragraph covers only this topic: {section}. "
+            + _STYLE
+            + "Plain prose. No title, no markdown, no bullet list. "
+            + _GROUNDING_RULE
+        )
+        raw = ollama_chat(
+            base_url=base_url,
+            model=model,
+            system_text=system,
+            user_text=(
+                f"Resort: {resort_label}\n\nNOTES:\n{json.dumps(group, ensure_ascii=False)}\n"
+            ),
+            temperature=0.3,
+            num_predict=max(220, budget // 2),
+            num_ctx=num_ctx,
+            timeout=timeout,
+        )
+        paragraph = _clean_prose(raw).replace("\n", " ").strip()
+        if paragraph:
+            parts.append(paragraph)
+    text = "\n\n".join(parts)
+    return _strip_ungrounded(text, notes, tier, name or resort_label)
+
+
+def produce_draft(
+    notes: list[dict[str, Any]],
+    beats: list[str],
+    *,
+    resort_label: str,
+    tier: str,
+    base_url: str,
+    model: str,
+    num_ctx: int,
+    timeout: float,
+    name: str = "",
+    section_writing: bool | None = None,
+) -> str:
+    use_sections = section_writing_for(tier) if section_writing is None else section_writing
+    if use_sections:
+        return write_by_section(
+            notes,
+            resort_label=resort_label,
+            tier=tier,
+            base_url=base_url,
+            model=model,
+            num_ctx=num_ctx,
+            timeout=timeout,
+            name=name,
+        )
+    return write_draft(
+        notes,
+        beats,
+        resort_label=resort_label,
+        tier=tier,
+        base_url=base_url,
+        model=model,
+        num_ctx=num_ctx,
+        timeout=timeout,
+    )
+
+
+def length_control_loop(
+    draft: str,
+    notes: list[dict[str, Any]],
+    *,
+    resort_label: str,
+    tier: str,
+    base_url: str,
+    model: str,
+    num_ctx: int,
+    timeout: float,
+    passes: int = 2,
+) -> tuple[str, str | None, list[dict[str, Any]]]:
+    """Ask the editor to use leftover notes. Stop when the page is long enough or the notes run out."""
+    text = draft
+    for _ in range(max(0, passes)):
+        if short_reason_for(text, notes, tier) is None:
+            return text, None, unused_notes(text, notes)
+        leftover = unused_notes(text, notes)
+        if not leftover:
+            return text, "facts_exhausted", []
+        longer = extend_draft(
+            text,
+            leftover,
+            resort_label=resort_label,
+            tier=tier,
+            base_url=base_url,
+            model=model,
+            num_ctx=num_ctx,
+            timeout=timeout,
+        )
+        if bedrock._char_count(longer) <= bedrock._char_count(text):
+            return text, "writer_underused_notes", leftover
+        text = longer
+    reason = short_reason_for(text, notes, tier)
+    return text, reason, unused_notes(text, notes)
+
+
+def finish_prose(
+    text: str,
+    notes: list[dict[str, Any]],
+    *,
+    name: str,
+    country: str | None,
+    state: str | None,
+    tier: str,
+) -> str:
+    """Apply note distances and drop sentences that name some other place."""
+    text = reconcile_distances(text, notes)
+    text = drop_foreign_sentences(text, notes, name=name, country=country, state=state)
+    return _fit_to_layout(text, tier) if text.strip() else text
+
+
+def critique_for_draft(
+    draft: str,
+    notes: list[dict[str, Any]],
+    *,
+    tier: str,
+    name: str,
+    country: str | None,
+    state: str | None,
+    base_url: str,
+    model: str | None,
+    num_ctx: int,
+    timeout: float,
+    use_llm: bool,
+) -> dict[str, Any]:
+    """Deterministic checks always run. The model critic is optional and cannot add free-form items."""
+    det = deterministic_critique(draft, notes, name=name, country=country, state=state, tier=tier)
+    if not use_llm or not model or model == "deterministic":
+        return det
+    llm = critique_draft(
+        draft,
+        notes,
+        tier=tier,
+        base_url=base_url,
+        model=model,
+        num_ctx=num_ctx,
+        timeout=timeout,
+    )
+    llm["deterministic"] = {
+        "unsupported": det["unsupported"],
+        "contradictions": det["contradictions"],
+        "unused_notes": det["unused_notes"],
+    }
+    llm["fixes"] = list(dict.fromkeys([*llm.get("fixes", []), *det.get("fixes", [])]))
+    llm["contradictions"] = det["contradictions"]
+    llm["unused_notes"] = det["unused_notes"]
+    return llm

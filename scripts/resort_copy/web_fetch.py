@@ -272,6 +272,8 @@ def fetch_resort_pages(snippets: list[dict[str, Any]], *, name: str, state: str 
         seen.add(key)
         score = _snippet_score(snippet, name)
         about = _page_about_resort(snippet, name)
+        if "wikipedia.org" in low:
+            score += 14
         if about:
             score += 8
         if about and _host_matches_resort(_host(url), url, name):

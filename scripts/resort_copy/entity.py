@@ -226,7 +226,7 @@ def resolve_entity(
     queries = [
         f'"{name}" "{state or country or ""}" official resort'.replace(' ""', ""),
         f'"{name}" ski resort {region} official website'.strip(),
-    ]
+        ]
     candidates: dict[str, float] = {}
     for query in queries:
         if registry.queries_left() <= 0:
@@ -237,9 +237,19 @@ def resolve_entity(
             host = host_of(url)
             if not host or any(b in host + "/" for b in NO_FETCH_HOSTS) or any(d in host for d in DIRECTORY_HOSTS):
                 continue
-            if "wikipedia.org" in host or any(host_in(host, d) for d in PASS_PROVIDERS.values()):
-                continue
+            # Record a namesake before discarding the row: the academy/lake/mountain sharing the
+            # resort's name is exactly the page that must never become evidence later. Fetching it
+            # (rather than only noting the name) leaves an auditable record that it was seen,
+            # classified, and refused, so a later run cannot quietly cite it.
             if note_namesake(entity, title, url):
+                known = registry.known_url(url)
+                rec = registry.get(known) if known else None
+                if rec is None:
+                    rec = registry.fetch(url, reason="entity_namesake_rejected", topic="entity")
+                if rec is not None:
+                    assess_source(entity, rec)
+                continue
+            if "wikipedia.org" in host or any(host_in(host, d) for d in PASS_PROVIDERS.values()):
                 continue
             blob = f"{title} {row['snippet']}"
             score = 0.0

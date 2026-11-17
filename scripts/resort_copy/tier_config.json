@@ -1,0 +1,49 @@
+{
+  "tiers": {
+    "small": {
+      "paragraphs": [2, 3],
+      "lines": [20, 22],
+      "characters": [1450, 1650],
+      "search_fact_min": 6,
+      "note_cap": 16,
+      "snippets": 16,
+      "pages": 4,
+      "beats": 8,
+      "search_retries": 2,
+      "section_writing": false
+    },
+    "medium": {
+      "paragraphs": [5, 7],
+      "lines": [55, 60],
+      "characters": [3700, 4050],
+      "search_fact_min": 22,
+      "note_cap": 40,
+      "snippets": 36,
+      "pages": 8,
+      "beats": 16,
+      "search_retries": 2,
+      "section_writing": true
+    },
+    "large": {
+      "paragraphs": [10, 14],
+      "lines": [110, 120],
+      "characters": [7400, 8100],
+      "search_fact_min": 45,
+      "note_cap": 70,
+      "snippets": 48,
+      "pages": 12,
+      "beats": 24,
+      "search_retries": 3,
+      "section_writing": true
+    }
+  },
+  "models": {
+    "search": "llama3.1:8b",
+    "outline": "llama3.1:8b",
+    "writer": "qwen2.5:14b",
+    "editor": "qwen2.5:14b",
+    "critic": "deterministic"
+  },
+  "ownership_allowed": ["public", "private", "municipal", "not-for-profit", "unknown"],
+  "year_min": 1850
+}

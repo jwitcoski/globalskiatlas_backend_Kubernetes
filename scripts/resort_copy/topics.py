@@ -27,6 +27,9 @@ class Topic:
     legacy_field: str | None = None
     # Two verified values that capture different groups from this pattern are a conflict.
     conflict_pattern: str | None = None
+    # A quote matching this is about something else on the page (a trade body, a menu, a shop link)
+    # and is dropped before it can become evidence.
+    exclude: str | None = None
 
 
 def _topic(key: str, label: str, group: str, rounds: list[list[str]], keywords: str, **kw) -> Topic:
@@ -44,6 +47,8 @@ TOPICS: tuple[Topic, ...] = (
         ],
         r"located|address|miles (?:from|south|north|east|west)|minutes from|\bnear\b|off (?:route|us|interstate)|\bva-?\d+|"
         r"shenandoah|\bin the\b[^.]{0,40}(?:mountains?|valley|county)",
+        must=r"\d|\b(?:route|highway|interstate|minutes|miles|valley|county|mountain)\b",
+        exclude=r"\b(?:learn more|book now|shop|cart|sign in|click here|subscribe)\b",
         allow_regional=True, legacy_topic="setting", counts=False,
     ),
     _topic(
@@ -52,8 +57,13 @@ TOPICS: tuple[Topic, ...] = (
             ['"{name}" "{region}" ski resort owned operated by'],
             ['site:{domain} about us history ownership', '"{name}" resort owner management company'],
         ],
-        r"owned by|operated by|managed by|family[- ]owned|privately owned|owner|ownership|parent company|"
-        r"acquired|purchased|\bpart of\b",
+        r"\b(?:is |are |was |were )?(?:owned|operated|managed) (?:by|through)\b|family[- ]owned|"
+        r"privately[- ](?:owned|held)|parent (?:company|corporation)|\b(?:resort|mountain|area|company|"
+        r"corporation)\b[^.]{0,30}\bacquired\b",
+        must=r"\b(?:owned|operated|managed|ownership|company|corporation|family|group|acquired)\b",
+        # "Gold Card is a benefit for owners" is a timeshare perk, not who runs the resort.
+        exclude=r"\bgold card\b|\bowners?\b[^.]{0,40}\b(?:benefit|portal|association|meeting|billboard|"
+        r"reservation|unit|week)\b|\bownership (?:week|interest|unit|opportunit)",
         legacy_topic="other", legacy_field="owner",
     ),
     _topic(
@@ -82,7 +92,12 @@ TOPICS: tuple[Topic, ...] = (
             ['site:{domain} lift ticket rates pricing', '"{name}" day ticket price'],
         ],
         r"lift tickets?|day tickets?|all[- ]day|half[- ]day|twilight|night tickets?|ticket (?:price|rates?)",
-        must=r"\$\s?\d|ticket", legacy_topic="price", legacy_field="lift_ticket",
+        must=r"\$\s?\d.*\b(?:adult|junior|senior|child|weekday|weekend|holiday|all[- ]day|half[- ]day|"
+        r"\d+\s?(?:hour|hr)s?|rates?)\b|\b(?:adult|junior|senior|child|weekday|weekend|holiday)\b"
+        r"[^.]{0,40}\$\s?\d",
+        # "under $100", "about $50", "save $20" are editorial, not a published rate.
+        exclude=r"\b(?:under|below|about|around|save|saving|discount|cheaper|less than|starting at under)\b",
+        legacy_topic="price", legacy_field="lift_ticket",
     ),
     _topic(
         "season_passes", "Season passes", "tickets",
@@ -112,7 +127,8 @@ TOPICS: tuple[Topic, ...] = (
         ],
         r"chair ?lifts?|\blifts?\b|gondola|high[- ]speed|\bquad\b|\btriple\b|\bdouble\b|magic carpet|surface lift|"
         r"conveyor|t-bar|rope tow",
-        must=r"lift|gondola|carpet|tow", legacy_topic="other",
+        must=r"\b\d{1,2}\b[^.]{0,30}(?:lifts?|gondolas?|carpet|tow)|(?:lifts?|gondolas?)\b[^.]{0,20}\b\d{1,2}\b",
+        legacy_topic="other",
     ),
     _topic(
         "snowmaking", "Snowmaking", "terrain",
@@ -231,9 +247,14 @@ TOPICS: tuple[Topic, ...] = (
     _topic(
         "opening_year", "Opening year and background", "background",
         [['"{name}" ski resort opened history {region}'], ['site:{domain} history about']],
-        r"\b(?:opened|founded|established|began|built)\b[^.]{0,60}\b(?:18|19|20)\d{2}\b|\b(?:18|19|20)\d{2}\b[^.]{0,40}\b(?:opened|founded|established)\b",
+        # The founding verb must govern the year, and the page must not attribute it to a different
+        # organisation. "Established in 1962, the NSAA is..." is the trade body's founding, not the
+        # resort's, and it must never be the year we publish.
+        r"\b(?:opened|founded|established|built)\b[^.]{0,60}\b(?:18|19|20)\d{2}\b|\b(?:18|19|20)\d{2}\b[^.]{0,40}\b(?:opened|founded|established)\b",
+        must=r"\b(?:ski|resort|mountain|slopes?|trails?|lifts?)\b",
+        exclude=r"\b(?:NSAA|association|national|society|corporation|inc\.?|company|academy)\b",
         counts=False, legacy_topic="year_started", legacy_field="year_started",
-        conflict_pattern=r"\b((?:18|19|20)\d{2})\b",
+        conflict_pattern=r"\b(?:opened|founded|established|built)\b[^.]{0,60}\b((?:18|19|20)\d{2})\b",
     ),
 )
 
@@ -247,6 +268,56 @@ ATTRACTION_NAV = (
     "adventure park", "adventure center", "ropes course", "aerial adventure", "disc golf", "horseback",
     "climbing", "go-karts", "go karts", "mini golf", "arcade", "tennis", "fishing", "hiking",
 )
+
+# A resort menu says "Ski & Snowboard" or "Hours & Rates", never "snowmaking". Checking a nav label
+# against every topic's body-text keywords therefore skips the most useful page on the site. These
+# are nav-specific hints only; they rank which pages to fetch, and never justify a fact on their own.
+NAV_TERMS: tuple[tuple[str, str], ...] = (
+    (r"ski|snowboard|snow ?sports?|slopes?", "terrain"),
+    (r"hours|rates|pricing|prices|tickets?", "tickets"),
+    (r"season ?pass", "tickets"),
+    (r"lesson|school|learn", "services"),
+    (r"rental|rent", "services"),
+    (r"snow ?making|snow report|conditions|mountain report", "terrain"),
+    (r"tubing|snow ?tubing", "terrain"),
+    (r"terrain park|park", "terrain"),
+    (r"lodging|stay|accommodations|hotel|condo|rentals?", "lodging"),
+    (r"dining|restaurant|food", "services"),
+    (r"waterpark|water ?park|pool", "terrain"),
+    (r"parking|directions|getting here|map", "access"),
+    (r"about|history|our story|who we are", "background"),
+    (r"deals|specials|packages", "tickets"),
+)
+
+
+def nav_terms_for(label: str) -> int:
+    """How many distinct categories a menu label advertises."""
+    low = label.lower()
+    groups = {group for pattern, group in NAV_TERMS if re.search(pattern, low)}
+    return len(groups)
+
+
+def nav_covers_topic(label: str, topic: Topic) -> bool:
+    """Whether a menu label plausibly leads to this topic's page."""
+    low = label.lower()
+    if re.search(topic.keywords, low, re.IGNORECASE):
+        return True
+    groups = {group for pattern, group in NAV_TERMS if re.search(pattern, low)}
+    if topic.group == "basics":
+        return "background" in groups
+    if topic.group == "tickets":
+        return "tickets" in groups
+    if topic.group == "access":
+        return "access" in groups
+    if topic.group == "lodging":
+        return "lodging" in groups
+    if topic.group == "services":
+        return "services" in groups
+    if topic.group == "terrain":
+        return bool(groups & {"terrain", "tickets"})
+    if topic.group in ("winter_other", "year_round"):
+        return bool(groups & {"terrain", "services", "other"})
+    return False
 
 
 def queries_for(topic: Topic, round_index: int, *, name: str, region: str, domain: str | None) -> list[str]:

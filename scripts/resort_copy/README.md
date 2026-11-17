@@ -35,7 +35,7 @@ Imports only point down this list, so there are no cycles.
 |---|---|
 | `config.py` | Tier tables (facts, snippets, pages, beats, context), topic lists, default host/model, `_tier_key`, `_cell`, `fact_min_for` |
 | `ollama_client.py` | `ollama_chat`, `_chat_json`, model list/unload, JSON parsing |
-| `queries.py` | Search query builders (dossier, reader, record, mega, depth, follow-up) |
+| `queries.py` | Search query builders (dossier, reader, record, large-area, topic, depth, follow-up) |
 | `snippets.py` | Snippet scoring, trimming, selection; drops pages about other resorts |
 | `web_fetch.py` | Live and archived page fetch, block extraction, excerpts |
 | `notes.py` | Search pass: snippets and pages to NOTES, topic tagging, de-duplication, page facts |
@@ -54,3 +54,52 @@ Imports only point down this list, so there are no cycles.
 - Prompt wording for a pass: `writing.py` (or `notes.py` for the search pass).
 - How many facts, pages, or beats per tier: `config.py`.
 - Which sites or words count as a resort source: `snippets.py`, `web_fetch.py`.
+
+## Running it on the AI box (3070)
+
+Nothing here requires the laptop. Run the process *on* `3070` (`192.168.68.59`)
+so checkpoints stay on that machine when the PC sleeps. Layout on the box:
+
+| Path | Role |
+| --- | --- |
+| `~/ski/repo/` | Scripts + parquet input |
+| `~/ski/venv/` | Python deps (`pandas`, `pyarrow`, `ddgs`) |
+| `~/ski/output/` | Checkpoints and `key_points.jsonl` (auto when hostname is `3070`) |
+| `~/ski/cache/` | Fetched-page and registry cache (auto on that host) |
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `OLLAMA_HOST` | `http://192.168.68.59:11434` | Where the model runs. On the box itself use `http://127.0.0.1:11434`. |
+| `GLOBALS_SKI_OUTPUT` | `~/ski/output` on 3070, else `output` | Override checkpoint root. |
+| `GLOBALS_SKI_CACHE` | `~/ski/cache` on 3070, else `cache` | Override fetch cache root. |
+| `BRAVE_API_KEY` | unset | Optional better search than DuckDuckGo. |
+
+On the box:
+
+```bash
+cd ~/ski/repo
+source ~/ski/venv/bin/activate
+export OLLAMA_HOST=http://127.0.0.1:11434
+python scripts/generate_resort_copy_ollama.py \
+    -i output/combined/ski_areas_analyzed.parquet --batch 50
+```
+
+Then close the laptop. The batch writes per-resort checkpoints as it goes, so an
+interrupted box resumes with the same command: finished ids are skipped by reading
+the JSONL output back (`cli._finished_ids`).
+
+Batch output is append-only and safe to leave running overnight. To keep it
+running after you disconnect, start it under `nohup`, `tmux`, or systemd:
+
+```bash
+tmux new -s copy
+# ... run the command above ...
+# Ctrl-b d to detach; tmux attach -t copy to come back
+```
+
+### Note on search rate limits
+
+DuckDuckGo rate-limits aggressively. A 50-resort batch issues ~40 queries per
+resort, so expect throttled queries and `search failed ... No results found`
+lines. They are logged, not fatal, and the run continues with the searches that
+succeeded. For unattended batches, set `BRAVE_API_KEY` and pass `--brave-api-key`.

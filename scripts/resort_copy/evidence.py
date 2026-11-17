@@ -100,6 +100,7 @@ def candidates_for(topic: Topic, rec: dict[str, Any], entity: EntityRecord) -> l
     about = decision == "official" or mentions_name(f"{rec.get('title', '')} {rec.get('url', '')}", entity.canonical_name)
     keyword = re.compile(topic.keywords, re.IGNORECASE)
     must = re.compile(topic.must, re.IGNORECASE) if topic.must else None
+    exclude = re.compile(topic.exclude, re.IGNORECASE) if topic.exclude else None
     negative = _negative_re(topic.keywords) if topic.kind == "bool" else None
     lines = units(rec.get("text", ""))
     out: list[Candidate] = []
@@ -107,6 +108,8 @@ def candidates_for(topic: Topic, rec: dict[str, Any], entity: EntityRecord) -> l
         if len(unit) < 12 or len(unit) > 420 or INJECTION.search(unit):
             continue
         if not keyword.search(unit) or (must and not must.search(unit)):
+            continue
+        if exclude and exclude.search(unit):
             continue
         near_name = mentions_name(unit, entity.canonical_name) or any(
             mentions_name(lines[j], entity.canonical_name) for j in (i - 1, i + 1) if 0 <= j < len(lines)
@@ -138,6 +141,74 @@ def season_of(quotes: list[str], title: str = "") -> str | None:
         blob,
     )
     return norm(m.group(0)) if m else None
+
+
+_MONEY = re.compile(r"[$€£¥]\s?(\d[\d,]*(?:\.\d{2})?)")
+_PRICE_LABEL = re.compile(
+    r"\b(adult|junior|senior|child|youth|teen|student|military|holiday|weekend|weekday|midweek|peak|"
+    r"half[- ]day|full[- ]day|twilight|night|\d+\s?(?:hour|hr)s?)\b",
+    re.IGNORECASE,
+)
+
+
+def _topic_values(topic: Topic, quote: str) -> set[str]:
+    """The value(s) one quote actually asserts for this topic.
+
+    Running a conflict pattern over whole sentences counts unrelated numbers on the same page as
+    disagreements about the fact. `terrain_stats` should compare the trail count, not the acreage
+    or summit elevation printed beside it, so the year/stat patterns win their own capture group
+    while the rest fall back to the first match.
+    """
+    if not topic.conflict_pattern:
+        return set()
+    if topic.key == "opening_year":
+        m = re.search(topic.conflict_pattern, quote, re.IGNORECASE)
+        return {m.group(1)} if m else set()
+    if topic.key == "terrain_stats":
+        m = re.search(r"\b(\d+)\s+(?:ski\s+)?(?:trails?|slopes?|runs?|pistes?)\b", quote, re.IGNORECASE)
+        return {m.group(1)} if m else set()
+    m = re.search(topic.conflict_pattern, quote, re.IGNORECASE)
+    return {m.group(1)} if m else set()
+
+
+def price_summary(quote: str) -> str | None:
+    """Condense a rate table into one readable price fact.
+
+    A resort publishes rates as a grid: "Weekday Adult $57.00 Weekday Junior & Senior $54.00 Weekend
+    Adult $90.00 ...". The reader wants the cheapest and dearest adult ticket with the day-type that
+    produced them, not a bare "from $57" that hides the weekend price.
+
+    The label is the run of tokens immediately BEFORE its price. Everything earlier in the string
+    belongs to previous rows, so only the tail between the prior amount and this one is read.
+    """
+    amount_re = re.compile(r"[$\u20ac\u00a3\u00a5]\s?(\d[\d,]*(?:\.\d{2})?)")
+    matches = list(amount_re.finditer(quote))
+    rows: list[tuple[str, float]] = []
+    prev_end = 0
+    for m in matches:
+        amount = float(m.group(1).replace(",", ""))
+        window = quote[prev_end:m.start()]
+        prev_end = m.end()
+        if not (5 <= amount <= 5000):
+            continue
+        labels = [lab.lower() for lab in _PRICE_LABEL.findall(window)]
+        # One day-type and one audience per row: "Weekday Adult", "Holiday Junior & Senior".
+        day = next((lab for lab in labels if lab in _DAY_TYPES), "")
+        who = next((lab for lab in labels if lab in _AUDIENCES), "")
+        rows.append((" ".join(p for p in (day, who) if p), amount))
+    if not rows:
+        return None
+    cheapest = min(rows, key=lambda r: r[1])
+    dearest = max(rows, key=lambda r: r[1])
+    if cheapest[1] == dearest[1]:
+        return f"${cheapest[1]:,.0f}" + (f" ({cheapest[0]})" if cheapest[0] else "")
+    low = f"{cheapest[0]} ${cheapest[1]:,.0f}" if cheapest[0] else f"from ${cheapest[1]:,.0f}"
+    high = f"{dearest[0]} ${dearest[1]:,.0f}" if dearest[0] and dearest[0] != cheapest[0] else f"up to ${dearest[1]:,.0f}"
+    return f"{low}, {high}"
+
+
+_DAY_TYPES = {"weekday", "weekend", "holiday", "midweek", "peak", "weekday non-holiday"}
+_AUDIENCES = {"adult", "junior", "senior", "child", "youth", "teen", "student", "military"}
 
 
 def _numbers(text: str) -> set[str]:
@@ -210,14 +281,29 @@ def build_fact(
         best.setdefault(c.source_id, c)
     ranked = sorted(best.values(), key=lambda c: (c.tier, -c.score))
     if topic.conflict_pattern:
+        # Compare only the values each source actually asserts for this topic. Running the pattern
+        # over every candidate sentence counts unrelated numbers on the same page (acreage, summit
+        # elevation, an unrelated founding year) as disagreements about the fact itself.
         seen: dict[str, Candidate] = {}
         for c in ranked:
             if c.tier > 3:
                 continue
-            m = re.search(topic.conflict_pattern, c.quote, re.IGNORECASE)
-            if m:
-                seen.setdefault(m.group(1), c)
+            values = _topic_values(topic, c.quote)
+            if len(values) != 1:
+                continue
+            seen.setdefault(next(iter(values)), c)
         if len(seen) > 1:
+            # Third-party aggregators routinely publish stale trail counts. When the resort's own
+            # site states one and outsiders state others, publish the resort's number and record
+            # the disagreement, rather than handing the writer a list and no answer.
+            official = {v: c for v, c in seen.items() if c.tier == 0}
+            if len(official) == 1:
+                value, chosen = next(iter(official.items()))
+                others = ", ".join(sorted(v for v in seen if v != value))
+                return _with_sources(
+                    base, registry, int(value) if value.isdigit() else value, "verified", [chosen],
+                    f"official site says {value}; other sources say {others}",
+                )
             return _with_sources(
                 base, registry, sorted(seen), "conflicting", list(seen.values()), "sources give different values"
             )
@@ -225,6 +311,13 @@ def build_fact(
         return _with_sources(base, registry, True, "verified", ranked[:2], "")
     # Several quotes from the top source help text topics, so refine over all positive candidates.
     pool = sorted(positive, key=lambda c: (c.tier, -c.score))
+    if topic.key == "lift_tickets":
+        # A rate table is a grid. Nothing in it reads as prose, and the model will paraphrase the
+        # "Check current specials" banner instead of the ticket prices, so summarise the numbers.
+        for c in pool:
+            summary = price_summary(c.quote)
+            if summary:
+                return _with_sources(base, registry, summary, "verified", [c], "rate table")
     value, used = refine_value(topic, pool, entity, llm)
     chosen = [pool[i] for i in used if i < len(pool)] or pool[:1]
     return _with_sources(base, registry, value, "verified", chosen[:3], "")

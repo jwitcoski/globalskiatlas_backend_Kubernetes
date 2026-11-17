@@ -49,12 +49,12 @@ def _place_query(name: str, state: str | None, country: str | None) -> str:
 
 
 def _wide_area(tier: str | None) -> bool:
-    return _tier_key(tier or "") in {"large", "mega"}
+    return _tier_key(tier or "") == "large"
 
 
 def _long_plate(tier: str | None) -> bool:
-    """Medium and up have enough page that a thin search runs out of facts."""
-    return _tier_key(tier or "") in {"medium", "large", "mega"}
+    """Medium and large pages need more than the every-resort record list."""
+    return _tier_key(tier or "") in {"medium", "large"}
 
 
 def dossier_queries(name: str, state: str | None, country: str | None, tier: str | None = None) -> list[str]:
@@ -75,9 +75,10 @@ def dossier_queries(name: str, state: str | None, country: str | None, tier: str
     queries.extend(reader_queries(name, state))
     queries.extend(record_queries(name, state))
     if _wide_area(tier):
-        queries.extend(mega_queries(name, state))
+        queries.extend(large_area_queries(name, state))
     if _long_plate(tier):
         queries.extend(depth_queries(name, state))
+        queries.append(f"{quoted} site:wikipedia.org ski")
     return queries
 
 
@@ -122,8 +123,8 @@ def record_queries(name: str, state: str | None = None) -> list[str]:
     ]
 
 
-def mega_queries(name: str, state: str | None = None) -> list[str]:
-    """Ten searches for a linked ski domain. Small hills do not need them."""
+def large_area_queries(name: str, state: str | None = None) -> list[str]:
+    """Searches for a linked ski domain. Small hills do not need them."""
     quoted = _search_name(name, state)
     return [
         f"{quoted} ski villages OR sectors OR \"linked to\" OR domain",
@@ -184,10 +185,65 @@ def followup_queries(
         queries.extend(reader_queries(name, state))
         queries.extend(record_queries(name, state))
         if _wide_area(tier):
-            queries.extend(mega_queries(name, state))
+            queries.extend(large_area_queries(name, state))
         if _long_plate(tier):
             queries.extend(depth_queries(name, state))
     return queries
+
+
+_TOPIC_QUERY = {
+    "year_started": '{q} ski opened OR founded OR established',
+    "history": '{q} ski history founded opened',
+    "pass": '{q} ski "ski pass" OR Epic OR Ikon OR "season pass"',
+    "passes": '{q} ski "ski pass" OR Epic OR Ikon OR "season pass"',
+    "public_or_private": '{q} ski club OR municipal OR private OR "not-for-profit"',
+    "who": '{q} ski beginners OR families OR members',
+    "setting": '{q} ski valley OR overlooks OR mountain',
+    "access": '{q} ski airport OR "km from" OR "drive from"',
+    "price": '{q} ski "lift ticket" OR "day pass" price',
+    "prices": '{q} ski "lift ticket" OR "day pass" price',
+    "lodging": '{q} ski lodging OR hotel OR "where to stay"',
+    "terrain": '{q} ski vertical OR trails OR terrain',
+    "lifts": '{q} ski chairlift OR gondola OR lifts',
+    "season": '{q} ski season opens OR closes OR snowmaking',
+    "school": '{q} ski school OR childcare',
+    "scene": '{q} ski restaurant OR village OR festival',
+    "food": '{q} ski restaurant OR dining',
+    "night": '{q} ski "night skiing"',
+    "people": '{q} ski racer OR champion OR olympic',
+    "rentals": '{q} ski rentals OR "rental shop" OR "snowboard rental"',
+    "ski_instructors": '{q} "ski school" OR "ski instructor" OR "ski lessons"',
+    "snowtubing": '{q} "snow tubing" OR "tube park"',
+}
+
+
+def topic_queries(
+    name: str,
+    state: str | None,
+    country: str | None,
+    topics: list[str],
+    *,
+    tier: str | None = None,
+) -> list[str]:
+    """One search per thin topic. Medium and large also ask for the Wikipedia page."""
+    quoted = _search_name(name, state)
+    out: list[str] = []
+    seen: set[str] = set()
+    for topic in topics:
+        template = _TOPIC_QUERY.get(topic)
+        if not template:
+            continue
+        query = template.format(q=quoted)
+        if query not in seen:
+            seen.add(query)
+            out.append(query)
+    if _long_plate(tier):
+        wiki = f"{quoted} site:wikipedia.org"
+        if wiki not in seen:
+            out.append(wiki)
+    if country and "year_started" in topics:
+        out.append(f"{quoted} {country} ski resort founded")
+    return out
 
 
 def add_web_snippets(snippets: list[dict[str, Any]], queries: list[str]) -> list[dict[str, Any]]:

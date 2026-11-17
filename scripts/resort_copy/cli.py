@@ -19,6 +19,15 @@ from .config import (
     DEFAULT_NUM_CTX,
     TIER_CHOICES,
     _cell,
+    output_path,
+)
+from .amenity_store import (
+    TABLE_NAME,
+    push_rows,
+)
+from .filters import (
+    filter_row_from_result,
+    upsert_filter_row,
 )
 from .key_points import (
     upsert_key_points,
@@ -71,8 +80,8 @@ def _round_robin(rows: list[dict[str, Any]], n: int) -> list[dict[str, Any]]:
     return picked
 
 
-# 50-resort mix: mostly the short plates, a few longer ones. Not fifty pages.
-_TEST_QUOTA: dict[str, int] = {"small": 18, "medium": 16, "large": 10, "mega": 6}
+# 50-resort mix across the three plates. There is no mega plate.
+_TEST_QUOTA: dict[str, int] = {"small": 18, "medium": 16, "large": 16}
 
 
 def pick_test_rows(rows: list[dict[str, Any]], n: int = 50) -> list[dict[str, Any]]:
@@ -131,7 +140,26 @@ def _print_key_points(points: dict[str, Any]) -> None:
             print(f"    {key}: {value['value']}", file=sys.stderr)
 
 
+def _dedupe_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One row per resort name and country. Germundo-style duplicates are dropped."""
+    seen: set[tuple[str, str]] = set()
+    kept: list[dict[str, Any]] = []
+    for row in rows:
+        name = (_resort_name(row) or "").strip().lower()
+        country = (_cell(row, "country") or "").strip().lower()
+        if not name:
+            continue
+        key = (name, country)
+        if key in seen:
+            print(f"dedupe skip {name}", file=sys.stderr)
+            continue
+        seen.add(key)
+        kept.append(row)
+    return kept
+
+
 def _finished_ids(path: Path) -> set[str]:
+    """Skip resorts that already finished or were rejected as placeholders."""
     done: set[str] = set()
     if not path.is_file():
         return done
@@ -143,8 +171,11 @@ def _finished_ids(path: Path) -> set[str]:
             item = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if item.get("ok") and item.get("winterSportsId"):
-            done.add(str(item["winterSportsId"]))
+        wid = item.get("winterSportsId")
+        if not wid:
+            continue
+        if item.get("ok") or item.get("status") in {"complete", "skipped"}:
+            done.add(str(wid))
     return done
 
 
@@ -206,7 +237,16 @@ def main() -> int:
     ap.add_argument("--model", default=DEFAULT_MODEL, help=f"Ollama model tag (default {DEFAULT_MODEL})")
     ap.add_argument("--search-model", default=None, help="Tag for search and outline. Defaults to --model.")
     ap.add_argument("--writer-model", default=None, help="Tag for the draft and the edit. Defaults to --model.")
-    ap.add_argument("--critic-model", default=None, help="Tag for the fact check. Defaults to --model.")
+    ap.add_argument(
+        "--critic-model",
+        default=None,
+        help="Optional LLM fact checker. Omit this to use the deterministic checker.",
+    )
+    ap.add_argument(
+        "--llm-critic",
+        action="store_true",
+        help="Run the model critic as well as the deterministic checker.",
+    )
     ap.add_argument("--num-ctx", type=int, default=DEFAULT_NUM_CTX, help="Context length; 4096 fits an 8B model on 8 GB")
     ap.add_argument("--timeout", type=float, default=180.0, help="Seconds to wait for each Ollama call")
     ap.add_argument("--snippet-limit", type=int, default=8, help="How many research snippets to send the fact agent")
@@ -257,6 +297,8 @@ def main() -> int:
                 chosen = chosen[: args.batch]
         else:
             chosen = pick_test_rows(rows, count)
+        chosen = _dedupe_rows(chosen)
+        critic_model = args.critic_model or (args.model if args.llm_critic else None)
         if args.dry_batch:
             for i, row in enumerate(chosen, start=1):
                 tier = bedrock.layout_tier_for_parquet_row(row)
@@ -265,9 +307,9 @@ def main() -> int:
                 print(f"{i:02d}\t{tier}\t{name}\t{place}")
             return 0
         out_path = args.out_jsonl or (
-            Path("output/ollama_resort_copy/pennsylvania_search.jsonl")
+            output_path("ollama_resort_copy", "pennsylvania_search.jsonl")
             if args.search_only and args.state
-            else Path("output/ollama_resort_copy/test50.jsonl")
+            else output_path("ollama_resort_copy", "test50.jsonl")
         )
         out_path.parent.mkdir(parents=True, exist_ok=True)
         done = _finished_ids(out_path)
@@ -287,49 +329,73 @@ def main() -> int:
             tier = bedrock.resolve_layout_tier(args.tier, row)
             t0 = time.time()
             print(f"[{index}/{len(chosen)}] {label} ({tier})", file=sys.stderr, flush=True)
-            try:
-                snippets = bedrock.gather_research_snippets(
-                    name=name,
-                    state=state,
-                    country=country,
-                    brave_api_key=brave_key,
-                    use_ddg=not args.no_ddg,
-                    parquet_row=row,
-                )
-                if not args.no_ddg:
-                    add_web_snippets(snippets, dossier_queries(name, state, country, tier))
-                result = run_passes(
-                    resort_label=label,
-                    snippets=snippets,
-                    tier=tier,
-                    base_url=base,
-                    model=args.model,
-                    num_ctx=args.num_ctx,
-                    timeout=args.timeout,
-                    snippet_limit=args.snippet_limit,
-                    name=name,
-                    state=state,
-                    country=country,
-                    use_ddg=not args.no_ddg,
-                    search_model=args.search_model,
-                    writer_model=args.writer_model,
-                    critic_model=args.critic_model,
-                    search_only=args.search_only,
-                )
-                result["ok"] = True
+            result: dict[str, Any] | None = None
+            last_error: Exception | None = None
+            for attempt in range(3):
+                try:
+                    snippets = bedrock.gather_research_snippets(
+                        name=name,
+                        state=state,
+                        country=country,
+                        brave_api_key=brave_key,
+                        use_ddg=not args.no_ddg,
+                        parquet_row=row,
+                    )
+                    if not args.no_ddg:
+                        add_web_snippets(snippets, dossier_queries(name, state, country, tier))
+                    result = run_passes(
+                        resort_label=label,
+                        snippets=snippets,
+                        tier=tier,
+                        base_url=base,
+                        model=args.model,
+                        num_ctx=args.num_ctx,
+                        timeout=args.timeout,
+                        snippet_limit=args.snippet_limit,
+                        name=name,
+                        state=state,
+                        country=country,
+                        use_ddg=not args.no_ddg,
+                        search_model=args.search_model,
+                        writer_model=args.writer_model,
+                        critic_model=critic_model,
+                        search_only=args.search_only,
+                    )
+                    break
+                except Exception as exc:
+                    last_error = exc
+                    print(f"    attempt {attempt + 1} failed: {exc}", file=sys.stderr, flush=True)
+                    if attempt < 2:
+                        time.sleep(2 ** attempt)
+            if result is None:
+                result = {
+                    "ok": False,
+                    "status": "failed",
+                    "winterSportsId": wid,
+                    "resort_label": label,
+                    "tier": tier,
+                    "error": str(last_error),
+                    "validation_errors": [],
+                    "short_reason": None,
+                    "unused_notes": [],
+                }
+                failed += 1
+            else:
                 result["winterSportsId"] = wid
                 result["pageId"] = bedrock.wiki_page_id_from_row(row)
-                if not args.search_only:
+                if result.get("final"):
                     result["contentMarkdown"] = bedrock.wiki_content_markdown_from_row(row, result["final"])
-                ok += 1
+                if result.get("status") == "complete":
+                    result["ok"] = True
+                    ok += 1
+                else:
+                    result["ok"] = False
+                    failed += 1
                 print(
-                    f"    {result.get('search_color_count', 0)} visit facts "
-                    f"plus anchors ({result.get('search_fact_count', 0)} notes)"
+                    f"    status={result.get('status')} facts={result.get('search_fact_count', 0)}"
                     + (
-                        f", {result['final_char_count']} characters"
-                        f" / {result['final_line_count']} lines"
-                        f" / {result['final_paragraph_count']} paragraphs"
-                        if not args.search_only
+                        f", {result.get('final_char_count')} characters"
+                        if result.get("final_char_count") is not None
                         else ""
                     )
                     + f" in {time.time() - t0:.0f}s",
@@ -338,16 +404,6 @@ def main() -> int:
                 )
                 if args.search_only:
                     _print_key_points(result.get("key_points") or {})
-            except Exception as exc:
-                result = {
-                    "ok": False,
-                    "winterSportsId": wid,
-                    "resort_label": label,
-                    "tier": tier,
-                    "error": str(exc),
-                }
-                failed += 1
-                print(f"    failed: {exc}", file=sys.stderr, flush=True)
             with out_path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(result, ensure_ascii=False) + "\n")
             if result.get("ok") and result.get("key_points"):
@@ -358,6 +414,20 @@ def main() -> int:
                         page_id=result.get("pageId"),
                     )
                 )
+            if result.get("filters"):
+                filter_record = filter_row_from_result(
+                    result,
+                    winter_sports_id=wid or None,
+                    page_id=result.get("pageId"),
+                    country=country,
+                    state=state,
+                )
+                upsert_filter_row(filter_record)
+                if os.environ.get("RESORT_AMENITY_PUSH") == "1" and filter_record.get("winterSportsId"):
+                    try:
+                        push_rows([filter_record], table_name=TABLE_NAME)
+                    except Exception as exc:
+                        print(f"    amenity table: {exc}", file=sys.stderr, flush=True)
             if args.delay_seconds > 0 and index < len(chosen):
                 time.sleep(args.delay_seconds)
         print(
@@ -396,8 +466,9 @@ def main() -> int:
         raise SystemExit("--tier auto needs -i and --name.")
     brave_key = (args.brave_api_key or os.environ.get("BRAVE_API_KEY") or "").strip() or None
     name = label.split(",")[0].strip()
+    critic_model = args.critic_model or (args.model if args.llm_critic else None)
     safe_name = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or "resort"
-    out_json = args.out_json or Path("output/ollama_resort_copy") / f"{safe_name}.json"
+    out_json = args.out_json or output_path("ollama_resort_copy") / f"{safe_name}.json"
     checkpoint_data: dict[str, Any] = {
         "status": "in_progress",
         "stage": "starting_research",
@@ -407,7 +478,7 @@ def main() -> int:
         "models": {
             "search": args.search_model or args.model,
             "writer": args.writer_model or args.model,
-            "critic": args.critic_model or args.model,
+            "critic": critic_model or "deterministic",
         },
         "progress": {},
     }
@@ -474,7 +545,7 @@ def main() -> int:
             use_ddg=not args.no_ddg,
             search_model=args.search_model,
             writer_model=args.writer_model,
-            critic_model=args.critic_model,
+            critic_model=critic_model,
             checkpoint=save_checkpoint,
         )
     except Exception as exc:
@@ -490,7 +561,8 @@ def main() -> int:
     if row is not None:
         result["winterSportsId"] = _cell(row, "winter_sports_id")
         result["pageId"] = bedrock.wiki_page_id_from_row(row)
-        result["contentMarkdown"] = bedrock.wiki_content_markdown_from_row(row, result["final"])
+        if result.get("final"):
+            result["contentMarkdown"] = bedrock.wiki_content_markdown_from_row(row, result["final"])
     if result.get("key_points"):
         upsert_key_points(
             key_point_record(
@@ -499,12 +571,29 @@ def main() -> int:
                 page_id=result.get("pageId"),
             )
         )
-    result["status"] = "complete"
-    result["stage"] = "complete"
+    if result.get("filters"):
+        filter_record = filter_row_from_result(
+            result,
+            winter_sports_id=result.get("winterSportsId"),
+            page_id=result.get("pageId"),
+            country=country,
+            state=state,
+        )
+        upsert_filter_row(filter_record)
+        if os.environ.get("RESORT_AMENITY_PUSH") == "1" and filter_record.get("winterSportsId"):
+            try:
+                push_rows([filter_record], table_name=TABLE_NAME)
+            except Exception as exc:
+                print(f"    amenity table: {exc}", file=sys.stderr)
+    result.setdefault("status", "complete")
+    result["stage"] = result["status"]
     if "progress" in checkpoint_data:
         result["progress"] = checkpoint_data["progress"]
     _write_json_checkpoint(out_json, result)
-    print(f"wrote {out_json}", file=sys.stderr)
+    print(f"wrote {out_json} ({result['status']})", file=sys.stderr)
+    if not result.get("final"):
+        print(result.get("error") or result["status"], file=sys.stderr)
+        return 0 if result["status"] == "skipped" else 1
     print(result["final"])
     goal_out = result["layout_goal"]
     print(

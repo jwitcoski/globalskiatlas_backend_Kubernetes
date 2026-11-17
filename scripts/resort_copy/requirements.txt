@@ -1,0 +1,2 @@
+# Resort-copy pipeline. The rest of the repo has its own requirements.txt.
+ddgs>=1.0.0

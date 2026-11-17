@@ -104,6 +104,14 @@ def list_models(base_url: str, timeout: float = 8.0) -> list[str]:
     return [str(m.get("name")) for m in payload.get("models") or [] if m.get("name")]
 
 
+class OllamaJsonError(RuntimeError):
+    """A model reply was not valid JSON after one repair attempt."""
+
+    def __init__(self, message: str, raw: str) -> None:
+        super().__init__(message)
+        self.raw = raw
+
+
 def _parse_json_loose(raw: str) -> dict[str, Any]:
     s = bedrock._strip_json_fence(raw)
     try:
@@ -126,34 +134,51 @@ def _chat_json(
     num_predict: int,
     num_ctx: int,
     timeout: float,
-    json_format: bool = False,
+    json_format: bool = True,
 ) -> dict[str, Any]:
-    raw = ollama_chat(
-        base_url=base_url,
-        model=model,
-        system_text=system_text,
-        user_text=user_text,
-        temperature=temperature,
-        num_predict=num_predict,
-        num_ctx=num_ctx,
-        timeout=timeout,
-        json_format=json_format,
-    )
-    try:
-        return _parse_json_loose(raw)
-    except json.JSONDecodeError:
-        raw = ollama_chat(
+    """Call the model in JSON mode, then one repair pass. Log the raw reply on failure."""
+
+    def _once(system: str, user: str, temp: float) -> str:
+        return ollama_chat(
             base_url=base_url,
             model=model,
-            system_text=system_text + " Reply was not JSON. Return only the JSON object.",
-            user_text=user_text,
-            temperature=0.0,
+            system_text=system,
+            user_text=user,
+            temperature=temp,
             num_predict=num_predict,
             num_ctx=num_ctx,
             timeout=timeout,
             json_format=json_format,
         )
+
+    raw = _once(system_text, user_text, temperature)
+    try:
         return _parse_json_loose(raw)
+    except json.JSONDecodeError as first_error:
+        print(
+            f"    json parse failed ({first_error}); raw follows\n{raw[:2000]}",
+            file=sys.stderr,
+            flush=True,
+        )
+        repair_user = (
+            user_text
+            + "\n\nThe previous reply was not valid JSON. Repair it. "
+            + "Return one JSON object and nothing else.\nBROKEN:\n"
+            + raw[:4000]
+        )
+        repaired = _once(system_text + " Return only a JSON object.", repair_user, 0.0)
+        try:
+            return _parse_json_loose(repaired)
+        except json.JSONDecodeError as second_error:
+            print(
+                f"    json repair failed ({second_error}); raw follows\n{repaired[:2000]}",
+                file=sys.stderr,
+                flush=True,
+            )
+            raise OllamaJsonError(
+                f"Ollama JSON parse failed after repair: {second_error}",
+                repaired,
+            ) from second_error
 
 
 def unload_model(base_url: str, model: str) -> None:

@@ -1,0 +1,8 @@
+{
+  "TableName": "atlas-ResortAmenities",
+  "BillingMode": "PAY_PER_REQUEST",
+  "Key": "winterSportsId",
+  "GSI": "pageId-index",
+  "Region": "us-east-1",
+  "Note": "Amenity flags only. Trail count, vertical drop, and lift count stay on the OSM and DEM table."
+}

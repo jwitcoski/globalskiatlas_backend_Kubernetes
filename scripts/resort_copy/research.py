@@ -41,7 +41,17 @@ from .sources import (
     http_get,
     now_iso,
 )
-from .topics import ATTRACTION_NAV, PASS_TOPIC, TOPIC_BY_KEY, TOPICS, Topic, max_rounds, queries_for
+from .topics import (
+    ATTRACTION_NAV,
+    PASS_TOPIC,
+    TOPIC_BY_KEY,
+    TOPICS,
+    Topic,
+    max_rounds,
+    nav_covers_topic,
+    nav_terms_for,
+    queries_for,
+)
 
 SearchFn = Callable[[str, int], list[dict[str, str]]]
 
@@ -321,13 +331,13 @@ def _fetch_navigation(entity: EntityRecord, registry: SourceRegistry, attraction
         if not host_in(host_of(url), entity.official_domain) or not text or len(text) > 60:
             continue
         label = f"{text} {url.rsplit('/', 2)[-1] if url.rstrip('/').count('/') > 2 else ''}".lower()
-        hits = sum(1 for t in TOPICS if re.search(t.keywords, label, re.IGNORECASE))
+        # A menu says "Ski & Snowboard", not "snowmaking": match the label against nav vocabulary,
+        # not against each topic's body-text keywords, or the site's best page is never fetched.
+        hits = max(1, nav_terms_for(label))
         term = next((a for a in ATTRACTION_NAV if a in label), None)
         if term:
             attractions[term] = url
-            hits += 1
-        if hits:
-            scored.append((hits, url, text))
+        scored.append((hits, url, text))
     scored.sort(key=lambda s: -s[0])
     seen: set[str] = set()
     for _hits, url, text in scored:

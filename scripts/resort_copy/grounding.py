@@ -51,7 +51,9 @@ def _strip_ungrounded(text: str, notes: list[dict[str, Any]], tier: str, name: s
             if any(n.rstrip(".,") not in {k.rstrip(".,") for k in known_nums} for n in nums):
                 continue
             words = _content_words(sentence)
-            if len(words) >= 5 and len(words & known) < 0.4 * len(words):
+            # A paraphrase can share few exact tokens. Only drop a sentence that
+            # barely overlaps the notes at all, so the page is not padded and not gutted.
+            if len(words) >= 8 and len(words & known) < 0.2 * len(words):
                 continue
             kept.append(sentence)
         if kept:

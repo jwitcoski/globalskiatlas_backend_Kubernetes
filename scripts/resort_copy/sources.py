@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import ssl
 import sys
 import time
 import urllib.error
@@ -58,6 +60,15 @@ _BOILERPLATE = re.compile(
     re.IGNORECASE,
 )
 
+# Definition-list rows and table cells are the shape price tables take. They are joined, not split.
+_PRICE_ROW = re.compile(r"[$€£¥]\s?\d|\b\d{1,4}\s?(?:USD|EUR|GBP|CHF|CAD|AUD|JPY|NOK|SEK)\b")
+_CELL_WORD = re.compile(r"[^A-Za-z0-9 ]")
+_ROW_END = re.compile(r"[.!?:;]$")
+
+# A JSON-LD block is a structured description of the resort. Its price lists and amenities are
+# machine-readable facts the visible HTML sometimes hides behind a widget.
+_LD_UNITS = re.compile(r'"description"\s*:\s*"((?:[^"\\]|\\.){40,700})"')
+
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -93,7 +104,13 @@ def canonicalize(url: str) -> str:
 
 
 class PageParser(HTMLParser):
-    """Title, canonical link, meta description, visible text blocks, and every anchor."""
+    """Title, canonical link, meta description, visible text blocks, every anchor, and JSON-LD.
+
+    A price table is published as nested definition lists: a term (``Weekday``/``Adult``) and a
+    definition (``$57.00``) in separate ``<dt>``/``<dd>`` elements. Splitting on every block tag
+    throws that pairing away, leaving a page of $0 that hides the resort's actual rates. Term and
+    definition cells are therefore buffered together and flushed as one row.
+    """
 
     _SKIP = {"script", "style", "noscript", "svg", "iframe", "template"}
     _CHROME = {"nav", "footer", "header", "aside", "form", "button", "select"}
@@ -109,17 +126,25 @@ class PageParser(HTMLParser):
         self.description = ""
         self.blocks: list[str] = []
         self.links: list[tuple[str, str]] = []
+        self.jsonld: list[str] = []
         self.script_count = 0
         self._buf: list[str] = []
         self._skip = 0
         self._chrome = 0
         self._in_title = False
+        self._in_ld = False
+        self._ld: list[str] = []
         self._anchor: list[Any] | None = None
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         a = dict(attrs)
         if tag == "script":
             self.script_count += 1
+            if "ld+json" in (a.get("type") or "").lower():
+                # JSON-LD is data, not prose: read it before the script skip drops it.
+                self._in_ld = True
+                self._ld = []
+                return
         if tag in self._SKIP:
             self._skip += 1
             return
@@ -136,9 +161,18 @@ class PageParser(HTMLParser):
             self._chrome += 1
             self._flush()
         elif tag in self._BLOCK:
-            self._flush()
+            self._flush(keep_rows=True)
 
     def handle_endtag(self, tag: str) -> None:
+        if tag == "script" and self._in_ld:
+            self._in_ld = False
+            body = "".join(self._ld).strip()
+            self._ld = []
+            if body:
+                self.jsonld.append(body)
+            if tag in self._SKIP:
+                self._skip = max(0, self._skip - 1)
+            return
         if tag in self._SKIP:
             self._skip = max(0, self._skip - 1)
             return
@@ -152,9 +186,12 @@ class PageParser(HTMLParser):
             self._chrome = max(0, self._chrome - 1)
             self._flush()
         elif tag in self._BLOCK:
-            self._flush()
+            self._flush(keep_rows=True)
 
     def handle_data(self, data: str) -> None:
+        if self._in_ld:
+            self._ld.append(data)
+            return
         if self._skip:
             return
         if self._in_title:
@@ -165,8 +202,14 @@ class PageParser(HTMLParser):
         if not self._chrome:
             self._buf.append(data)
 
-    def _flush(self) -> None:
+    def _flush(self, keep_rows: bool = False) -> None:
         text = re.sub(r"\s+", " ", " ".join(self._buf)).strip()
+        if keep_rows and text and len(text) < 220 and not _ROW_END.search(text):
+            # Nothing closes a definition-list row: "Weekday" and "Adult" arrive as separate
+            # blocks, and the price follows in a third. Hold short, punctuation-free cells open
+            # so the label and its value land in one block.
+            if _CELL_WORD.sub("", text) == "" or len(text.split()) <= 4:
+                return
         self._buf = []
         if text:
             self.blocks.append(text)
@@ -185,6 +228,17 @@ def parse_page(html: str, base_url: str) -> dict[str, Any]:
         pass
     seen: set[str] = set()
     blocks: list[str] = []
+    # The structured description is the resort writing its own summary. It leads the text.
+    for payload in parser.jsonld:
+        for raw in _LD_UNITS.findall(payload):
+            try:
+                line = json.loads(f'"{raw}"')
+            except json.JSONDecodeError:
+                continue
+            line = re.sub(r"\s+", " ", line).strip()
+            if len(line) >= 40 and line.lower() not in seen:
+                seen.add(line.lower())
+                blocks.append(line)
     for block in ([parser.description] if parser.description else []) + parser.blocks:
         if len(block) < 12 or len(block.split()) < 2 or _BOILERPLATE.search(block):
             continue
@@ -217,6 +271,29 @@ def parse_page(html: str, base_url: str) -> dict[str, Any]:
 # ----- HTTP ---------------------------------------------------------------------------------------------------
 
 
+_SSL_CONTEXT: ssl.SSLContext | None = None
+
+
+def _ssl_context() -> ssl.SSLContext:
+    """A trust store that works off the Windows registry too.
+
+    Python's bundled `ssl` on Windows only reads the system store when `certifi` is absent; when
+    `certifi` is installed but `SSL_CERT_FILE` is unset, urllib can fail every HTTPS request with
+    `CERTIFICATE_VERIFY_FAILED`. That failure is silent here (it becomes `fetch_status: failed`),
+    which quietly degrades the whole pipeline to search blurbs. Prefer `certifi` when available.
+    """
+    global _SSL_CONTEXT
+    if _SSL_CONTEXT is not None:
+        return _SSL_CONTEXT
+    try:
+        import certifi  # type: ignore
+
+        _SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        _SSL_CONTEXT = ssl.create_default_context()
+    return _SSL_CONTEXT
+
+
 @dataclass
 class HttpResult:
     status_code: int | None = None
@@ -229,7 +306,7 @@ class HttpResult:
 def http_get(url: str, timeout: float = 15.0) -> HttpResult:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout, context=_ssl_context()) as resp:
             raw = resp.read(2_500_000)
             ctype = resp.headers.get("Content-Type") or ""
             charset = resp.headers.get_content_charset() or "utf-8"
@@ -466,7 +543,9 @@ class SourceRegistry:
         text = page["text"]
         if CHALLENGE_MARKERS.search(text[:1500]) and len(text) < 1500:
             return self._store(url, res, page, "blocked", reason, topic)
-        if len(text) < 200:
+        # A page that states one fact per row is short but still evidence. Only treat a page as
+        # contentless when it produced no usable block at all; JSON-LD alone is enough to keep it.
+        if not text.strip():
             js = page["script_count"] >= 5 or re.search(r"__NEXT_DATA__|id=\"(?:root|app|__nuxt)\"|ng-app", res.body[:200000])
             return self._store(url, res, page, "js_dependent" if js else "empty", reason, topic)
         return self._store(url, res, page, "ok", reason, topic)

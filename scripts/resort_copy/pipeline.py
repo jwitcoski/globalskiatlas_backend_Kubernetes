@@ -9,7 +9,6 @@ from . import bedrock
 
 from .config import (
     PAGE_KEY_POINT_CHARS,
-    REQUIRED_TOPICS,
     SEARCH_SYSTEM_TOKENS,
     TIER_BEATS,
     TIER_NOTE_CAP,
@@ -18,6 +17,11 @@ from .config import (
     TIER_SNIPPETS,
     _tier_key,
     fact_min_for,
+    search_retries_for,
+)
+from .filters import (
+    filter_row,
+    missing_amenity_topics,
 )
 from .key_points import (
     assemble_key_points,
@@ -30,7 +34,7 @@ from .notes import (
 )
 from .queries import (
     add_web_snippets,
-    followup_queries,
+    topic_queries,
 )
 from .snippets import (
     _keep_grounded,
@@ -40,12 +44,21 @@ from .snippets import (
 from .web_fetch import (
     fetch_resort_pages,
 )
+from .validators import (
+    is_placeholder_name,
+    sanitize_notes,
+    section_for_note,
+    short_reason_for,
+    unused_notes,
+)
 from .writing import (
     _reader_fixes,
-    critique_draft,
+    critique_for_draft,
     edit_draft,
-    extend_draft,
+    finish_prose,
+    length_control_loop,
     outline_beats,
+    produce_draft,
     write_draft,
 )
 
@@ -69,8 +82,11 @@ def _extract_notes(
     note_cap: int | None = None,
     checkpoint: CheckpointCallback | None = None,
     search_phase: str = "initial",
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
-    trimmed = _select_snippets(snippets, limit=snippet_limit, chars=650, name=name, state=state)
+    validation_errors: list[dict[str, str]] | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any], int]:
+    trimmed, dropped = _select_snippets(
+        snippets, limit=snippet_limit, chars=650, name=name, state=state, country=country
+    )
     page_cache = {} if page_cache is None else page_cache
     page_facts: list[dict[str, Any]] = []
     for page in trimmed:
@@ -117,7 +133,7 @@ def _extract_notes(
         shown.pop()
         block = bedrock.format_snippets_for_prompt(shown)
     if not block:
-        return trimmed, [], {}
+        return trimmed, [], {}, dropped
     print(
         f"search: {len(shown)} sources ({sum(1 for s in trimmed if s.get('fetched'))} read in full, "
         f"{len(page_facts)} page facts), {len(block)} characters, context {num_ctx}",
@@ -147,8 +163,45 @@ def _extract_notes(
         ),
     )
     notes = _keep_grounded(notes, trimmed, resort_name=name)
+    notes, errors = sanitize_notes(notes, name=name, snippets=trimmed)
+    if validation_errors is not None:
+        validation_errors.extend(errors)
     points = assemble_key_points(notes, raw_points, trimmed, name)
-    return trimmed, notes, points
+    return trimmed, notes, points, dropped
+
+
+def _gap_topics(notes: list[dict[str, Any]]) -> list[str]:
+    gaps = list(_missing_topics(notes))
+    have = {section_for_note(note) for note in notes}
+    for section in (
+        "history",
+        "access",
+        "terrain",
+        "prices",
+        "passes",
+        "lodging",
+        "scene",
+        "who",
+        "season",
+        "school",
+    ):
+        if section not in have:
+            gaps.append(section)
+    return gaps
+
+
+def _research_view(snippets: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": s.get("id"),
+            "source": s.get("source"),
+            "title": s.get("title"),
+            "url": s.get("url"),
+            "read_in_full": bool(s.get("fetched")),
+            "text": s.get("text"),
+        }
+        for s in snippets
+    ]
 
 
 def run_passes(
@@ -173,13 +226,30 @@ def run_passes(
 ) -> dict[str, Any]:
     search_model = search_model or model
     writer_model = writer_model or model
-    critic_model = critic_model or model
+    use_llm_critic = bool(critic_model) and critic_model not in {"deterministic", "none"}
+    critic_label = critic_model if use_llm_critic else "deterministic"
     print(
-        f"models search={search_model} writer={writer_model} critic={critic_model}",
+        f"models search={search_model} writer={writer_model} critic={critic_label}",
         file=sys.stderr,
         flush=True,
     )
+    placeholder, why = is_placeholder_name(name)
+    if placeholder:
+        return {
+            "resort_label": resort_label,
+            "tier": _tier_key(tier),
+            "status": "skipped",
+            "error": why,
+            "ok": False,
+            "notes": [],
+            "validation_errors": [{"topic": "name", "reason": why, "text": name}],
+            "short_reason": None,
+            "unused_notes": [],
+        }
     fact_min = fact_min_for(tier)
+    stage_timings: dict[str, float] = {}
+    validation_errors: list[dict[str, str]] = []
+    snippets_dropped = 0
     limit = max(snippet_limit, TIER_SNIPPETS.get(_tier_key(tier), 10))
     if not bedrock.format_snippets_for_prompt(snippets):
         raise RuntimeError("No research snippets.")
@@ -208,56 +278,10 @@ def run_passes(
         )
     page_cache: dict[str, list[dict[str, Any]]] = {}
     note_cap = TIER_NOTE_CAP.get(_tier_key(tier), fact_min)
-    trimmed, notes, key_points = _extract_notes(
-        snippets,
-        resort_label=resort_label,
-        name=name,
-        state=state,
-        country=country,
-        fact_min=fact_min,
-        snippet_limit=limit,
-        base_url=base_url,
-        model=search_model,
-        num_ctx=search_ctx,
-        timeout=timeout,
-        page_cache=page_cache,
-        note_cap=note_cap,
-        checkpoint=checkpoint,
-    )
-    gaps = _missing_topics(notes)
-    need_color = len(_color_notes(notes)) < fact_min
-    if use_ddg and (need_color or gaps):
-        extra_queries = followup_queries(
-            name, state, country, gaps, need_color=need_color, tier=tier
-        )
-        print(
-            f"follow-up search: {len(extra_queries)} queries",
-            file=sys.stderr,
-            flush=True,
-        )
-        add_web_snippets(snippets, extra_queries)
-        if checkpoint is not None:
-            checkpoint(
-                "followup_research_complete",
-                {
-                    "progress": {
-                        "followup_research_snippets": [
-                            {
-                                "id": s.get("id"),
-                                "source": s.get("source"),
-                                "title": s.get("title"),
-                                "url": s.get("url"),
-                                "read_in_full": bool(s.get("fetched")),
-                                "text": s.get("text"),
-                            }
-                            for s in snippets
-                        ]
-                    }
-                },
-            )
-        print("follow-up search complete; extracting notes again", file=sys.stderr, flush=True)
-        read += fetch_resort_pages(snippets, name=name, state=state, limit=page_limit)
-        trimmed_again, notes_again, points_again = _extract_notes(
+
+    def _pull(phase: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any], int]:
+        started = time.time()
+        pulled = _extract_notes(
             snippets,
             resort_label=resort_label,
             name=name,
@@ -272,21 +296,38 @@ def run_passes(
             page_cache=page_cache,
             note_cap=note_cap,
             checkpoint=checkpoint,
-            search_phase="followup",
+            search_phase=phase,
+            validation_errors=validation_errors,
         )
-        again_score = (
-            len(REQUIRED_TOPICS) - len(_missing_topics(notes_again)),
-            len(_color_notes(notes_again)),
+        stage_timings[phase] = round(time.time() - started, 2)
+        print(f"    {phase}: {stage_timings[phase]}s, {len(pulled[1])} notes", file=sys.stderr, flush=True)
+        return pulled
+
+    trimmed, notes, key_points, dropped = _pull("initial")
+    snippets_dropped += dropped
+    gaps = _gap_topics(notes)
+    amenity_gaps = missing_amenity_topics(notes, trimmed, key_points)
+    attempts = 0
+    while use_ddg and attempts < search_retries_for(tier) and (len(notes) < fact_min or amenity_gaps):
+        attempts += 1
+        extra_queries = topic_queries(
+            name, state, country, list(dict.fromkeys([*gaps, *amenity_gaps])), tier=tier
         )
-        kept_score = (
-            len(REQUIRED_TOPICS) - len(gaps),
-            len(_color_notes(notes)),
-        )
-        if again_score >= kept_score:
-            trimmed = trimmed_again
-            notes = notes_again
-            key_points = points_again
-            gaps = _missing_topics(notes)
+        print(f"topic search {attempts}: {len(extra_queries)} queries for {gaps}", file=sys.stderr, flush=True)
+        before = len(snippets)
+        add_web_snippets(snippets, extra_queries)
+        if len(snippets) == before:
+            print("topic search added no new snippets", file=sys.stderr, flush=True)
+            break
+        if checkpoint is not None:
+            checkpoint("followup_research_complete", {"progress": {"followup_research_snippets": _research_view(snippets)}})
+        read += fetch_resort_pages(snippets, name=name, state=state, limit=page_limit)
+        trimmed_again, notes_again, points_again, dropped_again = _pull(f"retry_{attempts}")
+        snippets_dropped += dropped_again
+        if len(notes_again) >= len(notes):
+            trimmed, notes, key_points = trimmed_again, notes_again, points_again
+        gaps = _gap_topics(notes)
+        amenity_gaps = missing_amenity_topics(notes, trimmed, key_points)
     if checkpoint is not None:
         checkpoint(
             "search_complete",
@@ -297,20 +338,76 @@ def run_passes(
                 "search_gaps": gaps,
                 "notes": notes,
                 "key_points": key_points,
+                "validation_errors": validation_errors,
+                "snippets_dropped": snippets_dropped,
             },
         )
-    if not notes:
-        raise RuntimeError("Search pass returned no grounded notes.")
+    filters = filter_row(
+        resort=resort_label,
+        tier=_tier_key(tier),
+        country=country,
+        state=state,
+        notes=notes,
+        snippets=trimmed,
+        key_points=key_points,
+    )
+    if len(notes) < fact_min:
+        return {
+            "resort_label": resort_label,
+            "tier": _tier_key(tier),
+            "status": "insufficient_data",
+            "error": (
+                f"{len(notes)} valid facts is below the {fact_min} fact minimum for {_tier_key(tier)} "
+                f"after {attempts} extra searches"
+            ),
+            "ok": False,
+            "layout_goal": {
+                "paragraphs": list(bedrock.copy_goal_for_tier(tier).paragraphs),
+                "lines": list(bedrock.copy_goal_for_tier(tier).lines),
+                "characters": list(bedrock.copy_goal_for_tier(tier).characters),
+            },
+            "models": {
+                "search": search_model,
+                "outline": search_model,
+                "writer": writer_model,
+                "critic": critic_label,
+                "editor": writer_model,
+            },
+            "host": base_url,
+            "search_fact_min": fact_min,
+            "search_fact_count": len(notes),
+            "search_color_count": len(_color_notes(notes)),
+            "search_gaps": gaps,
+            "search_attempts": attempts,
+            "notes": notes,
+            "key_points": key_points,
+            "validation_errors": validation_errors,
+            "snippets_dropped": snippets_dropped,
+            "stage_timings": stage_timings,
+            "short_reason": None,
+            "unused_notes": [],
+            "filters": filters,
+            "snippets": _research_view(trimmed),
+        }
     if search_only:
         return {
             "resort_label": resort_label,
             "tier": tier,
+            "status": "complete",
+            "ok": True,
             "model": search_model,
             "host": base_url,
             "search_fact_min": fact_min,
             "search_fact_count": len(notes),
             "search_color_count": len(_color_notes(notes)),
             "search_gaps": gaps,
+            "search_attempts": attempts,
+            "validation_errors": validation_errors,
+            "snippets_dropped": snippets_dropped,
+            "stage_timings": stage_timings,
+            "short_reason": None,
+            "unused_notes": [],
+            "filters": filters,
             "notes": notes,
             "key_points": key_points,
             "snippets": [
@@ -330,9 +427,10 @@ def run_passes(
     beat_cap = TIER_BEATS.get(_tier_key(tier), 5)
     page_ctx = num_ctx
     if _tier_key(tier) == "large":
-        page_ctx = max(num_ctx, 12288)
+        page_ctx = max(num_ctx, 8192)
     elif _tier_key(tier) == "medium":
         page_ctx = max(num_ctx, 8192)
+    started = time.time()
     beats = outline_beats(
         notes,
         resort_label=resort_label,
@@ -342,10 +440,12 @@ def run_passes(
         num_ctx=page_ctx,
         timeout=timeout,
     )
+    stage_timings["outline"] = round(time.time() - started, 2)
     if checkpoint is not None:
         checkpoint("outline_complete", {"outline": beats})
     print("write: starting", file=sys.stderr, flush=True)
-    draft = write_draft(
+    started = time.time()
+    draft = produce_draft(
         notes,
         beats,
         resort_label=resort_label,
@@ -354,37 +454,60 @@ def run_passes(
         model=writer_model,
         num_ctx=page_ctx,
         timeout=timeout,
+        name=name,
     )
+    if not draft.strip():
+        draft = write_draft(
+            notes,
+            beats,
+            resort_label=resort_label,
+            tier=tier,
+            base_url=base_url,
+            model=writer_model,
+            num_ctx=page_ctx,
+            timeout=timeout,
+        )
+    draft = finish_prose(draft, notes, name=name, country=country, state=state, tier=tier)
+    stage_timings["draft"] = round(time.time() - started, 2)
     if checkpoint is not None:
         checkpoint("draft_complete", {"draft": draft})
     print("critique: starting", file=sys.stderr, flush=True)
-    critique = critique_draft(
+    started = time.time()
+    critique = critique_for_draft(
         draft,
         notes,
         tier=tier,
+        name=name,
+        country=country,
+        state=state,
         base_url=base_url,
         model=critic_model,
         num_ctx=page_ctx,
         timeout=timeout,
+        use_llm=use_llm_critic,
     )
     critique["fixes"] = list(critique.get("fixes") or []) + _reader_fixes(draft, notes, name)
+    stage_timings["critique"] = round(time.time() - started, 2)
     if checkpoint is not None:
         checkpoint("critique_complete", {"critique": critique})
-    final = edit_draft(
-        draft,
-        notes,
-        critique,
-        resort_label=resort_label,
-        tier=tier,
-        base_url=base_url,
-        model=writer_model,
-        num_ctx=page_ctx,
-        timeout=timeout,
-    )
-    if checkpoint is not None:
-        checkpoint("edit_complete", {"final": final})
-    print("edit/extend: starting", file=sys.stderr, flush=True)
-    final = extend_draft(
+    started = time.time()
+    if critique.get("fixes"):
+        final = edit_draft(
+            draft,
+            notes,
+            critique,
+            resort_label=resort_label,
+            tier=tier,
+            base_url=base_url,
+            model=writer_model,
+            num_ctx=page_ctx,
+            timeout=timeout,
+        )
+    else:
+        final = draft
+    final = finish_prose(final, notes, name=name, country=country, state=state, tier=tier)
+    print("length: starting", file=sys.stderr, flush=True)
+    final, short_reason, leftover = length_control_loop(
         final,
         notes,
         resort_label=resort_label,
@@ -394,12 +517,21 @@ def run_passes(
         num_ctx=page_ctx,
         timeout=timeout,
     )
+    final = finish_prose(final, notes, name=name, country=country, state=state, tier=tier)
+    if short_reason_for(final, notes, tier) is None:
+        short_reason = None
+    else:
+        short_reason = short_reason or short_reason_for(final, notes, tier)
+    leftover = unused_notes(final, notes)
+    stage_timings["edit"] = round(time.time() - started, 2)
     if checkpoint is not None:
-        checkpoint("extend_complete", {"final": final})
+        checkpoint("extend_complete", {"final": final, "short_reason": short_reason})
     measured = bedrock.measure_copy(final, tier)
     result = {
         "resort_label": resort_label,
-        "tier": tier,
+        "tier": _tier_key(tier),
+        "status": "complete",
+        "ok": True,
         "layout_goal": {
             "paragraphs": list(goal.paragraphs),
             "lines": list(goal.lines),
@@ -410,7 +542,7 @@ def run_passes(
             "search": search_model,
             "outline": search_model,
             "writer": writer_model,
-            "critic": critic_model,
+            "critic": critic_label,
             "editor": writer_model,
         },
         "host": base_url,
@@ -418,6 +550,7 @@ def run_passes(
         "search_fact_count": len(notes),
         "search_color_count": len(_color_notes(notes)),
         "search_gaps": gaps,
+        "search_attempts": attempts,
         "notes": notes,
         "key_points": key_points,
         "outline": beats,
@@ -428,6 +561,12 @@ def run_passes(
         "final_char_count": measured["characters"],
         "final_line_count": measured["lines"],
         "final_paragraph_count": measured["paragraphs"],
+        "short_reason": short_reason,
+        "unused_notes": [item.get("text") for item in leftover],
+        "validation_errors": validation_errors,
+        "snippets_dropped": snippets_dropped,
+        "stage_timings": stage_timings,
+        "filters": filters,
         "snippets": [
             {
                     "id": s.get("id"),
@@ -451,4 +590,5 @@ def key_point_record(result: dict[str, Any], *, winter_sports_id: str | None, pa
         "resort": result.get("resort_label"),
         "tier": result.get("tier"),
         "key_points": result.get("key_points") or {},
+        "filters": result.get("filters") or {},
     }
