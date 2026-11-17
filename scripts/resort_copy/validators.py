@@ -447,6 +447,16 @@ def deterministic_critique(
     }
 
 
+def note_chars(notes: list[dict[str, Any]]) -> int:
+    """Characters of note text the writer can actually draw on."""
+    return sum(len(str(note.get("text") or "").strip()) for note in notes)
+
+
+def note_char_target(tier: str) -> int:
+    """Upper print-column size. Search keeps going until the notes reach it."""
+    return int(bedrock.copy_goal_for_tier(tier).characters[1])
+
+
 def short_reason_for(text: str, notes: list[dict[str, Any]], tier: str) -> str | None:
     report = length_report(text, tier)
     if not report["short"]:

@@ -17,12 +17,15 @@ from resort_copy.config import TIER_FACT_MIN, fact_min_for  # noqa: E402
 from resort_copy.ollama_client import _parse_json_loose  # noqa: E402
 from resort_copy.queries import large_area_queries, topic_queries  # noqa: E402
 from resort_copy.snippets import _drop_pages_about_other_places, _select_snippets  # noqa: E402
+from resort_copy.notes import _salvage_bullets  # noqa: E402
 from resort_copy.validators import (  # noqa: E402
     deterministic_critique,
     distance_has_unit,
     drop_foreign_sentences,
     is_placeholder_name,
     length_report,
+    note_char_target,
+    note_chars,
     opening_year,
     ownership_kind,
     paragraph_budgets,
@@ -156,6 +159,22 @@ class LengthAndCriticTests(unittest.TestCase):
         report = length_report("A short page about the hill.", "small")
         self.assertTrue(report["short"])
         self.assertLess(report["character_pct"], 100)
+
+    def test_note_target_is_the_upper_plate(self) -> None:
+        self.assertEqual(note_char_target("small"), 1650)
+        self.assertEqual(note_char_target("medium"), 4050)
+        self.assertEqual(note_char_target("large"), 8100)
+        self.assertEqual(note_chars([{"text": "abc"}, {"text": " de "}]), 5)
+
+    def test_cut_off_bullet_list_keeps_complete_items(self) -> None:
+        raw = (
+            '{"bullets":['
+            '{"topic":"price","text":"Adult day ticket is $89.","snippet_ids":["D1"]},'
+            '{"topic":"season","text":"The season opens in December'
+        )
+        kept = _salvage_bullets(raw)
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(kept[0]["text"], "Adult day ticket is $89.")
 
     def test_distance_contradiction_is_rewritten_from_notes(self) -> None:
         notes = [{"topic": "access", "text": "Mount Buller is 248 km from Melbourne."}]

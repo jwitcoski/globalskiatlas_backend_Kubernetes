@@ -50,6 +50,8 @@ from .validators import (
     section_for_note,
     short_reason_for,
     unused_notes,
+    note_char_target,
+    note_chars,
 )
 from .writing import (
     _reader_fixes,
@@ -63,6 +65,16 @@ from .writing import (
 )
 
 CheckpointCallback = Callable[[str, dict[str, Any]], None]
+
+# Extra searches while the notes are still shorter than the upper print size.
+_CHAR_FILL: tuple[tuple[str, ...], ...] = (
+    ("price", "season", "school"),
+    ("history", "access", "lodging"),
+    ("food", "night", "rentals"),
+    ("snowtubing", "ski_instructors", "people"),
+    ("pass", "who", "scene"),
+    ("year_started", "public_or_private", "terrain"),
+)
 
 
 def _extract_notes(
@@ -247,6 +259,7 @@ def run_passes(
             "unused_notes": [],
         }
     fact_min = fact_min_for(tier)
+    char_target = note_char_target(tier)
     stage_timings: dict[str, float] = {}
     validation_errors: list[dict[str, str]] = []
     snippets_dropped = 0
@@ -277,7 +290,7 @@ def run_passes(
             },
         )
     page_cache: dict[str, list[dict[str, Any]]] = {}
-    note_cap = TIER_NOTE_CAP.get(_tier_key(tier), fact_min)
+    note_cap = max(TIER_NOTE_CAP.get(_tier_key(tier), fact_min), char_target // 60)
 
     def _pull(phase: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any], int]:
         started = time.time()
@@ -300,7 +313,11 @@ def run_passes(
             validation_errors=validation_errors,
         )
         stage_timings[phase] = round(time.time() - started, 2)
-        print(f"    {phase}: {stage_timings[phase]}s, {len(pulled[1])} notes", file=sys.stderr, flush=True)
+        print(
+            f"    {phase}: {stage_timings[phase]}s, {len(pulled[1])} notes, {note_chars(pulled[1])} note characters",
+            file=sys.stderr,
+            flush=True,
+        )
         return pulled
 
     trimmed, notes, key_points, dropped = _pull("initial")
@@ -308,12 +325,21 @@ def run_passes(
     gaps = _gap_topics(notes)
     amenity_gaps = missing_amenity_topics(notes, trimmed, key_points)
     attempts = 0
-    while use_ddg and attempts < search_retries_for(tier) and (len(notes) < fact_min or amenity_gaps):
+    while use_ddg and attempts < search_retries_for(tier) and (
+        len(notes) < fact_min or amenity_gaps or note_chars(notes) < char_target
+    ):
         attempts += 1
-        extra_queries = topic_queries(
-            name, state, country, list(dict.fromkeys([*gaps, *amenity_gaps])), tier=tier
+        before_chars = note_chars(notes)
+        asked = list(dict.fromkeys([*gaps, *amenity_gaps]))
+        if note_chars(notes) < char_target:
+            asked.extend(_CHAR_FILL[attempts % len(_CHAR_FILL)])
+        extra_queries = topic_queries(name, state, country, asked, tier=tier)
+        print(
+            f"topic search {attempts}: {len(extra_queries)} queries, "
+            f"{before_chars}/{char_target} note characters",
+            file=sys.stderr,
+            flush=True,
         )
-        print(f"topic search {attempts}: {len(extra_queries)} queries for {gaps}", file=sys.stderr, flush=True)
         before = len(snippets)
         add_web_snippets(snippets, extra_queries)
         if len(snippets) == before:
@@ -324,10 +350,13 @@ def run_passes(
         read += fetch_resort_pages(snippets, name=name, state=state, limit=page_limit)
         trimmed_again, notes_again, points_again, dropped_again = _pull(f"retry_{attempts}")
         snippets_dropped += dropped_again
-        if len(notes_again) >= len(notes):
+        if note_chars(notes_again) >= before_chars:
             trimmed, notes, key_points = trimmed_again, notes_again, points_again
         gaps = _gap_topics(notes)
         amenity_gaps = missing_amenity_topics(notes, trimmed, key_points)
+        if note_chars(notes) <= before_chars:
+            print("topic search added no new note text", file=sys.stderr, flush=True)
+            break
     if checkpoint is not None:
         checkpoint(
             "search_complete",

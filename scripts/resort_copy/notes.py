@@ -23,7 +23,21 @@ from .snippets import (
 )
 
 
-def _note_from_item(topic: str, item: dict[str, Any]) -> dict[str, Any] | None:
+def _salvage_bullets(raw: str) -> list[dict[str, Any]]:
+    """Keep every complete bullet from a reply that was cut off mid-JSON."""
+    found: list[dict[str, Any]] = []
+    pattern = re.compile(
+        r'\{\s*"topic"\s*:\s*"([^"]+)"\s*,\s*"text"\s*:\s*"((?:\\.|[^"\\])*)"\s*,\s*"snippet_ids"\s*:\s*(\[[^\]]*\])\s*\}'
+    )
+    for match in pattern.finditer(raw or ""):
+        try:
+            text = json.loads('"' + match.group(2) + '"')
+            ids = json.loads(match.group(3))
+        except json.JSONDecodeError:
+            continue
+        if isinstance(text, str) and text.strip():
+            found.append({"topic": match.group(1), "text": text.strip(), "snippet_ids": ids if isinstance(ids, list) else []})
+    return found
     text = str(item.get("text") or "").strip()
     if not text or text.lower().startswith("not found"):
         return None
@@ -320,7 +334,13 @@ def search_notes(
                 timeout=timeout,
             )
         except (RuntimeError, json.JSONDecodeError) as exc:
-            print(f"  search {label} failed: {exc}", file=sys.stderr, flush=True)
+            raw = getattr(exc, "raw", "")
+            salvaged = _salvage_bullets(raw) if label == "bullets" else []
+            if salvaged:
+                payload["bullets"] = salvaged
+                print(f"  search {label}: kept {len(salvaged)} bullets from a cut-off reply", file=sys.stderr, flush=True)
+            else:
+                print(f"  search {label} failed: {exc}", file=sys.stderr, flush=True)
             continue
         print(f"  search {label}: {time.time() - started:.0f}s", file=sys.stderr, flush=True)
         merged = {**payload.get("key_points", {}), **(part.get("key_points") or {})} if "key_points" in part else None

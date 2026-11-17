@@ -5,11 +5,11 @@
       "lines": [20, 22],
       "characters": [1450, 1650],
       "search_fact_min": 6,
-      "note_cap": 16,
+      "note_cap": 28,
       "snippets": 16,
       "pages": 4,
       "beats": 8,
-      "search_retries": 2,
+      "search_retries": 4,
       "section_writing": false
     },
     "medium": {
@@ -17,11 +17,11 @@
       "lines": [55, 60],
       "characters": [3700, 4050],
       "search_fact_min": 22,
-      "note_cap": 40,
+      "note_cap": 70,
       "snippets": 36,
       "pages": 8,
       "beats": 16,
-      "search_retries": 2,
+      "search_retries": 5,
       "section_writing": true
     },
     "large": {
@@ -29,11 +29,11 @@
       "lines": [110, 120],
       "characters": [7400, 8100],
       "search_fact_min": 45,
-      "note_cap": 70,
+      "note_cap": 140,
       "snippets": 48,
       "pages": 12,
       "beats": 24,
-      "search_retries": 3,
+      "search_retries": 6,
       "section_writing": true
     }
   },
