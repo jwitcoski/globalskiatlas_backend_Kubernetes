@@ -350,13 +350,17 @@ def run_passes(
         read += fetch_resort_pages(snippets, name=name, state=state, limit=page_limit)
         trimmed_again, notes_again, points_again, dropped_again = _pull(f"retry_{attempts}")
         snippets_dropped += dropped_again
+        grew = note_chars(notes_again) > before_chars
         if note_chars(notes_again) >= before_chars:
             trimmed, notes, key_points = trimmed_again, notes_again, points_again
         gaps = _gap_topics(notes)
         amenity_gaps = missing_amenity_topics(notes, trimmed, key_points)
-        if note_chars(notes) <= before_chars:
-            print("topic search added no new note text", file=sys.stderr, flush=True)
-            break
+        if not grew:
+            print(
+                f"topic search kept {note_chars(notes)} note characters",
+                file=sys.stderr,
+                flush=True,
+            )
     if checkpoint is not None:
         checkpoint(
             "search_complete",

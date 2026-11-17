@@ -38,6 +38,9 @@ def _salvage_bullets(raw: str) -> list[dict[str, Any]]:
         if isinstance(text, str) and text.strip():
             found.append({"topic": match.group(1), "text": text.strip(), "snippet_ids": ids if isinstance(ids, list) else []})
     return found
+
+
+def _note_from_item(topic: str, item: dict[str, Any]) -> dict[str, Any] | None:
     text = str(item.get("text") or "").strip()
     if not text or text.lower().startswith("not found"):
         return None
