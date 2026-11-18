@@ -317,10 +317,26 @@ def search_notes(
         )
         for i in range(0, len(fields), 5)
     )
+    # One 5,400-token bullet reply never finishes on CPU before the 30-minute deadline,
+    # and the client then repeats that wait. A dozen bullets is about a two-minute reply.
+    bullet_chunk = 12
+    bullet_calls = tuple(
+        (
+            f"bullets {i // bullet_chunk + 1}",
+            bullets_schema,
+            bullet_rules.replace(
+                f"Add at least {fact_min} bullets",
+                f"Add {min(bullet_chunk, fact_min - i)} new bullets",
+            )
+            + shared_rules,
+            600,
+        )
+        for i in range(0, fact_min, bullet_chunk)
+    )
     calls = (
         ("anchors", anchors_schema, "Fill the four named fields from SNIPPETS. " + shared_rules, 500),
         *point_calls,
-        ("bullets", bullets_schema, bullet_rules + shared_rules, max(900, fact_min * 120)),
+        *bullet_calls,
     )
     payload: dict[str, Any] = {}
     for label, schema, rules, budget in calls:
@@ -338,18 +354,25 @@ def search_notes(
             )
         except (RuntimeError, json.JSONDecodeError) as exc:
             raw = getattr(exc, "raw", "")
-            salvaged = _salvage_bullets(raw) if label == "bullets" else []
+            salvaged = _salvage_bullets(raw) if label.startswith("bullets") else []
             if salvaged:
-                payload["bullets"] = salvaged
+                payload["bullets"] = [*(payload.get("bullets") or []), *salvaged]
                 print(f"  search {label}: kept {len(salvaged)} bullets from a cut-off reply", file=sys.stderr, flush=True)
             else:
                 print(f"  search {label} failed: {exc}", file=sys.stderr, flush=True)
             continue
         print(f"  search {label}: {time.time() - started:.0f}s", file=sys.stderr, flush=True)
-        merged = {**payload.get("key_points", {}), **(part.get("key_points") or {})} if "key_points" in part else None
+        merged_points = (
+            {**payload.get("key_points", {}), **(part.get("key_points") or {})} if "key_points" in part else None
+        )
+        merged_bullets = (
+            [*(payload.get("bullets") or []), *(part.get("bullets") or [])] if "bullets" in part else None
+        )
         payload.update(part)
-        if merged is not None:
-            payload["key_points"] = merged
+        if merged_points is not None:
+            payload["key_points"] = merged_points
+        if merged_bullets is not None:
+            payload["bullets"] = merged_bullets
         if on_part is not None:
             on_part(label, dict(payload))
     notes = _notes_from_payload(

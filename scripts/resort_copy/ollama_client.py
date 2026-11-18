@@ -124,7 +124,9 @@ def ollama_chat(
             return text.strip()
         except (TimeoutError, json.JSONDecodeError, OSError, RuntimeError) as e:
             last_error = e
-            if attempt == 2:
+            # A timeout already used the whole deadline. Repeating it waits the same
+            # length again and still returns nothing. Connection drops are worth a retry.
+            if attempt == 2 or isinstance(e, TimeoutError):
                 break
             print(
                 f"    ollama connection failed ({e}); retry {attempt + 2}/3",

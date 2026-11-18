@@ -54,6 +54,27 @@ TABLES = (
 )
 ID_COLUMNS = ("winter_sports_id", "osm_way_id", "osm_id", "osm_relation_id")
 RADIUS_M = 305
+_LAST_OSM_SOURCE = ""
+
+
+def _osm_host_label(endpoint: str) -> str:
+    host = (urllib.parse.urlparse(endpoint).hostname or endpoint or "").lower()
+    if "maplark.com" in host:
+        return "MapLark"
+    if host == "overpass-api.de":
+        return "Overpass (de)"
+    if "kumi.systems" in host:
+        return "Overpass (kumi)"
+    if "openstreetmap.fr" in host:
+        return "Overpass (fr)"
+    if host:
+        return f"Overpass ({host})"
+    return "Overpass"
+
+
+def _note_osm_source(label: str) -> None:
+    global _LAST_OSM_SOURCE
+    _LAST_OSM_SOURCE = (label or "").strip()
 
 
 def _match(df: pd.DataFrame, wid: str) -> pd.Series:
@@ -119,7 +140,9 @@ def _maplark_overpass(query: str) -> dict:
         },
     )
     with urllib.request.urlopen(req, timeout=180) as resp:
-        return json.loads(resp.read().decode())
+        payload = json.loads(resp.read().decode())
+    _note_osm_source(_osm_host_label(endpoint))
+    return payload
 
 
 def overpass(query: str, url: str | None = None) -> dict:
@@ -142,7 +165,9 @@ def overpass(query: str, url: str | None = None) -> dict:
         for attempt in range(1, 4):
             try:
                 with urllib.request.urlopen(req, timeout=180) as resp:
-                    return json.loads(resp.read().decode())
+                    payload = json.loads(resp.read().decode())
+                _note_osm_source(_osm_host_label(endpoint))
+                return payload
             except Exception as exc:
                 last = exc
                 print(f"overpass {endpoint} attempt {attempt}/3: {exc}", flush=True)
@@ -1025,6 +1050,7 @@ def write_run_status(s3, bucket: str) -> None:
             "message": body.get("message") or "",
             "winter_sports_id": body.get("winter_sports_id") or "",
             "region": body.get("region") or "",
+            "osm_source": body.get("osm_source") or "",
             "updated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(path.stat().st_mtime)),
         })
     recent.sort(key=lambda row: row["updated"], reverse=True)
@@ -1062,6 +1088,8 @@ def _put_job(s3, bucket: str, job_id: str, status: str, message: str, extra: dic
         body["winter_sports_id"] = os.environ.get("WINTER_SPORTS_ID")
     if os.environ.get("REGION") and "region" not in body:
         body["region"] = os.environ.get("REGION")
+    if _LAST_OSM_SOURCE and "osm_source" not in body:
+        body["osm_source"] = _LAST_OSM_SOURCE
     raw = json.dumps(body).encode()
     print(body, flush=True)
     if job_id and (s3 or _local_root()):
@@ -1788,6 +1816,18 @@ def _schema_for_merge(source_schema, incoming):
     return pa.schema(fields, metadata=source_schema.metadata)
 
 
+def _parquet_readable(path: Path) -> bool:
+    """False when a parquet file was cut off before its footer was written."""
+    import pyarrow.parquet as pq
+
+    try:
+        pq.ParquetFile(path)
+    except Exception as exc:
+        print(f"publish: unreadable parquet {path}: {exc}", flush=True)
+        return False
+    return True
+
+
 def _merge_parquet_light(existing: Path, incoming: Path, wid: str, dest: Path) -> None:
     """Replace one resort's rows without loading the whole GeoParquet.
 
@@ -1834,6 +1874,12 @@ def _patch_prefix_light(s3, bucket: str, prefix: str, work: Path, wid: str) -> N
         remote = scratch / "in" / name
         had = _download(s3, bucket, key, remote)
         out = scratch / "out" / name
+        if had and not _parquet_readable(remote):
+            print(f"publish: leaving broken {key}, continuing", flush=True)
+            continue
+        if local.is_file() and not _parquet_readable(local):
+            print(f"publish: skip bad incoming {key}, continuing", flush=True)
+            continue
         if not had:
             if prefix.strip("/") == "combined":
                 raise SystemExit(f"refusing to replace {key} with a single resort")
@@ -2033,6 +2079,7 @@ def main() -> int:
     work.mkdir(parents=True, exist_ok=True)
     s3 = None if _local_root() or os.environ.get("SKIP_S3") == "1" else _s3()
     try:
+        _note_osm_source("")
         _put_job(s3, bucket, job_id, "running", action)
         resort = None
         if action == "add":

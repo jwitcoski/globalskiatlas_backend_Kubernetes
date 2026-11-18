@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from run_one_resort import _maplark_adapt_query, replace_resort_rows
+from run_one_resort import _maplark_adapt_query, _osm_host_label, replace_resort_rows
 
 
 def test_replace_one_id():
@@ -30,7 +30,15 @@ def test_maplark_adapt_query():
     assert '["name"~"Aspen"]' in adapted
 
 
+def test_osm_host_label():
+    assert _osm_host_label("https://overpass-api.de/api/interpreter") == "Overpass (de)"
+    assert _osm_host_label("https://overpass.kumi.systems/api/interpreter") == "Overpass (kumi)"
+    assert _osm_host_label("https://overpass.openstreetmap.fr/api/interpreter") == "Overpass (fr)"
+    assert _osm_host_label("https://api.maplark.com/api/interpreter") == "MapLark"
+
+
 if __name__ == "__main__":
     test_replace_one_id()
     test_maplark_adapt_query()
+    test_osm_host_label()
     print("check ok")

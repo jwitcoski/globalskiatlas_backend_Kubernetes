@@ -343,8 +343,12 @@ def run_passes(
         before = len(snippets)
         add_web_snippets(snippets, extra_queries)
         if len(snippets) == before:
-            print("topic search added no new snippets", file=sys.stderr, flush=True)
-            break
+            print(
+                "topic search added no new snippets; trying the next query set",
+                file=sys.stderr,
+                flush=True,
+            )
+            continue
         if checkpoint is not None:
             checkpoint("followup_research_complete", {"progress": {"followup_research_snippets": _research_view(snippets)}})
         read += fetch_resort_pages(snippets, name=name, state=state, limit=page_limit)

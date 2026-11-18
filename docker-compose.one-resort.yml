@@ -38,7 +38,7 @@ services:
       OVERPASS_URL: ${OVERPASS_URL:-}
       MAPLARK_API_KEY: ${MAPLARK_API_KEY:-}
       MAPLARK_URL: ${MAPLARK_URL:-https://api.maplark.com/api/interpreter}
-      MAPLARK_MAX_AROUND_M: ${MAPLARK_MAX_AROUND_M:-22000}
+      MAPLARK_MAX_AROUND_M: ${MAPLARK_MAX_AROUND_M:-16000}
     deploy:
       resources:
         limits:
