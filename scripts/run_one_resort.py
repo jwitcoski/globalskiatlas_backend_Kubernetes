@@ -2,8 +2,8 @@
 """One resort: live Overpass, existing pipeline scripts, patch region + combined parquet.
 
 Env: ACTION (update|add|delete|batch), WINTER_SPORTS_ID, REGION, NAME, COUNTRY, STATE,
-LAT, LON, JOB_ID, S3_BUCKET, BOUNDARIES, OVERPASS_URL, MAPLARK_API_KEY, MAPLARK_URL,
-MAPLARK_MAX_AROUND_M.
+LAT, LON, JOB_ID, S3_BUCKET, BOUNDARIES, OVERPASS_URL, OVERPASS_TIMEOUT, MAPLARK_API_KEY,
+MAPLARK_URL, MAPLARK_MAX_AROUND_M.
 
 ACTION=batch first asks Overpass for named landuse=winter_sports ways and
 relations. Any id missing from combined/ski_areas.parquet, the delete skip list,
@@ -77,6 +77,14 @@ def _note_osm_source(label: str) -> None:
     _LAST_OSM_SOURCE = (label or "").strip()
 
 
+def _osm_http_timeout() -> float:
+    """Seconds to wait on one Overpass/MapLark attempt before trying the next host."""
+    try:
+        return max(5.0, float(os.environ.get("OVERPASS_TIMEOUT") or "30"))
+    except ValueError:
+        return 30.0
+
+
 def _match(df: pd.DataFrame, wid: str) -> pd.Series:
     wid = str(wid)
     mask = pd.Series(False, index=df.index)
@@ -139,17 +147,19 @@ def _maplark_overpass(query: str) -> dict:
             "Authorization": f"Bearer {key}",
         },
     )
-    with urllib.request.urlopen(req, timeout=180) as resp:
+    with urllib.request.urlopen(req, timeout=_osm_http_timeout()) as resp:
         payload = json.loads(resp.read().decode())
     _note_osm_source(_osm_host_label(endpoint))
     return payload
 
 
 def overpass(query: str, url: str | None = None) -> dict:
+    """Try each Overpass host once, then MapLark. No retries, no sleep between hosts."""
     endpoints = [url] if url else []
     endpoints.append(os.environ.get("OVERPASS_URL") or "https://overpass-api.de/api/interpreter")
     endpoints.append("https://overpass.kumi.systems/api/interpreter")
     endpoints.append("https://overpass.openstreetmap.fr/api/interpreter")
+    timeout = _osm_http_timeout()
     seen = []
     last = None
     for endpoint in endpoints:
@@ -162,17 +172,14 @@ def overpass(query: str, url: str | None = None) -> dict:
             data=data,
             headers={"User-Agent": "globalskiatlas-one-resort/1.0", "Accept": "application/json"},
         )
-        for attempt in range(1, 4):
-            try:
-                with urllib.request.urlopen(req, timeout=180) as resp:
-                    payload = json.loads(resp.read().decode())
-                _note_osm_source(_osm_host_label(endpoint))
-                return payload
-            except Exception as exc:
-                last = exc
-                print(f"overpass {endpoint} attempt {attempt}/3: {exc}", flush=True)
-                if attempt < 3:
-                    time.sleep(20)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                payload = json.loads(resp.read().decode())
+            _note_osm_source(_osm_host_label(endpoint))
+            return payload
+        except Exception as exc:
+            last = exc
+            print(f"overpass {endpoint}: {exc}", flush=True)
     key = (os.environ.get("MAPLARK_API_KEY") or os.environ.get("MAPLARK_KEY") or "").strip()
     if key:
         print("overpass exhausted; trying MapLark interpreter", flush=True)
