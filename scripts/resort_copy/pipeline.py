@@ -17,6 +17,7 @@ from .config import (
     TIER_SNIPPETS,
     _tier_key,
     fact_min_for,
+    write_floor_for,
     search_retries_for,
 )
 from .filters import (
@@ -388,13 +389,14 @@ def run_passes(
         snippets=trimmed,
         key_points=key_points,
     )
-    if len(notes) < fact_min:
+    write_floor = write_floor_for(tier)
+    if len(notes) < write_floor:
         return {
             "resort_label": resort_label,
             "tier": _tier_key(tier),
             "status": "insufficient_data",
             "error": (
-                f"{len(notes)} valid facts is below the {fact_min} fact minimum for {_tier_key(tier)} "
+                f"{len(notes)} valid facts is below the {write_floor} needed to write a {_tier_key(tier)} page "
                 f"after {attempts} extra searches"
             ),
             "ok": False,

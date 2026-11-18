@@ -13,10 +13,11 @@ _SCRIPTS = Path(__file__).resolve().parent.parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
-from resort_copy.config import TIER_FACT_MIN, fact_min_for  # noqa: E402
+from resort_copy.config import TIER_FACT_MIN, fact_min_for, write_floor_for  # noqa: E402
 from resort_copy.ollama_client import _parse_json_loose  # noqa: E402
 from resort_copy.queries import large_area_queries, topic_queries  # noqa: E402
 from resort_copy.snippets import _drop_pages_about_other_places, _select_snippets  # noqa: E402
+from generate_resort_copy_bedrock import _chunk_article, _wiki_title_score  # noqa: E402
 from resort_copy.notes import _salvage_bullets  # noqa: E402
 from resort_copy.validators import (  # noqa: E402
     deterministic_critique,
@@ -146,6 +147,22 @@ class LengthAndCriticTests(unittest.TestCase):
         self.assertEqual(fact_min_for("small"), 6)
         self.assertGreaterEqual(fact_min_for("medium"), 20)
         self.assertGreaterEqual(fact_min_for("large"), 40)
+        self.assertEqual(write_floor_for("small"), 6)
+        self.assertEqual(write_floor_for("medium"), 22)
+        self.assertEqual(write_floor_for("large"), 22)
+
+    def test_wikipedia_article_is_split_and_the_ski_page_wins(self) -> None:
+        self.assertGreater(
+            _wiki_title_score("Killington Ski Resort", "Killington Resort Vermont"),
+            _wiki_title_score("Killington, Vermont secession movement", "Killington Resort Vermont"),
+        )
+        self.assertGreater(
+            _wiki_title_score("Camelback Mountain Resort", "Camelback Mountain Resort Pennsylvania"),
+            _wiki_title_score("List of ski areas and resorts in the United States", "Camelback Mountain Resort Pennsylvania"),
+        )
+        chunks = _chunk_article("Intro about the resort.\n\n" + ("History paragraph. " * 80), size=200, limit=8)
+        self.assertGreater(len(chunks), 1)
+        self.assertTrue(all(len(chunk) <= 200 or "\n" not in chunk for chunk in chunks))
         self.assertNotIn("mega", TIER_FACT_MIN)
 
     def test_budgets_cover_the_character_target(self) -> None:

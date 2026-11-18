@@ -226,6 +226,15 @@ def fact_min_for(tier: str) -> int:
     return TIER_FACT_MIN.get(_tier_key(tier), TIER_FACT_MIN["medium"])
 
 
+def write_floor_for(tier: str) -> int:
+    """Notes required before a page is written. Search still aims at fact_min_for.
+
+    A large resort stays in search until 45 facts, but 22 grounded notes are already
+    a page. Refusing to write at 34 threw away a real article.
+    """
+    return min(fact_min_for(tier), 22)
+
+
 def note_cap_for(tier: str) -> int:
     block = _tier_block(tier)
     if "note_cap" in block:

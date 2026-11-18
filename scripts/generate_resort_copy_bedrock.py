@@ -386,8 +386,112 @@ except ImportError:
         DDGS = None  # type: ignore
 
 
-def fetch_wikipedia_snippets(resort_query: str, max_chars: int = 8000) -> list[dict[str, Any]]:
-    """Pull Wikipedia REST summaries; ids W1, W2, … (often empty for tiny ski areas)."""
+def _wiki_get_json(url: str) -> Any:
+    """Wikipedia answers 429 if the last call was too quick. One wait, then the article."""
+    try:
+        return _http_get_json(url, timeout=25.0)
+    except urllib.error.HTTPError as exc:
+        if exc.code != 429:
+            raise
+        time.sleep(3)
+        return _http_get_json(url, timeout=25.0)
+
+
+def _wiki_title_score(title: str, query: str = "") -> int:
+    """Prefer this resort's article over the town, a list of every hill, or a secession page."""
+    low = title.lower()
+    score = 0
+    if "ski" in low:
+        score += 4
+    if "resort" in low:
+        score += 3
+    if "mountain" in low:
+        score += 2
+    if low.startswith("list of") or "disambiguation" in low or "secession" in low:
+        score -= 12
+    tokens = [
+        token
+        for token in re.findall(r"[a-z0-9]+", query.lower())
+        if len(token) >= 5 and token not in {"resort", "mountain", "united", "states", "america"}
+    ]
+    if tokens and any(token in low for token in tokens):
+        score += 8
+    return score
+
+
+def _chunk_article(text: str, size: int = 1400, limit: int = 8) -> list[str]:
+    """Split a Wikipedia article into page-sized pieces. One piece is one fact-reading call."""
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", text) if part.strip()]
+    chunks: list[str] = []
+    buf = ""
+    for para in paragraphs:
+        if buf and len(buf) + 1 + len(para) > size:
+            chunks.append(buf)
+            if len(chunks) >= limit:
+                return chunks
+            buf = para
+        else:
+            buf = f"{buf}\n{para}".strip() if buf else para
+    if buf and len(chunks) < limit:
+        chunks.append(buf)
+    return chunks
+
+
+def _wikipedia_article_snippets(title: str, *, limit_chars: int) -> list[dict[str, Any]]:
+    """The article itself, not the one-paragraph summary. Famous resorts have a real page."""
+    # exchars together with a section format returns only the intro. Take the article and cut it here.
+    params = urllib.parse.urlencode(
+        {
+            "action": "query",
+            "prop": "extracts",
+            "explaintext": "1",
+            "redirects": "1",
+            "titles": title,
+            "format": "json",
+        }
+    )
+    url = f"https://en.wikipedia.org/w/api.php?{params}"
+    try:
+        data = _wiki_get_json(url)
+    except (urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError, OSError):
+        return []
+    pages = (data.get("query") or {}).get("pages") or {}
+    if not pages:
+        return []
+    page = next(iter(pages.values()))
+    if page.get("missing") is not None:
+        return []
+    extract = str(page.get("extract") or "").strip()[:limit_chars]
+    if len(extract) < 400:
+        return []
+    resolved = str(page.get("title") or title)
+    slug = urllib.parse.quote(resolved.replace(" ", "_"))
+    base = f"https://en.wikipedia.org/wiki/{slug}"
+    snippets: list[dict[str, Any]] = []
+    for index, chunk in enumerate(_chunk_article(extract), start=1):
+        snippets.append(
+            {
+                "id": f"W{index}",
+                "source": "wikipedia",
+                "title": f"{resolved} ({index})",
+                "url": f"{base}#part-{index}",
+                "text": f"{resolved}\n{chunk}",
+                "fetched": True,
+            }
+        )
+    return snippets
+
+
+def fetch_wikipedia_snippets(
+    resort_query: str,
+    max_chars: int = 8000,
+    *,
+    article_chars: int = 0,
+) -> list[dict[str, Any]]:
+    """Pull Wikipedia REST summaries; ids W1, W2, … (often empty for tiny ski areas).
+
+    article_chars > 0 reads the best matching article in full and splits it into pieces.
+    """
     snippets: list[dict[str, Any]] = []
     params = urllib.parse.urlencode(
         {
@@ -400,13 +504,18 @@ def fetch_wikipedia_snippets(resort_query: str, max_chars: int = 8000) -> list[d
     )
     search_url = f"https://en.wikipedia.org/w/api.php?{params}"
     try:
-        sr_data = _http_get_json(search_url, timeout=20.0)
+        sr_data = _wiki_get_json(search_url)
     except (urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError, OSError):
         return snippets
     hits = sr_data.get("query", {}).get("search", [])
     titles = [h["title"] for h in hits[:4]]
     if not titles:
         return snippets
+    if article_chars > 0:
+        best = max(titles, key=lambda title: (_wiki_title_score(title, resort_query), -titles.index(title)))
+        article = _wikipedia_article_snippets(best, limit_chars=article_chars)
+        if article:
+            return article
 
     for i, title in enumerate(titles):
         safe = urllib.parse.quote(title.replace(" ", "_"))
@@ -710,7 +819,7 @@ def gather_research_snippets(
 
     def _wiki() -> list[dict[str, Any]]:
         try:
-            return fetch_wikipedia_snippets(wq)
+            return fetch_wikipedia_snippets(wq, article_chars=16000)
         except Exception:
             return []
 
@@ -746,7 +855,7 @@ def gather_research_snippets(
     if not _snippets_meaningful(merged):
         for alt in wiki_fallback_search_queries(name, state, country):
             try:
-                more_w = fetch_wikipedia_snippets(alt)
+                more_w = fetch_wikipedia_snippets(alt, article_chars=16000)
             except Exception:
                 more_w = []
             before = len(merged)
