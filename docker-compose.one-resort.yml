@@ -35,6 +35,10 @@ services:
       AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
       JAVA_HEAP: ${JAVA_HEAP:-6g}
+      OVERPASS_URL: ${OVERPASS_URL:-}
+      MAPLARK_API_KEY: ${MAPLARK_API_KEY:-}
+      MAPLARK_URL: ${MAPLARK_URL:-https://api.maplark.com/api/interpreter}
+      MAPLARK_MAX_AROUND_M: ${MAPLARK_MAX_AROUND_M:-22000}
     deploy:
       resources:
         limits:

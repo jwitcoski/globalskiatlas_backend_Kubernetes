@@ -42,6 +42,10 @@ services:
       CLOUDFRONT_DISTRIBUTION_ID: ""
       BOUNDARIES: /app/boundaries
       JOB_ID: sweep
+      OVERPASS_URL: ${OVERPASS_URL:-}
+      MAPLARK_API_KEY: ${MAPLARK_API_KEY:-}
+      MAPLARK_URL: ${MAPLARK_URL:-https://api.maplark.com/api/interpreter}
+      MAPLARK_MAX_AROUND_M: ${MAPLARK_MAX_AROUND_M:-22000}
     volumes:
       - ${SKI_DATA:-/home/lola/globalskiatlas/output}:/data
     deploy:
@@ -88,6 +92,10 @@ services:
       BOUNDARIES: /app/boundaries
       JOB_ID: nightly
       DISCOVER_MAX: ${DISCOVER_MAX:-8}
+      OVERPASS_URL: ${OVERPASS_URL:-}
+      MAPLARK_API_KEY: ${MAPLARK_API_KEY:-}
+      MAPLARK_URL: ${MAPLARK_URL:-https://api.maplark.com/api/interpreter}
+      MAPLARK_MAX_AROUND_M: ${MAPLARK_MAX_AROUND_M:-22000}
     volumes:
       - ${SKI_DATA:-/opt/globalskiatlas/output}:/data
     deploy:

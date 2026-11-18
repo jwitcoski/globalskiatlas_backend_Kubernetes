@@ -1,11 +1,14 @@
 """Thin Ollama chat client and JSON-reply helpers."""
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import sys
+import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any
 
@@ -21,6 +24,55 @@ def ollama_base_url(raw: str | None) -> str:
     if "://" not in host:
         host = "http://" + host
     return host
+
+
+def _post(url: str, data: bytes, timeout: float) -> tuple[int, str]:
+    """POST with a deadline. Closing the socket unblocks a read the OS timeout missed."""
+    parsed = urllib.parse.urlparse(url)
+    holder: dict[str, http.client.HTTPConnection] = {}
+    box: dict[str, Any] = {}
+
+    def run() -> None:
+        conn = http.client.HTTPConnection(parsed.hostname, parsed.port or 80, timeout=timeout)
+        holder["conn"] = conn
+        try:
+            conn.request(
+                "POST",
+                parsed.path or "/",
+                body=data,
+                headers={"Content-Type": "application/json"},
+            )
+            resp = conn.getresponse()
+            raw = resp.read()
+            box["status"] = resp.status
+            box["body"] = raw.decode("utf-8", errors="replace")
+        except Exception as exc:
+            box["error"] = exc
+        finally:
+            conn.close()
+
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    worker.join(timeout + 15)
+    if worker.is_alive():
+        conn = holder.get("conn")
+        if conn is not None:
+            conn.close()
+        raise TimeoutError(f"Ollama at {parsed.hostname} did not answer within {timeout:.0f}s")
+    if "error" in box:
+        raise box["error"]
+    return int(box.get("status") or 0), str(box.get("body") or "")
+
+
+def _wait_until_up(base_url: str, timeout: float) -> None:
+    """Give a restarted Ollama a minute to answer /api/tags before the next prompt."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            list_models(base_url, timeout=5)
+            return
+        except (SystemExit, OSError, TimeoutError):
+            time.sleep(5)
 
 
 def _num_predict(tier: str) -> int:
@@ -57,28 +109,20 @@ def ollama_chat(
     if json_format:
         body["format"] = "json"
     data = json.dumps(body).encode("utf-8")
-    req = urllib.request.Request(
-        base_url + "/api/chat",
-        data=data,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
     last_error: Exception | None = None
     for attempt in range(3):
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                raw_body = resp.read().decode("utf-8", errors="replace")
-                payload = json.loads(raw_body)
+            status, raw_body = _post(base_url + "/api/chat", data, timeout)
+            if status >= 400:
+                raise RuntimeError(f"Ollama {status} from {base_url}: {raw_body[:500]}")
+            payload = json.loads(raw_body)
             message = payload.get("message") or {}
             text = message.get("content") or ""
             if not text.strip():
                 err = payload.get("error") or "empty reply"
                 raise RuntimeError(f"Ollama returned no text: {err}")
             return text.strip()
-        except urllib.error.HTTPError as e:
-            detail = e.read().decode("utf-8", errors="replace")[:500]
-            raise RuntimeError(f"Ollama {e.code} from {base_url}: {detail}") from e
-        except (urllib.error.URLError, json.JSONDecodeError, OSError, RuntimeError) as e:
+        except (TimeoutError, json.JSONDecodeError, OSError, RuntimeError) as e:
             last_error = e
             if attempt == 2:
                 break
@@ -87,6 +131,7 @@ def ollama_chat(
                 file=sys.stderr,
                 flush=True,
             )
+            _wait_until_up(base_url, timeout=min(60.0, timeout))
             time.sleep(8 * (attempt + 1))
     raise RuntimeError(
         f"Cannot reach Ollama at {base_url} ({last_error}). "

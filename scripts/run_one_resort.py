@@ -2,7 +2,8 @@
 """One resort: live Overpass, existing pipeline scripts, patch region + combined parquet.
 
 Env: ACTION (update|add|delete|batch), WINTER_SPORTS_ID, REGION, NAME, COUNTRY, STATE,
-LAT, LON, JOB_ID, S3_BUCKET, BOUNDARIES, OVERPASS_URL.
+LAT, LON, JOB_ID, S3_BUCKET, BOUNDARIES, OVERPASS_URL, MAPLARK_API_KEY, MAPLARK_URL,
+MAPLARK_MAX_AROUND_M.
 
 ACTION=batch first asks Overpass for named landuse=winter_sports ways and
 relations. Any id missing from combined/ski_areas.parquet, the delete skip list,
@@ -11,6 +12,11 @@ new resorts one night starts. A state that is not its own extract, such as
 Shizuoka inside Chubu, is filed under the Geofabrik region that contains it.
 A country with no extract is added when Geofabrik publishes one. One resort
 that fails is recorded and removed from the queue so the rest of the batch runs.
+
+When every public Overpass mirror fails (timeout, 502, etc.), the same query is
+retried once against MapLark's Overpass-compatible interpreter if MAPLARK_API_KEY
+is set. MapLark needs a spatial anchor for tag filters, so planet-wide discovery
+still depends on Overpass.
 
 Set DATA_ROOT to a local output directory (the Docker host volume) to read and
 write that catalog with no S3, DynamoDB, or CloudFront calls.
@@ -77,6 +83,45 @@ def replace_resort_rows(existing: pd.DataFrame | None, incoming: pd.DataFrame | 
     return pd.concat([kept, add], ignore_index=True)
 
 
+def _maplark_adapt_query(query: str) -> str:
+    """Rewrite Overpass QL bits MapLark's interpreter subset rejects."""
+    # Case-insensitive regex (,i) is unsupported; keep the pattern as-is.
+    adapted = re.sub(r'(~"[^"]*"),i\b', r"\1", query)
+    try:
+        max_around = int(os.environ.get("MAPLARK_MAX_AROUND_M") or "22000")
+    except ValueError:
+        max_around = 22000
+    max_around = max(1, max_around)
+
+    def _clamp_around(match: re.Match[str]) -> str:
+        radius = min(int(match.group(1)), max_around)
+        return f"(around:{radius},{match.group(2)})"
+
+    return re.sub(r"\(around:(\d+),([^)]+)\)", _clamp_around, adapted)
+
+
+def _maplark_overpass(query: str) -> dict:
+    key = (os.environ.get("MAPLARK_API_KEY") or os.environ.get("MAPLARK_KEY") or "").strip()
+    if not key:
+        raise RuntimeError("MAPLARK_API_KEY is not set")
+    endpoint = (os.environ.get("MAPLARK_URL") or "https://api.maplark.com/api/interpreter").strip()
+    adapted = _maplark_adapt_query(query)
+    if adapted != query:
+        print(f"maplark adapted query for supported Overpass subset", flush=True)
+    data = urllib.parse.urlencode({"data": adapted}).encode()
+    req = urllib.request.Request(
+        endpoint,
+        data=data,
+        headers={
+            "User-Agent": "globalskiatlas-one-resort/1.0",
+            "Accept": "application/json",
+            "Authorization": f"Bearer {key}",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=180) as resp:
+        return json.loads(resp.read().decode())
+
+
 def overpass(query: str, url: str | None = None) -> dict:
     endpoints = [url] if url else []
     endpoints.append(os.environ.get("OVERPASS_URL") or "https://overpass-api.de/api/interpreter")
@@ -103,6 +148,16 @@ def overpass(query: str, url: str | None = None) -> dict:
                 print(f"overpass {endpoint} attempt {attempt}/3: {exc}", flush=True)
                 if attempt < 3:
                     time.sleep(20)
+    key = (os.environ.get("MAPLARK_API_KEY") or os.environ.get("MAPLARK_KEY") or "").strip()
+    if key:
+        print("overpass exhausted; trying MapLark interpreter", flush=True)
+        try:
+            return _maplark_overpass(query)
+        except Exception as exc:
+            last = exc
+            print(f"maplark interpreter failed: {exc}", flush=True)
+    elif last is not None:
+        print("overpass exhausted; set MAPLARK_API_KEY to enable MapLark fallback", flush=True)
     raise last
 
 
