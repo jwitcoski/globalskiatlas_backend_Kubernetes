@@ -466,7 +466,8 @@ def run_passes(
     beat_cap = TIER_BEATS.get(_tier_key(tier), 5)
     page_ctx = num_ctx
     if _tier_key(tier) == "large":
-        page_ctx = max(num_ctx, 8192)
+        # Twice the print size is about 16,000 characters of notes. 8192 tokens clips that pile.
+        page_ctx = max(num_ctx, 12288)
     elif _tier_key(tier) == "medium":
         page_ctx = max(num_ctx, 8192)
     started = time.time()

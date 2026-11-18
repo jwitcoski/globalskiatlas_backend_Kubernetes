@@ -448,7 +448,7 @@ def read_page_facts(
             system_text=system,
             user_text=f"Ski area: {resort_label}\nPAGE ({page.get('title') or page.get('url')}):\n{text}\n",
             temperature=0.1,
-            num_predict=700,
+            num_predict=1000,
             num_ctx=num_ctx,
             timeout=timeout,
             json_format=True,

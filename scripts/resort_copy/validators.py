@@ -453,8 +453,11 @@ def note_chars(notes: list[dict[str, Any]]) -> int:
 
 
 def note_char_target(tier: str) -> int:
-    """Upper print-column size. Search keeps going until the notes reach it."""
-    return int(bedrock.copy_goal_for_tier(tier).characters[1])
+    """Twice the upper print size. Search keeps going until the notes reach it.
+
+    The printed page stays on the plate. The extra notes are the pile the writer chooses from.
+    """
+    return int(bedrock.copy_goal_for_tier(tier).characters[1]) * 2
 
 
 def short_reason_for(text: str, notes: list[dict[str, Any]], tier: str) -> str | None:

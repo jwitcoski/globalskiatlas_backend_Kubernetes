@@ -111,7 +111,8 @@ ARCHIVE_PAGES = 3
 
 
 # Each page is read on its own for facts. The key-point call only sees the top of it.
-PAGE_FACTS_PER_PAGE = 6
+# Enough separate facts from one page that the note pile can run past the printed page.
+PAGE_FACTS_PER_PAGE = 10
 
 
 PAGE_KEY_POINT_CHARS = 600

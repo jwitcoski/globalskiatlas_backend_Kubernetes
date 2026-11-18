@@ -419,7 +419,7 @@ def _wiki_title_score(title: str, query: str = "") -> int:
     return score
 
 
-def _chunk_article(text: str, size: int = 1400, limit: int = 8) -> list[str]:
+def _chunk_article(text: str, size: int = 1400, limit: int = 12) -> list[str]:
     """Split a Wikipedia article into page-sized pieces. One piece is one fact-reading call."""
     paragraphs = [part.strip() for part in re.split(r"\n\s*\n", text) if part.strip()]
     chunks: list[str] = []

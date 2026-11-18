@@ -178,9 +178,9 @@ class LengthAndCriticTests(unittest.TestCase):
         self.assertLess(report["character_pct"], 100)
 
     def test_note_target_is_the_upper_plate(self) -> None:
-        self.assertEqual(note_char_target("small"), 1650)
-        self.assertEqual(note_char_target("medium"), 4050)
-        self.assertEqual(note_char_target("large"), 8100)
+        self.assertEqual(note_char_target("small"), 3300)
+        self.assertEqual(note_char_target("medium"), 8100)
+        self.assertEqual(note_char_target("large"), 16200)
         self.assertEqual(note_chars([{"text": "abc"}, {"text": " de "}]), 5)
 
     def test_cut_off_bullet_list_keeps_complete_items(self) -> None:
