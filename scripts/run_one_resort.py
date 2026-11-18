@@ -805,7 +805,11 @@ def _write_osm_hull_dem(work: Path, wid: str, region: str) -> Path:
     crop, west, south, east, north = _mosaic_from_skadi_cache(coverage, work / "cache", fetch=True)
     dest = work / "dems" / "scene" / f"{wid}.tif"
     _write_temp_dem(crop, west, south, east, north, dest)
-    print("scene dem: wrote one Mapterhorn mosaic", dest, flush=True)
+    # Same file game_export.resolve_dem looks for before mosaicking again.
+    hull_cache = work / "cache" / "game_export_dems" / Path(*[p for p in region.split("/") if p]) / f"{wid}-osmhull.tif"
+    hull_cache.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(dest, hull_cache)
+    print("scene dem: wrote one Mapterhorn mosaic", dest, "and", hull_cache, flush=True)
     return dest
 
 

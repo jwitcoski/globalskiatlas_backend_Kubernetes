@@ -139,11 +139,16 @@ def find_ski_area(data_root: Path, cfg: GameExportConfig) -> tuple[gpd.GeoSeries
 def _dem_candidates(data_root: Path, cfg: GameExportConfig) -> list[Path]:
     wid = cfg.winter_sports_id
     parts = cfg.region_dir_parts
+    # Prefer the one-resort hull mosaic (dems/scene) so game/clay export does not
+    # remosaic Mapterhorn after ski_area_elevation_contours / _write_osm_hull_dem.
     out = [
-        data_root.joinpath(*parts, "dems", *parts, f"{wid}.tif"),
-        data_root.joinpath(*parts, "dems", f"{wid}.tif"),
+        data_root / "dems" / "scene" / f"{wid}.tif",
+        data_root / "combined" / "dems" / "scene" / f"{wid}.tif",
         data_root / "combined" / "dems" / Path(*parts) / f"{wid}.tif",
         data_root / "combined" / "dems" / f"{wid}.tif",
+        data_root.joinpath(*parts, "dems", "scene", f"{wid}.tif"),
+        data_root.joinpath(*parts, "dems", *parts, f"{wid}.tif"),
+        data_root.joinpath(*parts, "dems", f"{wid}.tif"),
     ]
     return out
 
