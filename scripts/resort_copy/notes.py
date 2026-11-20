@@ -9,6 +9,8 @@ from typing import Any, Callable
 
 from .config import (
     COLOR_TOPICS,
+    PAGE_FACT_MAX_WINDOWS,
+    PAGE_FACT_WINDOW_CHARS,
     PAGE_FACTS_PER_PAGE,
     REQUIRED_TOPICS,
 )
@@ -409,44 +411,159 @@ _PAGE_FACT_TOPICS = {
 }
 
 
-def read_page_facts(
-    page: dict[str, Any],
+def merge_page_facts(
+    existing: list[dict[str, Any]], more: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Keep earlier facts and append only new text."""
+    seen = {str(fact.get("text") or "").strip().lower() for fact in existing}
+    out = list(existing)
+    for fact in more:
+        key = str(fact.get("text") or "").strip().lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(fact)
+    return out
+
+
+def extend_notes_with_page_facts(
+    notes: list[dict[str, Any]],
+    page_facts: list[dict[str, Any]],
     *,
+    name: str,
+    state: str | None,
+    country: str | None,
+    fact_min: int,
+    cap: int | None = None,
+) -> list[dict[str, Any]]:
+    """Fold newly mined page facts into the note pile without a full search pass."""
+    prior = [
+        {
+            "topic": note.get("topic") or "other",
+            "text": str(note.get("text") or "").strip(),
+            "snippet_ids": list(note.get("snippet_ids") or []),
+        }
+        for note in notes
+        if str(note.get("text") or "").strip()
+    ]
+    return _notes_from_payload(
+        {},
+        fact_min,
+        name=name,
+        state=state,
+        country=country,
+        page_facts=[*prior, *page_facts],
+        cap=cap,
+    )
+
+
+def _hard_cut_windows(text: str, *, size: int, limit: int) -> list[str]:
+    """Cut a long block into windows when paragraph breaks are missing."""
+    chunks: list[str] = []
+    start = 0
+    while start < len(text) and len(chunks) < limit:
+        piece = text[start : start + size]
+        if start + size < len(text):
+            piece = piece.rsplit(" ", 1)[0] or piece
+        piece = piece.strip()
+        if not piece:
+            break
+        chunks.append(piece)
+        start += len(piece)
+        while start < len(text) and text[start].isspace():
+            start += 1
+    return chunks
+
+
+def split_page_windows(
+    text: str, *, size: int = PAGE_FACT_WINDOW_CHARS, limit: int = PAGE_FACT_MAX_WINDOWS
+) -> list[str]:
+    """Split a fetched page body into fact-reading windows. Prefer paragraph breaks."""
+    text = (text or "").strip()
+    if not text:
+        return []
+    if len(text) <= size:
+        return [text]
+    # Page bodies are often joined with single newlines; treat those as breaks too.
+    paragraphs = [part.strip() for part in re.split(r"\n+", text) if part.strip()]
+    if not paragraphs:
+        return _hard_cut_windows(text, size=size, limit=limit)
+    chunks: list[str] = []
+    buf = ""
+    for para in paragraphs:
+        if len(para) > size:
+            if buf:
+                chunks.append(buf)
+                buf = ""
+                if len(chunks) >= limit:
+                    return chunks
+            chunks.extend(_hard_cut_windows(para, size=size, limit=limit - len(chunks)))
+            if len(chunks) >= limit:
+                return chunks[:limit]
+            continue
+        if buf and len(buf) + 1 + len(para) > size:
+            chunks.append(buf)
+            if len(chunks) >= limit:
+                return chunks
+            buf = para
+        else:
+            buf = f"{buf}\n{para}".strip() if buf else para
+    if buf and len(chunks) < limit:
+        if len(buf) > size:
+            chunks.extend(_hard_cut_windows(buf, size=size, limit=limit - len(chunks)))
+        else:
+            chunks.append(buf)
+    return chunks[:limit]
+
+
+def _fact_window_call(
+    *,
+    window: str,
+    page: dict[str, Any],
     resort_label: str,
     name: str,
     base_url: str,
     model: str,
     num_ctx: int,
     timeout: float,
+    already_texts: list[str],
 ) -> list[dict[str, Any]]:
-    """One page, one short call. A small model finds the specific facts a long prompt buries.
-
-    num_ctx should match the search call: Ollama reloads the model whenever it changes.
-    """
-    text = str(page.get("text") or "").strip()
-    if len(text) < 200:
-        return []
+    already_block = ""
+    if already_texts:
+        lines = "\n".join(f"- {item}" for item in already_texts[:40])
+        already_block = (
+            f" You already took these facts from this PAGE; do not repeat them. "
+            f"List up to {PAGE_FACTS_PER_PAGE} additional facts that are still in this PAGE window "
+            f"and not in this list:\n{lines}\n"
+        )
+    ask = (
+        f"List up to {PAGE_FACTS_PER_PAGE} additional facts about {name}"
+        if already_texts
+        else f"List up to {PAGE_FACTS_PER_PAGE} facts about {name}"
+    )
     system = (
         f"You read one web page for a ski atlas entry about {name}. Output one JSON object and nothing else: "
         '{"facts":[{"topic":"history","text":"one sentence, 30 words or fewer"}]}. '
-        f"List up to {PAGE_FACTS_PER_PAGE} facts about {name} that would make someone want to read on or visit. "
+        f"{ask} that would make someone want to read on or visit. "
         "topic is history, people, events, access, lodging, food, scene, review, price, who, or other. "
         "One fact per item: never list several years or events in one item. "
         "Leave a topic out when PAGE does not cover it. Never write that something is not mentioned. "
         "Good facts: when and how it started, a first or a record, who owns it and why, a famous skier or team, "
         "a tradition or event, the road it is on and how far to a named town, where to eat or stay, "
-        "what the skiing feels like and who it suits, and a day ticket price. "
+        "what the skiing feels like and who it suits, a day ticket price, ski or snowboard rentals, "
+        "a village or base area, and which pass this resort is on. "
         "Copy names, years, distances, and prices exactly from PAGE. "
         "Skip vertical, lift counts, trail counts, acreage, snowfall, and opening hours. "
         "Skip anything about a different ski area, and skip facts only about the town. "
-        'If PAGE says nothing useful about this ski area, return {"facts":[]}.'
+        + already_block
+        + 'If PAGE says nothing useful about this ski area, return {"facts":[]}.'
     )
     try:
         payload = _chat_json(
             base_url=base_url,
             model=model,
             system_text=system,
-            user_text=f"Ski area: {resort_label}\nPAGE ({page.get('title') or page.get('url')}):\n{text}\n",
+            user_text=f"Ski area: {resort_label}\nPAGE ({page.get('title') or page.get('url')}):\n{window}\n",
             temperature=0.1,
             num_predict=1000,
             num_ctx=num_ctx,
@@ -457,12 +574,77 @@ def read_page_facts(
         print(f"    page facts failed for {page.get('url')}: {exc}", file=sys.stderr, flush=True)
         return []
     facts: list[dict[str, Any]] = []
+    seen_prior = {item.lower() for item in already_texts}
     for item in payload.get("facts") or []:
         if not isinstance(item, dict):
             continue
         fact = str(item.get("text") or "").strip()
         if len(fact) < 20 or _STAT_RECAP.search(fact) or _NOT_STATED.search(fact):
             continue
+        if fact.lower() in seen_prior:
+            continue
         topic = _PAGE_FACT_TOPICS.get(str(item.get("topic") or "other").strip().lower(), "other")
         facts.append({"topic": topic, "text": fact})
     return facts[:PAGE_FACTS_PER_PAGE]
+
+
+def read_page_facts(
+    page: dict[str, Any],
+    *,
+    resort_label: str,
+    name: str,
+    base_url: str,
+    model: str,
+    num_ctx: int,
+    timeout: float,
+    already: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Walk the fetched page body in windows. Each window is one short fact call.
+
+    Prefer ``body`` (full page) over ``text`` (search excerpt). num_ctx should match the
+    search call so Ollama does not reload the model. When ``already`` is set, ask each
+    window for facts not yet taken.
+    """
+    text = str(page.get("body") or page.get("text") or "").strip()
+    if len(text) < 200:
+        return []
+    prior = [
+        str(item.get("text") or "").strip()
+        for item in (already or [])
+        if str(item.get("text") or "").strip()
+    ]
+    windows = split_page_windows(text)
+    if not windows:
+        return []
+    collected: list[dict[str, Any]] = []
+    seen = {item.lower() for item in prior}
+    known = list(prior)
+    for index, window in enumerate(windows, start=1):
+        more = _fact_window_call(
+            window=window,
+            page=page,
+            resort_label=resort_label,
+            name=name,
+            base_url=base_url,
+            model=model,
+            num_ctx=num_ctx,
+            timeout=timeout,
+            already_texts=known,
+        )
+        added = 0
+        for fact in more:
+            key = fact["text"].lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            known.append(fact["text"])
+            collected.append(fact)
+            added += 1
+        if len(windows) > 1:
+            print(
+                f"    page window {index}/{len(windows)}: {added} new facts "
+                f"({len(prior) + len(collected)} total) from {page.get('url')}",
+                file=sys.stderr,
+                flush=True,
+            )
+    return collected

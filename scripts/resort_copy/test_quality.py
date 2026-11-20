@@ -18,7 +18,17 @@ from resort_copy.ollama_client import _parse_json_loose  # noqa: E402
 from resort_copy.queries import large_area_queries, topic_queries  # noqa: E402
 from resort_copy.snippets import _drop_pages_about_other_places, _select_snippets  # noqa: E402
 from generate_resort_copy_bedrock import _chunk_article, _wiki_title_score  # noqa: E402
-from resort_copy.notes import _salvage_bullets  # noqa: E402
+from resort_copy.notes import (  # noqa: E402
+    _salvage_bullets,
+    extend_notes_with_page_facts,
+    merge_page_facts,
+    split_page_windows,
+)
+from resort_copy.web_fetch import _page_body  # noqa: E402
+from resort_copy.config import PAGE_FACT_WINDOW_CHARS, PAGE_BODY_MAX_CHARS  # noqa: E402
+from resort_copy.stay22 import lodging_weekend, stay22_map_url, add_stay22_lodging_snippet  # noqa: E402
+from resort_copy.stickies import stickies_for_tier  # noqa: E402
+from datetime import date  # noqa: E402
 from resort_copy.validators import (  # noqa: E402
     deterministic_critique,
     distance_has_unit,
@@ -182,6 +192,80 @@ class LengthAndCriticTests(unittest.TestCase):
         self.assertEqual(note_char_target("medium"), 8100)
         self.assertEqual(note_char_target("large"), 16200)
         self.assertEqual(note_chars([{"text": "abc"}, {"text": " de "}]), 5)
+
+    def test_page_fact_remine_keeps_old_and_adds_new(self) -> None:
+        prior = [{"topic": "price", "text": "Adult day tickets start at $89."}]
+        more = [
+            {"topic": "price", "text": "Adult day tickets start at $89."},
+            {"topic": "other", "text": "Ski and snowboard rentals are at the base lodge."},
+        ]
+        merged = merge_page_facts(prior, more)
+        self.assertEqual(len(merged), 2)
+        self.assertEqual(merged[1]["text"], "Ski and snowboard rentals are at the base lodge.")
+        notes = extend_notes_with_page_facts(
+            [{"topic": "setting", "text": "A ridge above the valley town.", "snippet_ids": ["W1"]}],
+            [{"topic": "price", "text": "Adult day tickets start at $89.", "snippet_ids": ["D1"]}],
+            name="Test Resort",
+            state="Vermont",
+            country="United States of America",
+            fact_min=6,
+            cap=28,
+        )
+        texts = {note["text"] for note in notes}
+        self.assertIn("A ridge above the valley town.", texts)
+        self.assertIn("Adult day tickets start at $89.", texts)
+
+    def test_sticky_counts_grow_with_tier(self) -> None:
+        self.assertEqual(len(stickies_for_tier("small")), 10)
+        self.assertEqual(len(stickies_for_tier("medium")), 16)
+        self.assertGreaterEqual(len(stickies_for_tier("large")), 16)
+        self.assertEqual(stickies_for_tier("small")[0].id, "setting")
+
+    def test_stay22_weekend_bookmarks_by_hemisphere(self) -> None:
+        today = date(2026, 11, 19)
+        north_in, north_out = lodging_weekend(lat=43.6, today=today)
+        south_in, south_out = lodging_weekend(lat=-41.1, today=today)
+        self.assertEqual(north_in.isoformat(), "2027-02-20")
+        self.assertEqual(north_out.isoformat(), "2027-02-22")
+        self.assertEqual(south_in.isoformat(), "2027-08-14")
+        self.assertEqual(south_out.isoformat(), "2027-08-16")
+        url = stay22_map_url(
+            lat=43.6,
+            lon=-72.8,
+            name="Killington Resort",
+            checkin=north_in,
+            checkout=north_out,
+        )
+        self.assertIn("stay22.com", url)
+        self.assertIn("checkin=2027-02-20", url)
+        snippets: list[dict] = []
+        add_stay22_lodging_snippet(
+            snippets,
+            name="Killington Resort",
+            row={"centroid_lat": 43.6, "centroid_lon": -72.8},
+            today=today,
+        )
+        self.assertEqual(len(snippets), 1)
+        self.assertEqual(snippets[0]["source"], "stay22")
+
+    def test_page_body_is_kept_and_split_into_fact_windows(self) -> None:
+        blocks = [
+            "Killington Resort opened with a single lift and a day ticket price of $5.",
+            "Ski and snowboard rentals are in the Snowshed base lodge near the village.",
+            "The Epic Pass is sold for this mountain according to the resort ticket desk.",
+        ]
+        # Pad so the stored body is longer than one excerpt window.
+        blocks.extend(f"Scene paragraph {i} about the ridge and the lodge cafeteria." for i in range(40))
+        body = _page_body(blocks, name="Killington Resort", about_resort=True)
+        self.assertGreater(len(body), PAGE_FACT_WINDOW_CHARS)
+        self.assertLessEqual(len(body), PAGE_BODY_MAX_CHARS)
+        self.assertIn("$5", body)
+        self.assertIn("rentals", body)
+        windows = split_page_windows(body)
+        self.assertGreater(len(windows), 1)
+        self.assertTrue(all(len(window) <= PAGE_FACT_WINDOW_CHARS + 50 for window in windows))
+        joined = "\n".join(windows)
+        self.assertIn("$5", joined)
 
     def test_cut_off_bullet_list_keeps_complete_items(self) -> None:
         raw = (

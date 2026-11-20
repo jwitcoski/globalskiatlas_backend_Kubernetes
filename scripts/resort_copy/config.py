@@ -115,6 +115,17 @@ ARCHIVE_PAGES = 3
 PAGE_FACTS_PER_PAGE = 10
 
 
+# Fact extraction walks the stored page body in these windows (10 facts each).
+PAGE_FACT_WINDOW_CHARS = PAGE_EXCERPT_CHARS
+
+
+PAGE_FACT_MAX_WINDOWS = 12
+
+
+# Soft cap so a huge marketing site cannot explode the fact loop.
+PAGE_BODY_MAX_CHARS = PAGE_FACT_WINDOW_CHARS * PAGE_FACT_MAX_WINDOWS
+
+
 PAGE_KEY_POINT_CHARS = 600
 
 

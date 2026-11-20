@@ -47,6 +47,9 @@ from .queries import (
     add_web_snippets,
     dossier_queries,
 )
+from .stay22 import (
+    add_stay22_lodging_snippet,
+)
 
 
 def _resort_name(row: dict[str, Any]) -> str | None:
@@ -343,6 +346,7 @@ def main() -> int:
                     )
                     if not args.no_ddg:
                         add_web_snippets(snippets, dossier_queries(name, state, country, tier))
+                    add_stay22_lodging_snippet(snippets, name=name, row=row)
                     result = run_passes(
                         resort_label=label,
                         snippets=snippets,
@@ -505,6 +509,7 @@ def main() -> int:
         )
         if not args.no_ddg:
             add_web_snippets(snippets, dossier_queries(name, state, country, tier))
+        add_stay22_lodging_snippet(snippets, name=name, row=row)
         print(f"research: {len(snippets)} snippets for {label}", file=sys.stderr)
         save_checkpoint(
             "research_complete",

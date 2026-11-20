@@ -14,6 +14,7 @@ from typing import Any
 
 from .config import (
     ARCHIVE_PAGES,
+    PAGE_BODY_MAX_CHARS,
     PAGE_EXCERPT_CHARS,
 )
 from .key_points import (
@@ -250,8 +251,29 @@ def _page_excerpt(blocks: list[str], *, name: str, about_resort: bool, chars: in
     return "\n".join(piece for _, piece in picked)
 
 
+def _page_body(blocks: list[str], *, name: str, about_resort: bool, max_chars: int = PAGE_BODY_MAX_CHARS) -> str:
+    """Keep the page in order for windowed fact extraction. List pages keep only resort lines."""
+    parts: list[str] = []
+    used = 0
+    for block in blocks:
+        if not about_resort and not _block_mentions_resort(block, name):
+            continue
+        if used and used + 1 + len(block) > max_chars:
+            break
+        if not used and len(block) > max_chars:
+            parts.append(block[:max_chars].rsplit(" ", 1)[0] + "…")
+            break
+        parts.append(block)
+        used += len(block) + (1 if used else 0)
+    return "\n".join(parts)
+
+
 def fetch_resort_pages(snippets: list[dict[str, Any]], *, name: str, state: str | None, limit: int) -> int:
-    """Replace the search blurb of the best resort pages with paragraphs read from the page."""
+    """Replace the search blurb of the best resort pages with paragraphs read from the page.
+
+    ``text`` stays a short excerpt for the search prompt. ``body`` keeps the longer page for
+    windowed fact extraction so ticket prices and rentals below the fold are not thrown away.
+    """
     remaining = limit - sum(1 for s in snippets if s.get("fetched"))
     if remaining <= 0:
         return 0
@@ -274,6 +296,9 @@ def fetch_resort_pages(snippets: list[dict[str, Any]], *, name: str, state: str 
         about = _page_about_resort(snippet, name)
         if "wikipedia.org" in low:
             score += 14
+        if "stay22.com" in low:
+            # Fixed mid-season lodging bookmark for hotel / Airbnb / ski-in facts.
+            score += 12
         if about:
             score += 8
         if about and _host_matches_resort(_host(url), url, name):
@@ -298,16 +323,22 @@ def fetch_resort_pages(snippets: list[dict[str, Any]], *, name: str, state: str 
         snippet["fetched"] = False
         if fetched >= remaining or not html:
             continue
+        blocks = _page_blocks(html)
+        about = _page_about_resort(snippet, name)
         excerpt = _page_excerpt(
-            _page_blocks(html),
+            blocks,
             name=name,
-            about_resort=_page_about_resort(snippet, name),
+            about_resort=about,
             chars=PAGE_EXCERPT_CHARS,
         )
-        if len(excerpt) < 200:
+        body = _page_body(blocks, name=name, about_resort=about)
+        if len(excerpt) < 200 and len(body) < 200:
             continue
+        if len(excerpt) < 200:
+            excerpt = body[:PAGE_EXCERPT_CHARS].rsplit(" ", 1)[0] + ("…" if len(body) > PAGE_EXCERPT_CHARS else "")
         snippet["blurb"] = snippet.get("text")
         snippet["text"] = excerpt
+        snippet["body"] = body or excerpt
         snippet["fetched"] = True
         fetched += 1
     return fetched
