@@ -48,6 +48,7 @@ services:
       MAPLARK_MAX_AROUND_M: ${MAPLARK_MAX_AROUND_M:-16000}
     volumes:
       - ${SKI_DATA:-/home/lola/globalskiatlas/output}:/data
+      - ${HOME}/.aws:/root/.aws:ro
     deploy:
       resources:
         limits:
@@ -97,7 +98,8 @@ services:
       MAPLARK_URL: ${MAPLARK_URL:-https://api.maplark.com/api/interpreter}
       MAPLARK_MAX_AROUND_M: ${MAPLARK_MAX_AROUND_M:-16000}
     volumes:
-      - ${SKI_DATA:-/opt/globalskiatlas/output}:/data
+      - ${SKI_DATA:-/home/lola/globalskiatlas/output}:/data
+      - ${HOME}/.aws:/root/.aws:ro
     deploy:
       resources:
         limits:
