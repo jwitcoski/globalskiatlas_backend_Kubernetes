@@ -19,7 +19,7 @@ model call is running.
 
 ## Pass order
 
-1. **Search**: build queries, fetch pages, pick snippets, extract cited NOTES.
+1. **Search**: build queries, fetch pages, answer the sticky questions, then top up: dedupe, mine the fetched pages in fact windows, search gap topics (`topup.py`).
 2. **Outline**: order the notes into beats.
 3. **Write**: paragraphs from outline + notes.
 4. **Critique**: unsupported claims and clichés (no new facts).
@@ -39,6 +39,8 @@ Imports only point down this list, so there are no cycles.
 | `snippets.py` | Snippet scoring, trimming, selection; drops pages about other resorts |
 | `web_fetch.py` | Live and archived page fetch, block extraction, excerpts |
 | `notes.py` | Search pass: snippets and pages to NOTES, topic tagging, de-duplication, page facts |
+| `stickies.py` | Sticky-question pass: one grounded note per reader question against a growing page pile |
+| `topup.py` | After stickies: dedupe notes, then mine fetched pages and search gap topics until the tier fact minimum (stickies alone cannot reach the 22-note floor) |
 | `grounding.py` | Anti-hallucination rule and `_strip_ungrounded` (mood words, unbacked numbers, low note overlap) |
 | `writing.py` | Outline, writer, critic, editor, extend, layout fitting |
 | `key_points.py` | Structured key points (prices, passes, audience, links) and `key_points.jsonl` upsert |

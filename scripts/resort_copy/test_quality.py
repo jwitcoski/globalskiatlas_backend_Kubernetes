@@ -34,6 +34,8 @@ from resort_copy.web_fetch import _page_body  # noqa: E402
 from resort_copy.config import PAGE_FACT_WINDOW_CHARS, PAGE_BODY_MAX_CHARS  # noqa: E402
 from resort_copy.stay22 import lodging_weekend, stay22_map_url, add_stay22_lodging_snippet  # noqa: E402
 from resort_copy.stickies import stickies_for_tier  # noqa: E402
+from resort_copy import topup  # noqa: E402
+from resort_copy.topup import dedupe_notes, top_up_notes  # noqa: E402
 from datetime import date  # noqa: E402
 from resort_copy.validators import (  # noqa: E402
     deterministic_critique,
@@ -361,6 +363,138 @@ class LengthAndCriticTests(unittest.TestCase):
         chosen, dropped = _select_snippets(snippets, limit=8, chars=400, name="Tahko", country="Finland")
         self.assertEqual(dropped, 1)
         self.assertEqual(len(chosen), 1)
+
+
+class TopUpTests(unittest.TestCase):
+    """The sticky pass alone cannot reach the 22-note floor for medium and large plates."""
+
+    def test_sticky_count_is_below_the_floor_so_top_up_is_required(self) -> None:
+        from resort_copy.config import write_floor_for
+
+        self.assertLess(len(stickies_for_tier("medium")), write_floor_for("medium"))
+        self.assertLess(len(stickies_for_tier("large")), write_floor_for("large"))
+
+    def test_dedupe_drops_the_same_sentence_lifted_by_three_stickies(self) -> None:
+        same = (
+            "Stowe Mountain Resort is a ski resort in the northeastern United States, "
+            "near the town of Stowe in northern Vermont, on Mount Mansfield."
+        )
+        notes = [
+            {"topic": "year_started", "text": "Stowe opened in 1933 with CCC trail cutting.", "snippet_ids": ["W1"]},
+            {"topic": "review", "text": same, "snippet_ids": ["W1"]},
+            {"topic": "other", "text": same + " It is the largest ski area in the state.", "snippet_ids": ["W1"]},
+            {"topic": "scene", "text": same, "snippet_ids": ["W2"]},
+            {"topic": "lodging", "text": "The Lodge at Spruce Peak is ski-in ski-out with a heated pool.", "snippet_ids": ["X3"]},
+        ]
+        kept = dedupe_notes(notes)
+        self.assertEqual([n["topic"] for n in kept], ["year_started", "review", "lodging"])
+
+    def test_dedupe_keeps_anchor_topics_that_overlap_a_color_note(self) -> None:
+        notes = [
+            {"topic": "other", "text": "The area opened in 1961 above the village of Tahko.", "snippet_ids": ["X1"]},
+            {"topic": "year_started", "text": "The area opened in 1961 above the village of Tahko.", "snippet_ids": ["X1"], "value": 1961},
+            {"topic": "year_started", "text": "Opened in 1961 above Tahko village.", "snippet_ids": ["X2"], "value": 1961},
+        ]
+        kept = dedupe_notes(notes)
+        # An exact repeat goes; a near-duplicate anchor stays because anchors are never thinned.
+        self.assertEqual(len(kept), 2)
+        self.assertEqual(kept[1]["topic"], "year_started")
+
+    def test_top_up_returns_at_once_when_the_pile_is_already_full(self) -> None:
+        calls: list[str] = []
+        original = topup.read_page_facts
+        topup.read_page_facts = lambda *a, **k: calls.append("x") or []  # type: ignore[assignment]
+        try:
+            notes = [
+                {"topic": "year_started", "text": "Tahko opened in 1968 as a club hill.", "snippet_ids": ["X1"], "value": 1968},
+                {"topic": "setting", "text": "Tahko sits above Lake Syväri in Nilsiä.", "snippet_ids": ["X1"]},
+                {"topic": "lodging", "text": "Tahko Spa hotel has an indoor pool and sauna wing.", "snippet_ids": ["X1"]},
+                {"topic": "scene", "text": "The snow park hosts a freestyle week each March.", "snippet_ids": ["X1"]},
+                {"topic": "who", "text": "Guides call the front side friendly for families and beginners.", "snippet_ids": ["X1"]},
+                {"topic": "other", "text": "Rentals and lessons meet at the Break Sokos base lodge.", "snippet_ids": ["X1"]},
+            ]
+            out, attempts, errors, windows = top_up_notes(
+                notes,
+                [{"id": "X1", "source": "searxng", "title": "Tahko", "url": "https://tahko.fi", "text": "Tahko ski resort", "body": "x" * 500, "fetched": True}],
+                resort_label="Tahko, Finland",
+                name="Tahko",
+                state=None,
+                country="Finland",
+                tier="small",
+                base_url="http://127.0.0.1:1",
+                model="m",
+                num_ctx=4096,
+                timeout=1,
+                page_limit=4,
+                use_ddg=False,
+                gap_topics=lambda notes: [],
+            )
+        finally:
+            topup.read_page_facts = original  # type: ignore[assignment]
+        self.assertEqual(calls, [])
+        self.assertEqual((attempts, windows), (0, 0))
+        self.assertEqual(len(out), 6)
+
+    def test_top_up_mines_fetched_pages_and_tags_the_page_id(self) -> None:
+        body = "\n".join(
+            f"Tahko ski resort paragraph {i} about the slopes, lodges, and the Nilsiä village." for i in range(40)
+        )
+        pile = [
+            {"id": "W1", "source": "wikipedia", "title": "Tahko", "url": "https://en.wikipedia.org/wiki/Tahko", "text": "Tahko ski resort in Nilsiä, Finland.", "body": body, "fetched": True},
+            {"id": "X1", "source": "searxng", "title": "Tahko", "url": "https://tahko.fi/en", "text": "Tahko ski resort official site.", "body": body, "fetched": True},
+        ]
+        asked: list[str] = []
+
+        facts_by_page = {
+            "W1": [
+                "Tahko Spa hotel has an indoor pool and a sauna wing for guests.",
+                "The snow park hosts a freestyle week each March with local riders.",
+                "Guides call the front side friendly for families and beginners.",
+                "Rentals and lessons meet at the Break Sokos base lodge.",
+            ],
+            "X1": [
+                "The Tahko Golf clubhouse serves lunch to skiers in winter.",
+                "A torchlight descent closes the season on the Pehkubaari slope.",
+            ],
+        }
+
+        def fake_read(page, **kwargs):
+            asked.append(page["id"])
+            return [{"topic": "other", "text": text} for text in facts_by_page[page["id"]]]
+
+        original = topup.read_page_facts
+        topup.read_page_facts = fake_read  # type: ignore[assignment]
+        try:
+            start = [
+                {"topic": "year_started", "text": "Tahko opened in 1968 as a club hill.", "snippet_ids": ["W1"], "value": 1968},
+                {"topic": "setting", "text": "Tahko sits above Lake Syväri in Nilsiä.", "snippet_ids": ["W1"]},
+            ]
+            out, attempts, errors, windows = top_up_notes(
+                start,
+                pile,
+                resort_label="Tahko, Finland",
+                name="Tahko",
+                state=None,
+                country="Finland",
+                tier="small",
+                base_url="http://127.0.0.1:1",
+                model="m",
+                num_ctx=4096,
+                timeout=1,
+                page_limit=4,
+                use_ddg=False,
+                gap_topics=lambda notes: ["lodging"],
+            )
+        finally:
+            topup.read_page_facts = original  # type: ignore[assignment]
+        self.assertEqual(asked[0], "W1", "Wikipedia page is read first")
+        self.assertGreaterEqual(len(out), 6, "small floor reached from page facts")
+        self.assertEqual(attempts, 0, "no web search needed when the pile already has pages")
+        self.assertGreater(windows, 0)
+        self.assertLessEqual(windows, topup.TOPUP_WINDOWS_PER_PAGE * len(asked))
+        mined = {n["text"]: n["snippet_ids"] for n in out[2:]}
+        self.assertEqual(mined[facts_by_page["W1"][0]], ["W1"], "page facts cite the page they came from")
+        self.assertTrue(all(ids in (["W1"], ["X1"]) for ids in mined.values()))
 
 
 if __name__ == "__main__":

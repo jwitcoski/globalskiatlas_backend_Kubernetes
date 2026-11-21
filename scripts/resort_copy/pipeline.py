@@ -27,7 +27,13 @@ from .stickies import (
     run_sticky_search,
 )
 from .snippets import (
+    _drop_pages_about_other_places,
     _keep_grounded,
+    _select_snippets,
+)
+from .topup import (
+    dedupe_notes,
+    top_up_notes,
 )
 from .validators import (
     is_placeholder_name,
@@ -158,17 +164,47 @@ def run_passes(
     )
     stage_timings["sticky_search"] = round(time.time() - started, 2)
     snippets_dropped += dropped
-    notes = _keep_grounded(notes, trimmed, resort_name=name)
-    notes, sticky_errors = sanitize_notes(notes, name=name, snippets=trimmed)
+    # Ground against every page about this resort, not the eight-page trimmed view:
+    # stickies read up to twelve pages, and a note citing page nine is still a fact.
+    # Pages about some other place are still dropped before grounding.
+    grounding_pile, _ = _drop_pages_about_other_places(snippets, name, state, country=country)
+    notes = _keep_grounded(notes, grounding_pile, resort_name=name)
+    notes, sticky_errors = sanitize_notes(notes, name=name, snippets=grounding_pile)
     validation_errors.extend(sticky_errors)
-    gaps = _gap_topics(notes)
-    attempts = 0
+    notes = dedupe_notes(notes)
     print(
         f"    sticky_search: {stage_timings['sticky_search']}s, {len(notes)} notes, "
         f"{note_chars(notes)} note characters",
         file=sys.stderr,
         flush=True,
     )
+    started = time.time()
+    notes, attempts, topup_errors, windows_read = top_up_notes(
+        notes,
+        snippets,
+        resort_label=resort_label,
+        name=name,
+        state=state,
+        country=country,
+        tier=tier,
+        base_url=base_url,
+        model=search_model,
+        num_ctx=search_ctx,
+        timeout=timeout,
+        page_limit=page_limit,
+        use_ddg=use_ddg,
+        gap_topics=_gap_topics,
+        checkpoint=checkpoint,
+    )
+    validation_errors.extend(topup_errors)
+    stage_timings["top_up"] = round(time.time() - started, 2)
+    stage_timings["top_up_windows"] = windows_read
+    if windows_read or attempts:
+        trimmed, more_dropped = _select_snippets(
+            snippets, limit=max(8, page_limit), chars=650, name=name, state=state, country=country
+        )
+        snippets_dropped += more_dropped
+    gaps = _gap_topics(notes)
     if checkpoint is not None:
         checkpoint(
             "search_complete",
