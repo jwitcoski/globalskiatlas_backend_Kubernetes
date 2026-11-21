@@ -92,6 +92,7 @@ def _fetch_tile(x: int, y: int, cache: Optional[Path]) -> np.ndarray:
         with urllib.request.urlopen(url, timeout=60) as r:
             data = r.read()
         if path:
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
     px = np.asarray(Image.open(io.BytesIO(data)).convert("RGB"), dtype="float32")
     return px[..., 0] * 256 + px[..., 1] + px[..., 2] / 256 - 32768
@@ -242,7 +243,11 @@ def convert_scene(scene: Path, out: Path, resort_id: str, *, catalog_name: Optio
 
     bq, blo, bhi = to_u16(fetch_backdrop(cs["origin_longitude"], cs["origin_latitude"], tile_cache))
     bq.tofile(out / "backdrop.u16")
-    where = ", ".join(p for p in (manifest.get("location"), manifest.get("country")) if p)
+    location = str(manifest.get("location") or "").strip()
+    country = str(manifest.get("country") or "").strip()
+    if country and country.casefold() in location.casefold():
+        country = ""
+    where = ", ".join(p for p in (location, country) if p)
     world = {"source": {"elevation": manifest["attribution"]["dem"], "pistes": manifest["attribution"]["osm"]},
              "name": name,
              "origin": {"lon": cs["origin_longitude"], "lat": cs["origin_latitude"]},
