@@ -640,6 +640,78 @@ def fetch_brave_web_snippets(
     return out
 
 
+def searxng_base_url(explicit: str | None = None) -> str | None:
+    """Local SearXNG JSON endpoint, e.g. http://127.0.0.1:8888. Empty disables."""
+    raw = (explicit or os.environ.get("SEARXNG_URL") or "").strip().rstrip("/")
+    return raw or None
+
+
+def fetch_searxng_snippets(
+    queries: list[str],
+    *,
+    base_url: str,
+    max_per_query: int = 6,
+    max_total: int = 26,
+    per_snippet_max_chars: int = 900,
+    id_start: int = 1,
+) -> list[dict[str, Any]]:
+    """Web search snippets via a self-hosted SearXNG JSON API; ids X{id_start}, …"""
+    out: list[dict[str, Any]] = []
+    root = (base_url or "").strip().rstrip("/")
+    if not root or not queries:
+        return out
+    seen_urls: set[str] = set()
+    n = 0
+    seq = id_start
+    for q in queries:
+        if not q.strip() or n >= max_total:
+            break
+        params = urllib.parse.urlencode(
+            {
+                "q": q.strip(),
+                "format": "json",
+                "language": "en",
+                "pageno": "1",
+            }
+        )
+        url = f"{root}/search?{params}"
+        try:
+            data = _http_get_json(url, timeout=30.0)
+        except (urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError, OSError) as exc:
+            print(f"  searxng search failed ({q.strip()!r}): {exc}", file=sys.stderr, flush=True)
+            continue
+        rows = data.get("results") or []
+        taken = 0
+        for row in rows:
+            if n >= max_total or taken >= max_per_query:
+                break
+            href = (row.get("url") or "").strip()
+            title = (row.get("title") or "").strip()
+            body = (row.get("content") or row.get("description") or "").strip()
+            if not body and not title:
+                continue
+            key = href.split("#", 1)[0].rstrip("/").lower() if href else title.lower()
+            if key in seen_urls:
+                continue
+            seen_urls.add(key)
+            text = body or title
+            if len(text) > per_snippet_max_chars:
+                text = text[:per_snippet_max_chars] + "…"
+            n += 1
+            taken += 1
+            out.append(
+                {
+                    "id": f"X{seq}",
+                    "source": "searxng",
+                    "title": title or href or q,
+                    "url": href or "",
+                    "text": text,
+                }
+            )
+            seq += 1
+    return out
+
+
 def research_queries(name: str, state: str | None, country: str | None) -> list[str]:
     """Web search queries: core resort + passes, pricing, transport, season, reviews (deduped)."""
     name = (name or "").strip()
@@ -758,14 +830,20 @@ def _append_unique_snippets(merged: list[dict[str, Any]], extra: list[dict[str, 
 
 
 def _renumber_snippet_ids(snippets: list[dict[str, Any]]) -> None:
-    """Sequential ids per source in list order (W1…, B1…, D1…, P1…)."""
+    """Sequential ids per source in list order (W1…, B1…, D1…, X1…, P1…)."""
     counts: dict[str, int] = {}
     for s in snippets:
         src = (s.get("source") or "dataset").lower()
-        if src not in ("wikipedia", "brave", "duckduckgo", "dataset"):
+        if src not in ("wikipedia", "brave", "duckduckgo", "searxng", "dataset"):
             src = "dataset"
         counts[src] = counts.get(src, 0) + 1
-        prefix = {"wikipedia": "W", "brave": "B", "duckduckgo": "D", "dataset": "P"}[src]
+        prefix = {
+            "wikipedia": "W",
+            "brave": "B",
+            "duckduckgo": "D",
+            "searxng": "X",
+            "dataset": "P",
+        }[src]
         s["id"] = f"{prefix}{counts[src]}"
 
 
@@ -809,13 +887,15 @@ def gather_research_snippets(
     country: str | None = None,
     brave_api_key: str | None = None,
     use_ddg: bool = True,
+    searxng_url: str | None = None,
     wiki_query: str | None = None,
     parquet_row: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """Merge Wikipedia + DuckDuckGo (+ optional Brave). Adds fallback queries and optional dataset stub."""
+    """Merge Wikipedia + SearXNG/Brave/DuckDuckGo. Adds fallback queries and optional dataset stub."""
     queries = research_queries(name, state, country)
     wq = wiki_query if wiki_query else wiki_search_query(name, state, country)
     merged: list[dict[str, Any]] = []
+    sx_url = searxng_base_url(searxng_url)
 
     def _wiki() -> list[dict[str, Any]]:
         try:
@@ -831,8 +911,18 @@ def gather_research_snippets(
         except Exception:
             return []
 
+    def _searx() -> list[dict[str, Any]]:
+        if not sx_url:
+            return []
+        try:
+            return fetch_searxng_snippets(queries, base_url=sx_url, max_per_query=6, max_total=26, id_start=1)
+        except Exception as e:
+            print(f"searxng search failed: {e}", file=sys.stderr)
+            return []
+
     def _ddg() -> list[dict[str, Any]]:
-        if not use_ddg or DDGS is None:
+        # Prefer SearXNG when configured; keep DDG as optional fallback only.
+        if sx_url or not use_ddg or DDGS is None:
             return []
         try:
             return fetch_duckduckgo_snippets(queries, max_per_query=6, max_total=26, id_start=1)
@@ -840,16 +930,19 @@ def gather_research_snippets(
             print(f"duckduckgo search failed: {e}", file=sys.stderr)
             return []
 
-    with ThreadPoolExecutor(max_workers=3) as ex:
+    with ThreadPoolExecutor(max_workers=4) as ex:
         fut_w = ex.submit(_wiki)
         fut_b = ex.submit(_brave)
+        fut_x = ex.submit(_searx)
         fut_d = ex.submit(_ddg)
         wiki_snips = fut_w.result()
         brave_snips = fut_b.result()
+        searx_snips = fut_x.result()
         ddg_snips = fut_d.result()
 
     merged.extend(wiki_snips)
     merged.extend(brave_snips)
+    merged.extend(searx_snips)
     merged.extend(ddg_snips)
 
     if not _snippets_meaningful(merged):
@@ -863,7 +956,14 @@ def gather_research_snippets(
             if len(merged) > before and _snippets_meaningful(merged):
                 break
 
-    if not _snippets_meaningful(merged) and use_ddg and DDGS is not None:
+    if not _snippets_meaningful(merged) and sx_url:
+        try:
+            fb = research_queries_fallback(name, state, country)
+            more_x = fetch_searxng_snippets(fb, base_url=sx_url, max_per_query=5, max_total=18, id_start=1)
+            _append_unique_snippets(merged, more_x)
+        except Exception as e:
+            print(f"searxng fallback search failed: {e}", file=sys.stderr)
+    elif not _snippets_meaningful(merged) and use_ddg and DDGS is not None:
         try:
             fb = research_queries_fallback(name, state, country)
             more_d = fetch_duckduckgo_snippets(fb, max_per_query=5, max_total=18, id_start=1)

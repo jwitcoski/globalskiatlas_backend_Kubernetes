@@ -20,6 +20,11 @@ still depends on Overpass.
 
 Set DATA_ROOT to a local output directory (the Docker host volume) to read and
 write that catalog with no S3, DynamoDB, or CloudFront calls.
+
+The playable game reads ``game_play/<id>/`` (world.json, detail.u16, backdrop.u16),
+not a ``game_scenes`` cake. This job still exports a scene as scratch, bakes the
+Hemu Ski files from it, then deletes the cake. Baked files stay on GAME_PLAY_DIR
+and are uploaded to ``game_play/`` when AWS credentials are available.
 """
 from __future__ import annotations
 
@@ -1462,6 +1467,126 @@ def _publish_pmtiles(s3, bucket: str, work: Path) -> None:
         print("uploaded", name, flush=True)
 
 
+def _latest_scene_dir(scenes: Path, resort_id: str) -> Path | None:
+    root = scenes / resort_id
+    if not root.is_dir():
+        return None
+    versions = sorted(
+        (p for p in root.iterdir() if p.is_dir() and (p / "scene-manifest.json").is_file()),
+        key=lambda p: p.stat().st_mtime,
+    )
+    return versions[-1] if versions else None
+
+
+def _merge_worlds_file(path: Path, entry: dict) -> None:
+    worlds = {"resorts": []}
+    if path.is_file():
+        worlds = json.loads(path.read_text(encoding="utf-8"))
+    resorts = [r for r in worlds.get("resorts") or [] if r.get("id") != entry["id"]]
+    resorts.append(entry)
+    resorts.sort(key=lambda w: str(w.get("name") or "").lower())
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"resorts": resorts}, ensure_ascii=False), encoding="utf-8")
+
+
+def _upload_game_play(s3, bucket: str, resort_id: str, src: Path, entry: dict) -> None:
+    types = {".json": "application/json; charset=utf-8", ".u16": "application/octet-stream"}
+    for f in sorted(p for p in src.rglob("*") if p.is_file()):
+        key = f"game_play/{resort_id}/{f.relative_to(src).as_posix()}"
+        s3.upload_file(
+            str(f), bucket, key,
+            ExtraArgs={
+                "ContentType": types.get(f.suffix, "application/octet-stream"),
+                "CacheControl": "public, max-age=3600",
+            },
+        )
+    key = "game_play/worlds.json"
+    worlds: dict = {"resorts": []}
+    try:
+        worlds = json.loads(s3.get_object(Bucket=bucket, Key=key)["Body"].read().decode())
+    except Exception:
+        worlds = {"resorts": []}
+    resorts = [r for r in worlds.get("resorts") or [] if r.get("id") != resort_id]
+    resorts.append(entry)
+    resorts.sort(key=lambda w: str(w.get("name") or "").lower())
+    s3.put_object(
+        Bucket=bucket, Key=key,
+        Body=json.dumps({"resorts": resorts}, ensure_ascii=False).encode(),
+        ContentType="application/json",
+        CacheControl="public, max-age=300",
+    )
+    print("uploaded game_play", resort_id, flush=True)
+
+
+def _publish_game_play(s3, bucket: str, work: Path, resort_id: str) -> None:
+    """Bake one scene cake into Hemu Ski files and drop the cake."""
+    from game_export.game_play import convert_scene
+
+    scene_dir = _latest_scene_dir(work / "game_scenes", resort_id)
+    if scene_dir is None:
+        raise SystemExit(f"game play: no scene cake for {resort_id}")
+    catalog_name = None
+    catalog_path = work / "game_scenes" / "catalog.json"
+    if catalog_path.is_file():
+        for row in json.loads(catalog_path.read_text(encoding="utf-8")).get("resorts") or []:
+            if row.get("id") == resort_id:
+                catalog_name = row.get("name")
+                break
+    out = work / "game_play_out" / resort_id
+    if out.exists():
+        shutil.rmtree(out)
+    entry = convert_scene(
+        scene_dir, out, resort_id,
+        catalog_name=catalog_name,
+        tile_cache=work / "cache" / "game_play_tiles",
+    )
+    play_root = Path(os.environ.get("GAME_PLAY_DIR", "/tmp/one_resort/game_play"))
+    dest = play_root / resort_id
+    if dest.exists():
+        shutil.rmtree(dest)
+    shutil.copytree(out, dest)
+    _merge_worlds_file(play_root / "worlds.json", entry)
+    cake = work / "game_scenes" / resort_id
+    if cake.is_dir():
+        shutil.rmtree(cake)
+    print("game play", resort_id, entry.get("runs"), "runs", flush=True)
+    client = s3
+    if client is None and os.environ.get("SKIP_GAME_PLAY_S3") != "1":
+        try:
+            client = _s3()
+        except Exception as exc:
+            print("game play: staying local, no s3 client", exc, flush=True)
+            client = None
+    if client is not None and os.environ.get("SKIP_GAME_PLAY_S3") != "1":
+        _upload_game_play(client, bucket, resort_id, dest, entry)
+
+
+def _drop_game_play(s3, bucket: str, resort_id: str) -> None:
+    play_root = Path(os.environ.get("GAME_PLAY_DIR", "/tmp/one_resort/game_play"))
+    dest = play_root / resort_id
+    if dest.is_dir():
+        shutil.rmtree(dest)
+    worlds_path = play_root / "worlds.json"
+    if worlds_path.is_file():
+        worlds = json.loads(worlds_path.read_text(encoding="utf-8"))
+        worlds["resorts"] = [r for r in worlds.get("resorts") or [] if r.get("id") != resort_id]
+        worlds_path.write_text(json.dumps(worlds, ensure_ascii=False), encoding="utf-8")
+    if s3 is None:
+        return
+    _delete_prefix(s3, bucket, f"game_play/{resort_id}/")
+    try:
+        worlds = json.loads(s3.get_object(Bucket=bucket, Key="game_play/worlds.json")["Body"].read().decode())
+    except Exception:
+        return
+    worlds["resorts"] = [r for r in worlds.get("resorts") or [] if r.get("id") != resort_id]
+    s3.put_object(
+        Bucket=bucket, Key="game_play/worlds.json",
+        Body=json.dumps(worlds, ensure_ascii=False).encode(),
+        ContentType="application/json",
+        CacheControl="public, max-age=300",
+    )
+
+
 def _merge_game_catalog(s3, bucket: str, local_catalog: Path) -> None:
     if s3 is None:
         return
@@ -1659,19 +1784,26 @@ def _disk_full(exc) -> bool:
 def _clear_resort_work() -> None:
     """Drop scratch files before another region starts.
 
-    Published parquet and scenes already live on the data volume. A new region
-    is queued only after this returns.
+    Published parquet already lives on the data volume. Baked ``game_play`` files
+    stay on the scratch disk because that volume is the one with room. A new
+    region is queued only after this returns.
     """
-    for path in (
-        Path("/tmp/one_resort"),
-        Path("/app/cache/game_export_dems"),
-        Path("/app/cache/skadi"),
-    ):
+    keep = {"game_play"}
+    scratch = Path("/tmp/one_resort")
+    if scratch.is_dir():
+        for child in scratch.iterdir():
+            if child.name in keep:
+                continue
+            if child.is_dir():
+                shutil.rmtree(child, ignore_errors=True)
+            else:
+                child.unlink(missing_ok=True)
+    else:
+        scratch.mkdir(parents=True, exist_ok=True)
+    for path in (Path("/app/cache/game_export_dems"), Path("/app/cache/skadi")):
         if path.is_dir():
             shutil.rmtree(path, ignore_errors=True)
-        if path.name != "one_resort":
-            path.mkdir(parents=True, exist_ok=True)
-    Path("/tmp/one_resort").mkdir(parents=True, exist_ok=True)
+        path.mkdir(parents=True, exist_ok=True)
     print("sweep: deleted region work files", flush=True)
 
 
@@ -2128,6 +2260,8 @@ def main() -> int:
                 patch_prefix(s3, bucket, prefix, work, wid, publish=False)
             _append_skip(s3, bucket, wid, work)
             yaml = _resort_yaml(wid)
+            if yaml:
+                _drop_game_play(s3, bucket, yaml.stem)
             if yaml and s3:
                 _delete_prefix(s3, bucket, f"game_scenes/{yaml.stem}/")
                 _delete_prefix(s3, bucket, f"clay_scenes/{yaml.stem}/")
@@ -2162,12 +2296,7 @@ def main() -> int:
             "--data-root", str(work), "--cache-dir", str(work / "cache"),
             "--fetch-skadi", "--force",
         ])
-        scenes = work / "game_scenes"
-        if (scenes / "catalog.json").is_file() and s3 and not _local_root():
-            _run([sys.executable, "scripts/upload_game_scenes.py", "--scenes-dir", str(scenes), "--bucket", bucket])
-            _merge_game_catalog(s3, bucket, scenes / "catalog.json")
-        elif _local_root() and scenes.is_dir():
-            shutil.copytree(scenes, _local_root() / "game_scenes", dirs_exist_ok=True)
+        _publish_game_play(s3, bucket, work, yaml.stem)
         _run([
             sys.executable, "-m", "game_export", "--clay-scene", "--resort", yaml.stem,
             "--data-root", str(work), "--cache-dir", str(work / "cache"),

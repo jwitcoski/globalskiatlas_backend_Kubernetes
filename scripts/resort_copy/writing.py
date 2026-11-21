@@ -25,6 +25,7 @@ from .validators import (
     assign_sections,
     deterministic_critique,
     drop_foreign_sentences,
+    note_chars,
     paragraph_budgets,
     reconcile_distances,
     short_reason_for,
@@ -37,6 +38,7 @@ _STYLE = (
     "Do not use nestled, hidden gem, world-class, or other brochure cliches. "
     "Use only facts from NOTES. If a fact is missing, leave it out. "
     "Do not state superlatives or review-style praise as fact. "
+    "Keep the extra clauses in NOTES. Do not compress a long note into one short sentence. "
 )
 
 
@@ -173,6 +175,7 @@ def write_draft(
         "Keep the opening year. Quote a price as a number from NOTES, not as a cheapest-in-the-country ranking. "
         "Cut a nearby golf club, banquet hall, or event-space detail before you cut the drive, the price, the year, or who it is for. "
         + length_rule
+        + "Use the NOTES almost in full. Do not compress the page to a few hundred words when NOTES are longer. "
         + "Do not add years, prices, pass names, or places that are not in NOTES. "
         + "Do not recite vertical, trails, lifts, or acreage. "
         + "The resort name, the lifts, the trails, and the vertical drop are already printed on the page from the database. "
@@ -303,7 +306,7 @@ def edit_draft(
         "Do not add any fact that is not already in NOTES or the draft. "
         "Delete unsupported claims and banned phrases. "
         + _GROUNDING_RULE
-        + " Never pad to reach length. "
+        + " Never invent facts to reach length. Keep NOTES detail instead of cutting it. "
         "The page title is already the resort name, and the fact block already lists lifts, trails, and vertical drop. "
         "If the draft opens with the resort name, the state, or the country, rewrite the opening. Do not repeat those mountain facts. "
         "Plain paragraphs only, one blank line between paragraphs. No title, no markdown. "
@@ -346,6 +349,7 @@ def extend_draft(
         f"{bedrock._measured_brief(bedrock.measure_copy(draft, tier), goal)} "
         f"{bedrock.layout_instruction(tier)} "
         "Keep every existing sentence. Add sentences and paragraphs that use NOTES items the draft does not use yet. "
+        "Copy the unused NOTES almost in full: names, years, and extra clauses. Do not boil them down. "
         "Do not repeat an idea already in the draft, and do not add any fact that is not in NOTES. "
         "Do not recite vertical, trails, lifts, or acreage. "
         "Plain paragraphs only, one blank line between paragraphs. No title, no markdown. "
@@ -394,10 +398,12 @@ def write_by_section(
         group = grouped.get(section) or []
         if not group:
             continue
+        room = max(budget, min(note_chars(group) + 120, 1600))
         system = (
-            f"You are the writer. Write one paragraph of about {budget} characters "
-            f"(stay between {max(180, budget - 80)} and {budget + 80}). "
+            f"You are the writer. Write one paragraph of about {room} characters "
+            f"(stay between {max(180, room - 80)} and {room + 120}). "
             f"The paragraph covers only this topic: {section}. "
+            "Keep the extra clauses in these NOTES. Do not summarize them into one sentence. "
             + _STYLE
             + "Plain prose. No title, no markdown, no bullet list. "
             + _GROUNDING_RULE
@@ -410,7 +416,7 @@ def write_by_section(
                 f"Resort: {resort_label}\n\nNOTES:\n{json.dumps(group, ensure_ascii=False)}\n"
             ),
             temperature=0.3,
-            num_predict=max(220, budget // 2),
+            num_predict=max(400, room // 2),
             num_ctx=num_ctx,
             timeout=timeout,
         )
@@ -458,6 +464,25 @@ def produce_draft(
     )
 
 
+def _stitch_unused_notes(text: str, leftover: list[dict[str, Any]], tier: str) -> str:
+    """Append leftover note text as paragraphs so the model cannot throw the pile away."""
+    if not leftover:
+        return text
+    goal = bedrock.copy_goal_for_tier(tier)
+    paras = list(bedrock._paragraphs(text)) if str(text or "").strip() else []
+    for note in leftover:
+        body = str(note.get("text") or "").strip()
+        if not body:
+            continue
+        if body[-1] not in ".!?":
+            body += "."
+        paras.append(body)
+        joined = "\n\n".join(paras)
+        if not bedrock._copy_under_min(bedrock.measure_copy(joined, tier), goal):
+            break
+    return "\n\n".join(paras)
+
+
 def length_control_loop(
     draft: str,
     notes: list[dict[str, Any]],
@@ -468,7 +493,7 @@ def length_control_loop(
     model: str,
     num_ctx: int,
     timeout: float,
-    passes: int = 2,
+    passes: int = 4,
 ) -> tuple[str, str | None, list[dict[str, Any]]]:
     """Ask the editor to use leftover notes. Stop when the page is long enough or the notes run out."""
     text = draft
@@ -489,8 +514,33 @@ def length_control_loop(
             timeout=timeout,
         )
         if bedrock._char_count(longer) <= bedrock._char_count(text):
+            stitched = _fit_to_layout(
+                _strip_ungrounded(
+                    _stitch_unused_notes(text, leftover, tier),
+                    notes,
+                    tier,
+                    resort_label,
+                ),
+                tier,
+            )
+            if bedrock._char_count(stitched) > bedrock._char_count(text):
+                text = stitched
+                break
             return text, "writer_underused_notes", leftover
         text = longer
+    leftover = unused_notes(text, notes)
+    if short_reason_for(text, notes, tier) and leftover:
+        stitched = _fit_to_layout(
+            _strip_ungrounded(
+                _stitch_unused_notes(text, leftover, tier),
+                notes,
+                tier,
+                resort_label,
+            ),
+            tier,
+        )
+        if bedrock._char_count(stitched) > bedrock._char_count(text):
+            text = stitched
     reason = short_reason_for(text, notes, tier)
     return text, reason, unused_notes(text, notes)
 

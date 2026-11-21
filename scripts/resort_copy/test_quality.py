@@ -13,7 +13,13 @@ _SCRIPTS = Path(__file__).resolve().parent.parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
-from resort_copy.config import TIER_FACT_MIN, fact_min_for, write_floor_for  # noqa: E402
+from resort_copy.config import (  # noqa: E402
+    NOTE_TEXT_MAX_WORDS,
+    TIER_FACT_MIN,
+    fact_min_for,
+    write_floor_for,
+)
+from resort_copy.writing import _stitch_unused_notes  # noqa: E402
 from resort_copy.ollama_client import _parse_json_loose  # noqa: E402
 from resort_copy.queries import large_area_queries, topic_queries  # noqa: E402
 from resort_copy.snippets import _drop_pages_about_other_places, _select_snippets  # noqa: E402
@@ -44,6 +50,7 @@ from resort_copy.validators import (  # noqa: E402
     reconcile_distances,
     sanitize_notes,
     snippet_entity_decision,
+    unused_notes,
 )
 
 
@@ -192,6 +199,36 @@ class LengthAndCriticTests(unittest.TestCase):
         self.assertEqual(note_char_target("medium"), 8100)
         self.assertEqual(note_char_target("large"), 16200)
         self.assertEqual(note_chars([{"text": "abc"}, {"text": " de "}]), 5)
+
+    def test_note_word_cap_is_triple_the_old_bullet(self) -> None:
+        self.assertEqual(NOTE_TEXT_MAX_WORDS, 75)
+
+    def test_long_notes_are_unused_until_their_content_lands(self) -> None:
+        note = {
+            "text": (
+                "Rather than sitting on a single isolated slope, Killington spans six "
+                "mountain peaks within the Green Mountains, which are over 900 million "
+                "years old and worn into rounded peaks and deep valleys."
+            )
+        }
+        self.assertTrue(unused_notes("Killington is a ski resort in Vermont.", [note]))
+        self.assertFalse(
+            unused_notes(
+                "Killington spans six mountain peaks within the Green Mountains, "
+                "which are over 900 million years old.",
+                [note],
+            )
+        )
+
+    def test_stitch_puts_leftover_notes_on_a_short_page(self) -> None:
+        leftover = [
+            {
+                "text": "Day tickets are $89 for adults on a weekend, copied from the rate sheet."
+            }
+        ]
+        page = _stitch_unused_notes("The hill opened in 1958.", leftover, "small")
+        self.assertIn("$89", page)
+        self.assertGreater(len(page), 40)
 
     def test_page_fact_remine_keeps_old_and_adds_new(self) -> None:
         prior = [{"topic": "price", "text": "Adult day tickets start at $89."}]

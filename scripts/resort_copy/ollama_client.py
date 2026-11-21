@@ -77,7 +77,7 @@ def _wait_until_up(base_url: str, timeout: float) -> None:
 
 def _num_predict(tier: str) -> int:
     """About four characters per token, plus room for the model to finish a sentence."""
-    return max(700, min(4096, bedrock.copy_goal_for_tier(tier).characters[1] // 3))
+    return max(700, min(4096, bedrock.copy_goal_for_tier(tier).characters[1] // 2))
 
 
 def ollama_chat(

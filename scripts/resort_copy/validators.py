@@ -351,7 +351,7 @@ def unused_notes(text: str, notes: list[dict[str, Any]]) -> list[dict[str, Any]]
         if not words:
             continue
         hits = sum(1 for w in words if w in low)
-        if hits < max(1, int(0.45 * len(words))):
+        if hits < max(2, int(0.25 * len(words))):
             unused.append(note)
     return unused
 

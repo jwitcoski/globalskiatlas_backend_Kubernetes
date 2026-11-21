@@ -282,6 +282,12 @@ def main() -> int:
     ap.add_argument("--no-ddg", action="store_true")
     ap.add_argument("--brave-api-key", type=str, default=None)
     ap.add_argument(
+        "--searxng-url",
+        type=str,
+        default=None,
+        help="SearXNG base URL (default: env SEARXNG_URL, e.g. http://127.0.0.1:8888)",
+    )
+    ap.add_argument(
         "--out-json",
         type=Path,
         default=None,
@@ -318,6 +324,7 @@ def main() -> int:
         done = _finished_ids(out_path)
         base = ollama_base_url(args.host)
         brave_key = (args.brave_api_key or os.environ.get("BRAVE_API_KEY") or "").strip() or None
+        searx_url = (args.searxng_url or os.environ.get("SEARXNG_URL") or "").strip() or None
         ok = 0
         failed = 0
         started = time.time()
@@ -342,10 +349,15 @@ def main() -> int:
                         country=country,
                         brave_api_key=brave_key,
                         use_ddg=not args.no_ddg,
+                        searxng_url=searx_url,
                         parquet_row=row,
                     )
-                    if not args.no_ddg:
-                        add_web_snippets(snippets, dossier_queries(name, state, country, tier))
+                    add_web_snippets(
+                        snippets,
+                        dossier_queries(name, state, country, tier),
+                        searxng_url=searx_url,
+                        use_ddg=not args.no_ddg,
+                    )
                     add_stay22_lodging_snippet(snippets, name=name, row=row)
                     result = run_passes(
                         resort_label=label,
@@ -469,6 +481,7 @@ def main() -> int:
     if tier == "auto":
         raise SystemExit("--tier auto needs -i and --name.")
     brave_key = (args.brave_api_key or os.environ.get("BRAVE_API_KEY") or "").strip() or None
+    searx_url = (args.searxng_url or os.environ.get("SEARXNG_URL") or "").strip() or None
     name = label.split(",")[0].strip()
     critic_model = args.critic_model or (args.model if args.llm_critic else None)
     safe_name = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or "resort"
@@ -505,10 +518,15 @@ def main() -> int:
             country=country,
             brave_api_key=brave_key,
             use_ddg=not args.no_ddg,
+            searxng_url=searx_url,
             parquet_row=row,
         )
-        if not args.no_ddg:
-            add_web_snippets(snippets, dossier_queries(name, state, country, tier))
+        add_web_snippets(
+            snippets,
+            dossier_queries(name, state, country, tier),
+            searxng_url=searx_url,
+            use_ddg=not args.no_ddg,
+        )
         add_stay22_lodging_snippet(snippets, name=name, row=row)
         print(f"research: {len(snippets)} snippets for {label}", file=sys.stderr)
         save_checkpoint(

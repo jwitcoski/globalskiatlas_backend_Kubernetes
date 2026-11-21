@@ -55,24 +55,53 @@ Imports only point down this list, so there are no cycles.
 - How many facts, pages, or beats per tier: `config.py`.
 - Which sites or words count as a resort source: `snippets.py`, `web_fetch.py`.
 
-## Running it on the AI box (3070)
+## Running it on the AI boxes (3070 and homeserver)
 
-Nothing here requires the laptop. Run the process *on* `3070` (`192.168.68.59`)
-so checkpoints stay on that machine when the PC sleeps. Layout on the box:
+Nothing here requires the laptop. Two boxes carry the same stack and run
+**independently**; neither talks to the other's Ollama or SearXNG.
+
+| Box | Address | Hostname |
+| --- | --- | --- |
+| OptiPlex 3070 | `192.168.68.59` | `3070` |
+| homeserver | `192.168.68.58` | `homeserver` |
+
+Run the process *on* a box so checkpoints stay on that machine when the PC
+sleeps. Identical layout on both:
 
 | Path | Role |
 | --- | --- |
 | `~/ski/repo/` | Scripts + parquet input |
 | `~/ski/venv/` | Python deps (`pandas`, `pyarrow`, `ddgs`) |
-| `~/ski/output/` | Checkpoints and `key_points.jsonl` (auto when hostname is `3070`) |
-| `~/ski/cache/` | Fetched-page and registry cache (auto on that host) |
+| `~/ski/output/` | Checkpoints and `key_points.jsonl` (auto when hostname is `3070` or `homeserver`) |
+| `~/ski/cache/` | Fetched-page and registry cache (auto on those hosts) |
+| `~/ski/searxng/` | Local SearXNG on `127.0.0.1:8888` |
+| `~/ollama/` | Ollama binary, models, `start.sh` (cron `@reboot`) |
+| `~/ski/run_state.sh` | Runner: `run_state.sh "<State>"` writes `output/ollama_resort_copy/<state>.jsonl` |
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `OLLAMA_HOST` | `http://192.168.68.59:11434` | Where the model runs. On the box itself use `http://127.0.0.1:11434`. |
-| `GLOBALS_SKI_OUTPUT` | `~/ski/output` on 3070, else `output` | Override checkpoint root. |
-| `GLOBALS_SKI_CACHE` | `~/ski/cache` on 3070, else `cache` | Override fetch cache root. |
-| `BRAVE_API_KEY` | unset | Optional better search than DuckDuckGo. |
+| `OLLAMA_HOST` | `http://192.168.68.59:11434` | Where the model runs. On a box itself use `http://127.0.0.1:11434`. |
+| `AI_BOX` | unset | `1` forces AI-box defaults on any host, `0` forces them off. |
+| `GLOBALS_SKI_OUTPUT` | `~/ski/output` on an AI box, else `output` | Override checkpoint root. |
+| `GLOBALS_SKI_CACHE` | `~/ski/cache` on an AI box, else `cache` | Override fetch cache root. |
+| `BRAVE_API_KEY` | unset | Optional Brave Search API (still useful alongside SearXNG). |
+| `SEARXNG_URL` | unset | Local SearXNG base URL (on a box: `http://127.0.0.1:8888`). Prefer this over DuckDuckGo. |
+
+### Keeping the two boxes apart
+
+`cli._finished_ids` reads one JSONL back to skip done resorts. Two processes
+appending the same file will double-work and interleave lines, so give each box
+its own slice and its own output file:
+
+```bash
+# on 3070
+~/ski/run_state.sh Vermont
+# on homeserver
+~/ski/run_state.sh "New Hampshire"
+```
+
+Both boxes leave the house on one WAN address, so two SearXNG instances share
+upstream rate limits. If engines start returning 429s, raise `--delay-seconds`.
 
 On the box:
 
@@ -97,9 +126,9 @@ tmux new -s copy
 # Ctrl-b d to detach; tmux attach -t copy to come back
 ```
 
-### Note on search rate limits
+### Note on search
 
-DuckDuckGo rate-limits aggressively. A 50-resort batch issues ~40 queries per
-resort, so expect throttled queries and `search failed ... No results found`
-lines. They are logged, not fatal, and the run continues with the searches that
-succeeded. For unattended batches, set `BRAVE_API_KEY` and pass `--brave-api-key`.
+Prefer the box's own SearXNG (`SEARXNG_URL=http://127.0.0.1:8888`). DuckDuckGo
+rate-limits aggressively and often returns empty under batch load. Brave remains
+optional via `BRAVE_API_KEY`. Follow-up / sticky queries use SearXNG when the
+env var is set.

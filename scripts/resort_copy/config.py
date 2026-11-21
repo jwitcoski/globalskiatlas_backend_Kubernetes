@@ -10,9 +10,18 @@ from typing import Any
 from . import bedrock
 
 
+AI_BOX_HOSTNAMES: frozenset[str] = frozenset({"3070", "homeserver"})
+
+
 def _on_ai_box() -> bool:
-    """True when this process is already on the RTX 3070 host."""
-    return socket.gethostname().strip().lower() == "3070"
+    """True when this process runs on one of the AI boxes (3070 or homeserver).
+
+    `AI_BOX=1` forces it on any host; `AI_BOX=0` forces it off.
+    """
+    forced = (os.environ.get("AI_BOX") or "").strip()
+    if forced in {"1", "0"}:
+        return forced == "1"
+    return socket.gethostname().strip().lower() in AI_BOX_HOSTNAMES
 
 
 def _box_data_root() -> Path:
@@ -22,7 +31,7 @@ def _box_data_root() -> Path:
 def output_root() -> Path:
     """Where checkpoints and key points are written.
 
-    Defaults to the repo's `output/`. On the 3070 box, defaults to
+    Defaults to the repo's `output/`. On an AI box (3070, homeserver), defaults to
     `~/ski/output` so a laptop shutdown cannot take the data with it.
     `GLOBALS_SKI_OUTPUT` always wins. Relative paths stay relative to the
     working directory, as before.
@@ -42,7 +51,7 @@ def output_path(*parts: str) -> Path:
 def cache_root() -> Path:
     """Where fetched pages and research registries are cached.
 
-    Same reasoning as `output_root`: on the 3070 this should be local disk, not a
+    Same reasoning as `output_root`: on an AI box this should be local disk, not a
     network share back to the laptop. `GLOBALS_SKI_CACHE` overrides it.
     """
     raw = (os.environ.get("GLOBALS_SKI_CACHE") or "").strip()
@@ -105,6 +114,18 @@ TIER_PAGES: dict[str, int] = {
 
 
 PAGE_EXCERPT_CHARS = 1400
+
+
+# Old bullets were "25 words or fewer". Triple that so ~45 large-resort hits
+# can fill the print plate without needing 90 separate facts.
+NOTE_TEXT_MAX_WORDS = 75
+NOTE_TEXT_RULE = (
+    f"Each note is up to {NOTE_TEXT_MAX_WORDS} words. "
+    "Lead with the fact, then add extra color from the same source "
+    "(a named detail, a second clause, why it matters). "
+    "Do not stop at one clause when the source has more. "
+    "Do not invent. A thin source can stay short."
+)
 
 
 ARCHIVE_PAGES = 3

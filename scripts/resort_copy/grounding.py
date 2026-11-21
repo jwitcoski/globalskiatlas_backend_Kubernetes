@@ -16,10 +16,12 @@ from .notes import (
 
 _GROUNDING_RULE = (
     "Every sentence must restate something a NOTES item says. "
+    "Keep the extra clauses, names, and years already in NOTES. Do not summarize a long note into one clause. "
     "Do not describe weather, snow conditions, scenery, mood, or atmosphere. "
     "Do not write about fireplaces, cozy lodges, hot cocoa, apres-ski, crisp air, powder, or how the place feels. "
     "Do not invent trail names, lifts, restaurants, events, or amenities. "
-    "If NOTES run out, stop. A shorter page is correct; padding is wrong."
+    "If unused NOTES remain, keep writing from them. A shorter page is correct only when every NOTES item is already used. "
+    "Padding with facts that are not in NOTES is wrong."
 )
 
 

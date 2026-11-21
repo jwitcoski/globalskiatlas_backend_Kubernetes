@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from .config import (
+    NOTE_TEXT_MAX_WORDS,
+    NOTE_TEXT_RULE,
     PAGE_FACT_WINDOW_CHARS,
     SEARCH_SYSTEM_TOKENS,
     _tier_key,
@@ -238,7 +240,10 @@ def _answer_sticky(
         f"You answer one sticky question for a ski atlas entry about {name}. "
         "Use only INDEXED_PAGES. Output one JSON object and nothing else: "
         '{"found":true,"text":"two to four sentences","snippet_ids":["W1"]}. '
-        "When found is true, text is a longer sticky note: first answer the question, "
+        + NOTE_TEXT_RULE
+        + " "
+        "When found is true, text is a longer sticky note (up to "
+        f"{NOTE_TEXT_MAX_WORDS} words): first answer the question, "
         "then keep a vivid grounded detail from the same pages (range age, where lessons meet, "
         "a named lodge, a price with currency, ski-in ski-out, a pool — only if stated). "
         "Copy names, years, distances, and prices exactly. "
@@ -257,7 +262,7 @@ def _answer_sticky(
             system_text=system,
             user_text=user,
             temperature=0.1,
-            num_predict=450,
+            num_predict=700,
             num_ctx=num_ctx,
             timeout=timeout,
             json_format=True,
@@ -329,7 +334,7 @@ def run_sticky_search(
     # Seed the pile: read the best pages we already have URLs for.
     fetch_resort_pages(snippets, name=name, state=state, limit=page_limit)
     notes: list[dict[str, Any]] = []
-    reply_tokens = 500
+    reply_tokens = 700
     budget = int((num_ctx - reply_tokens - SEARCH_SYSTEM_TOKENS) * 3.2)
     budget = max(3500, min(budget, 12000))
 

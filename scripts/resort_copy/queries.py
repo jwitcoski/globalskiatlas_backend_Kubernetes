@@ -246,11 +246,25 @@ def topic_queries(
     return out
 
 
-def add_web_snippets(snippets: list[dict[str, Any]], queries: list[str]) -> list[dict[str, Any]]:
-    if not queries or bedrock.DDGS is None:
+def add_web_snippets(
+    snippets: list[dict[str, Any]],
+    queries: list[str],
+    *,
+    searxng_url: str | None = None,
+    use_ddg: bool = True,
+) -> list[dict[str, Any]]:
+    if not queries:
         return snippets
     cap = min(90, max(12, len(queries) * 2))
-    more = bedrock.fetch_duckduckgo_snippets(queries, max_per_query=2, max_total=cap)
-    bedrock._append_unique_snippets(snippets, more)
-    bedrock._renumber_snippet_ids(snippets)
+    sx = bedrock.searxng_base_url(searxng_url)
+    more: list[dict[str, Any]] = []
+    if sx:
+        more = bedrock.fetch_searxng_snippets(
+            queries, base_url=sx, max_per_query=2, max_total=cap
+        )
+    elif use_ddg and bedrock.DDGS is not None:
+        more = bedrock.fetch_duckduckgo_snippets(queries, max_per_query=2, max_total=cap)
+    if more:
+        bedrock._append_unique_snippets(snippets, more)
+        bedrock._renumber_snippet_ids(snippets)
     return snippets

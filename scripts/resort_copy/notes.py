@@ -9,6 +9,8 @@ from typing import Any, Callable
 
 from .config import (
     COLOR_TOPICS,
+    NOTE_TEXT_MAX_WORDS,
+    NOTE_TEXT_RULE,
     PAGE_FACT_MAX_WINDOWS,
     PAGE_FACT_WINDOW_CHARS,
     PAGE_FACTS_PER_PAGE,
@@ -263,15 +265,20 @@ def search_notes(
         '"social":[{"text":"https://instagram.com/example","snippet_ids":["D30"]}]}}. '
     )
     bullets_schema = (
-        '{"bullets":[{"topic":"famous_people","text":"one concrete fact, 25 words or fewer","snippet_ids":["W1"]}]}. '
+        '{"bullets":[{"topic":"famous_people","text":"fact plus color from the snippet, '
+        + f"{NOTE_TEXT_MAX_WORDS} words or fewer"
+        + '","snippet_ids":["W1"]}]}. '
     )
     bullet_rules = (
         f"The map already knows the place ({known}). Do not write a bullet that only says where it is. "
+        + NOTE_TEXT_RULE
+        + " "
         f"Add at least {fact_min} bullets that would make someone want to visit or read on: "
         "a not-for-profit or club detail, a famous skier, ski-in ski-out or nearby lodging, "
         "whether the scene is nightlife or a few seasonal family events, "
         "and one thing a reviewer says about who it suits or what the skiing is like. "
-        "A review bullet is one concrete observation. No star rating and no trail or lift count. "
+        "A review bullet is a concrete observation plus any extra color on the page. "
+        "No star rating and no trail or lift count. "
         "Also add bullets for who skis there, how a visitor gets there, who the hill is for, "
         "and the day-pass or membership price. A price must be a number copied from SNIPPETS. "
         "Getting there means a drive, a distance, or the nearest city, not a repeat of the town name. "
@@ -331,7 +338,7 @@ def search_notes(
                 f"Add {min(bullet_chunk, fact_min - i)} new bullets",
             )
             + shared_rules,
-            600,
+            1800,
         )
         for i in range(0, fact_min, bullet_chunk)
     )
@@ -543,10 +550,14 @@ def _fact_window_call(
     )
     system = (
         f"You read one web page for a ski atlas entry about {name}. Output one JSON object and nothing else: "
-        '{"facts":[{"topic":"history","text":"one sentence, 30 words or fewer"}]}. '
+        '{"facts":[{"topic":"history","text":"fact plus color from PAGE, '
+        + f"{NOTE_TEXT_MAX_WORDS} words or fewer"
+        + '"}]}. '
         f"{ask} that would make someone want to read on or visit. "
+        + NOTE_TEXT_RULE
+        + " "
         "topic is history, people, events, access, lodging, food, scene, review, price, who, or other. "
-        "One fact per item: never list several years or events in one item. "
+        "One topic per item. Several clauses about the same fact are good; unrelated events are not. "
         "Leave a topic out when PAGE does not cover it. Never write that something is not mentioned. "
         "Good facts: when and how it started, a first or a record, who owns it and why, a famous skier or team, "
         "a tradition or event, the road it is on and how far to a named town, where to eat or stay, "
@@ -565,7 +576,7 @@ def _fact_window_call(
             system_text=system,
             user_text=f"Ski area: {resort_label}\nPAGE ({page.get('title') or page.get('url')}):\n{window}\n",
             temperature=0.1,
-            num_predict=1000,
+            num_predict=1800,
             num_ctx=num_ctx,
             timeout=timeout,
             json_format=True,
