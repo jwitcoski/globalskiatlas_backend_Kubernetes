@@ -17,3 +17,5 @@ Maps each requested fix to the code that now does it.
 The mega plate is not a tier. Old `mega_resort` size labels still map to the large plate in the shared layout table.
 
 Amenity filters live in `filters.py` and, when `RESORT_AMENITY_PUSH=1`, in the DynamoDB table `atlas-ResortAmenities` keyed by `winterSportsId`. An AI write skips a cell a user has locked. Trail count, vertical drop, and lift count stay on the OSM and DEM table.
+
+Comparable harvested facts live in SQLite locally and, when `RESORT_FACTS_PUSH=1` or `facts_table.py --push`, in DynamoDB `atlas-ResortFacts` (key `winterSportsId`, GSIs `pageId` / `country` / `state`). The wiki can `--set` a cell and lock it; the next harvest skips that field. Unknown cells are omitted; `false` is stored. Trail count, vertical drop, and lift count stay on `atlas-WikiPages`.

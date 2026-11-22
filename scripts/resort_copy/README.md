@@ -33,17 +33,19 @@ Imports only point down this list, so there are no cycles.
 
 | Module | Role |
 |---|---|
-| `config.py` | Tier tables (facts, snippets, pages, beats, context), topic lists, default host/model, `_tier_key`, `_cell`, `fact_min_for` |
+| `config.py` | Tier tables (facts, snippets, pages, beats, context), topic lists, default host/model, `_tier_key`, `_cell`, `fact_min_for`, `write_floor_for` (note count), `write_char_floor_for` (plate min characters), `search_ladder_for` (small→medium, medium→large) |
 | `ollama_client.py` | `ollama_chat`, `_chat_json`, model list/unload, JSON parsing |
 | `queries.py` | Search query builders (dossier, reader, record, large-area, topic, depth, follow-up) |
 | `snippets.py` | Snippet scoring, trimming, selection; drops pages about other resorts |
 | `web_fetch.py` | Live and archived page fetch, block extraction, excerpts |
 | `notes.py` | Search pass: snippets and pages to NOTES, topic tagging, de-duplication, page facts |
 | `stickies.py` | Sticky-question pass: one grounded note per reader question against a growing page pile |
-| `topup.py` | After stickies: dedupe notes, then mine fetched pages and search gap topics until the tier fact minimum (stickies alone cannot reach the 22-note floor) |
+| `topup.py` | After stickies: dedupe notes, mine fetched pages (skip Stay22/booking), search gap topics. Write needs **both** the note-count floor and the plate character minimum. Search keeps going until pantry chars hit 2× the plate (or the window budget). Prefer-stop at 12 page windows once both write floors are met; keep going to 24 if still short. Empty searches stop. |
 | `grounding.py` | Anti-hallucination rule and `_strip_ungrounded` (mood words, unbacked numbers, low note overlap) |
 | `writing.py` | Outline, writer, critic, editor, extend, layout fitting |
 | `key_points.py` | Structured key points (prices, passes, audience, links) and `key_points.jsonl` upsert |
+| `facts.py` / `fact_store.py` | Typed facts table from `filters.jsonl` + `key_points.jsonl` (no LLM, no invented cells) |
+| `facts_api.py` | `GET /resorts/facts` and `/resorts/facts/stats` |
 | `pipeline.py` | `run_passes` for one resort, `key_point_record` |
 | `cli.py` | Arguments, test-row picking, batch loop, `main` |
 
@@ -134,3 +136,27 @@ Prefer the box's own SearXNG (`SEARXNG_URL=http://127.0.0.1:8888`). DuckDuckGo
 rate-limits aggressively and often returns empty under batch load. Brave remains
 optional via `BRAVE_API_KEY`. Follow-up / sticky queries use SearXNG when the
 env var is set.
+
+### Facts table (filter chips / price strip)
+
+Harvested comparable facts, not the article body:
+
+```bash
+python scripts/resort_copy/facts_table.py --ingest --copy output/ollama_resort_copy/vermont.jsonl
+python scripts/resort_copy/facts_table.py --query --state Vermont --pass Ikon
+python scripts/resort_copy/facts_table.py --stats --state Vermont
+python scripts/resort_copy/facts_table.py --serve
+# GET http://127.0.0.1:8091/resorts/facts?state=Vermont&amenity=night_skiing&price_band=$$
+```
+
+On an AI box the JSONL sources are `~/ski/output/resort_filters/filters.jsonl` and
+`~/ski/output/resort_key_points/key_points.jsonl`. The OSM trail/lift table stays separate.
+
+Upload the same rows to DynamoDB `atlas-ResortFacts` (same key as wiki/amenities: `winterSportsId`):
+
+```bash
+python scripts/resort_copy/facts_table.py --create-table
+python scripts/resort_copy/facts_table.py --ingest --push --copy output/ollama_resort_copy/vermont.jsonl
+python scripts/resort_copy/facts_table.py --set 1094522661 night_skiing true
+# or set RESORT_FACTS_PUSH=1 on the copy pipeline (harvest skips locked wiki cells)
+```

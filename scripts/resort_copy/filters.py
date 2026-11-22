@@ -26,6 +26,7 @@ FILTER_COLUMNS: tuple[str, ...] = (
     "nordic",
     "childcare",
     "snowmaking",
+    "glacier",
 )
 
 # Text columns. Blank means the run did not establish the value.
@@ -44,6 +45,7 @@ COLUMN_LABELS: dict[str, str] = {
     "nordic": "Nordic",
     "childcare": "Childcare",
     "snowmaking": "Snowmaking",
+    "glacier": "Glacier",
 }
 
 # Approximate USD rates so a euro or yen day ticket lands in the same band.
@@ -58,7 +60,10 @@ _USD_RATES: dict[str, float] = {
     "JPY": 0.0067,
     "SEK": 0.094,
     "NOK": 0.092,
+    "KRW": 0.00072,
 }
+
+TICKET_CURRENCIES: frozenset[str] = frozenset(_USD_RATES)
 
 _MEGA_PASSES = ("Epic", "Ikon", "Indy", "Mountain Collective", "Power Pass")
 _PASS_PATTERNS: tuple[tuple[str, str], ...] = (
@@ -142,6 +147,12 @@ _SPECS: tuple[_Spec, ...] = (
         r"snowmaking|snow making|snow guns|snow cannons",
         r"\b(?:no|not|without)\b[^.]{0,30}snow ?making",
     ),
+    _Spec(
+        "glacier",
+        r"\bglacier(?:s)?\b",
+        r"\b(?:no|not|without)\b[^.]{0,30}glacier",
+        key_point="glacier",
+    ),
 )
 
 
@@ -192,14 +203,33 @@ def _point_urls(value: Any, index: dict[str, str]) -> list[str]:
     return []
 
 
+_PASS_HOSTS = (
+    "epicpass.com",
+    "ikonpass.com",
+    "indypass.com",
+    "indy-pass.com",
+    "mountaincollective.com",
+    "powerpass.com",
+    "nord.ski",
+)
+
+
 def classify_source(urls: list[str], official_host: str) -> dict[str, str]:
-    """official when a cited page is on the resort's own host. Otherwise third_party or unknown."""
+    """official, pass_site, wikipedia, third_party, or unknown."""
     cleaned = [url for url in urls if _host(url)]
     if official_host:
         for url in cleaned:
             host = _host(url)
             if host == official_host or host.endswith("." + official_host):
                 return {"kind": "official", "url": url}
+    for url in cleaned:
+        host = _host(url)
+        if "wikipedia." in host or "wikidata." in host:
+            return {"kind": "wikipedia", "url": url}
+    for url in cleaned:
+        host = _host(url)
+        if any(host == site or host.endswith("." + site) for site in _PASS_HOSTS):
+            return {"kind": "pass_site", "url": url}
     if cleaned:
         return {"kind": "third_party", "url": cleaned[0]}
     return {"kind": "unknown", "url": ""}
@@ -437,8 +467,8 @@ def _amount(token: str) -> float | None:
         return None
 
 
-def day_price_usd(text: str) -> tuple[float, str] | None:
-    """Adult day price in USD, plus the matched text. Multi-day prices are split per day."""
+def parse_native_day_price(text: str) -> dict[str, Any] | None:
+    """Adult day price in the sourced currency. USD is derived; the matched text is unchanged."""
     if not text or re.search(r"per night|/night|\ba night\b", text, re.IGNORECASE):
         return None
     if re.search(r"season pass|membership", text, re.IGNORECASE) and not re.search(
@@ -449,6 +479,7 @@ def day_price_usd(text: str) -> tuple[float, str] | None:
     day_count = re.search(r"(\d+)\s*-\s*days?|\b(\d+)\s+days?\b", text, re.IGNORECASE)
     if day_count:
         days = int(day_count.group(1) or day_count.group(2))
+    codes = "|".join(sorted(TICKET_CURRENCIES))
     patterns = (
         (r"¥\s?([\d,]+(?:\.\d+)?)", "JPY"),
         (r"€\s?([\d,]+(?:\.\d+)?)", "EUR"),
@@ -457,8 +488,8 @@ def day_price_usd(text: str) -> tuple[float, str] | None:
         (r"\bA\$\s?([\d,]+(?:\.\d+)?)", "AUD"),
         (r"\bNZD\s?\$?\s?([\d,]+(?:\.\d+)?)", "NZD"),
         (r"([\d,]+(?:\.\d+)?)\s?NZD\b", "NZD"),
-        (r"\$\s?([\d,]+(?:\.\d+)?)\s*(CAD|USD|AUD|NZD|EUR|GBP|CHF)\b", None),
-        (r"\b(CAD|USD|AUD|NZD|EUR|GBP|CHF|JPY)\s?\$?\s?([\d,]+(?:\.\d+)?)", None),
+        (rf"\$\s?([\d,]+(?:\.\d+)?)\s*({codes})\b", None),
+        (rf"\b({codes})\s?\$?\s?([\d,]+(?:\.\d+)?)", None),
         (r"\$\s?([\d,]+(?:\.\d+)?)", "USD"),
     )
     for pattern, forced in patterns:
@@ -474,11 +505,25 @@ def day_price_usd(text: str) -> tuple[float, str] | None:
         if number is None or number <= 0:
             continue
         per_day = number / days if days > 1 else number
-        usd = per_day * _USD_RATES[code]
-        if usd < 15:
+        rate = _USD_RATES.get(code)
+        usd = round(per_day * rate, 2) if rate is not None else None
+        if usd is not None and usd < 15:
             continue
-        return round(usd, 2), match.group(0)
+        return {
+            "amount": round(per_day, 2),
+            "currency": code,
+            "usd": usd,
+            "matched": match.group(0),
+        }
     return None
+
+
+def day_price_usd(text: str) -> tuple[float, str] | None:
+    """Adult day price in USD, plus the matched text. Multi-day prices are split per day."""
+    parsed = parse_native_day_price(text)
+    if not parsed or parsed.get("usd") is None:
+        return None
+    return float(parsed["usd"]), str(parsed["matched"])
 
 
 def price_band(usd: float) -> str:

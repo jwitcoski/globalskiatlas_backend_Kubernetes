@@ -29,6 +29,7 @@ from .filters import (
     filter_row_from_result,
     upsert_filter_row,
 )
+from .facts import persist_result
 from .key_points import (
     upsert_key_points,
 )
@@ -430,6 +431,7 @@ def main() -> int:
                         page_id=result.get("pageId"),
                     )
                 )
+            filter_record = None
             if result.get("filters"):
                 filter_record = filter_row_from_result(
                     result,
@@ -444,6 +446,10 @@ def main() -> int:
                         push_rows([filter_record], table_name=TABLE_NAME)
                     except Exception as exc:
                         print(f"    amenity table: {exc}", file=sys.stderr, flush=True)
+            try:
+                persist_result(result, filters=filter_record)
+            except Exception as exc:
+                print(f"    facts table: {exc}", file=sys.stderr, flush=True)
             if args.delay_seconds > 0 and index < len(chosen):
                 time.sleep(args.delay_seconds)
         print(
@@ -594,6 +600,7 @@ def main() -> int:
                 page_id=result.get("pageId"),
             )
         )
+    filter_record = None
     if result.get("filters"):
         filter_record = filter_row_from_result(
             result,
@@ -608,6 +615,10 @@ def main() -> int:
                 push_rows([filter_record], table_name=TABLE_NAME)
             except Exception as exc:
                 print(f"    amenity table: {exc}", file=sys.stderr)
+    try:
+        persist_result(result, filters=filter_record if result.get("filters") else None)
+    except Exception as exc:
+        print(f"    facts table: {exc}", file=sys.stderr)
     result.setdefault("status", "complete")
     result["stage"] = result["status"]
     if "progress" in checkpoint_data:
