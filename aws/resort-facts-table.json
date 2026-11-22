@@ -1,8 +1,25 @@
 {
   "TableName": "atlas-ResortFacts",
   "BillingMode": "PAY_PER_REQUEST",
-  "Key": "winterSportsId",
-  "GSI": ["pageId-index", "country-index", "state-index"],
   "Region": "us-east-1",
-  "Note": "Harvested comparable facts from the copy pipeline (passes, native prices, tri-state amenities). Unknown cells are omitted. Trail count, vertical drop, and lift count stay on atlas-WikiPages."
+  "Account": "298043721974",
+  "Arn": "arn:aws:dynamodb:us-east-1:298043721974:table/atlas-ResortFacts",
+  "Key": "winterSportsId",
+  "GSI": [
+    {"IndexName": "pageId-index", "Hash": "pageId"},
+    {"IndexName": "country-index", "Hash": "country"},
+    {"IndexName": "state-index", "Hash": "state"}
+  ],
+  "Frontend": {
+    "getByOsmId": "GetItem Key={winterSportsId}",
+    "getByWikiPage": "Query pageId-index",
+    "listVermont": "Query state-index Key={state: Vermont}",
+    "listCountry": "Query country-index",
+    "chips": "amenity BOOL true/false; missing attribute = unknown; never treat missing as false",
+    "passes": "String Set SS; a resort may have Ikon and a local pass",
+    "price": "lift_ticket_raw is native (49 EUR); lift_ticket_usd and price_band are derived",
+    "wikiEdit": "UpdateItem SET field, fieldLocked=true, fieldSource=user; harvest skips locked fields",
+    "notInThisTable": ["downhillTrails", "totalLifts", "vertical", "article body"]
+  },
+  "Note": "Harvested comparable facts from the copy pipeline. Unknown cells are omitted. OSM trail/lift/vertical stay on atlas-WikiPages."
 }
