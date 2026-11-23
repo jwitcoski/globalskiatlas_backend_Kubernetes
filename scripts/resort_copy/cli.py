@@ -29,7 +29,11 @@ from .filters import (
     filter_row_from_result,
     upsert_filter_row,
 )
-from .facts import persist_result
+try:
+    from .facts import persist_result
+except ImportError:  # older AI-box checkout without the facts table yet
+    def persist_result(*_a: Any, **_k: Any) -> None:
+        return None
 from .key_points import (
     upsert_key_points,
 )
@@ -128,6 +132,15 @@ def _in_state(row: dict[str, Any], wanted: str) -> bool:
         return True
     region = (_cell(row, "region") or "").lower().replace("_", "-")
     return needle.replace(" ", "-") in region
+
+
+def _in_country(row: dict[str, Any], wanted: str) -> bool:
+    needle = wanted.strip().lower()
+    _state, country = _known_state_country(row)
+    if (country or "").strip().lower() == needle:
+        return True
+    raw = (_cell(row, "country") or "").strip().lower()
+    return raw == needle or needle in raw
 
 
 def _print_key_points(points: dict[str, Any]) -> None:
@@ -264,6 +277,7 @@ def main() -> int:
     )
     ap.add_argument("--batch", type=int, default=None, metavar="N", help="Run N resorts (50 for the overnight test)")
     ap.add_argument("--state", type=str, default=None, help="Only resorts in this state, in parquet order")
+    ap.add_argument("--country", type=str, default=None, help="Only resorts in this country, in parquet order")
     ap.add_argument("--search-only", action="store_true", help="Search and key points only. Skip outline, draft, and edit.")
     ap.add_argument("--dry-batch", action="store_true", help="Print the batch list and exit. Does not call Ollama.")
     ap.add_argument(
@@ -296,17 +310,20 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    if args.dry_batch or args.batch or args.state:
+    if args.dry_batch or args.batch or args.state or args.country:
         if not args.input:
             raise SystemExit("--batch needs -i/--input parquet")
-        count = args.batch if args.batch else 50
         rows = bedrock.load_parquet_resorts_for_batch(args.input, skip_not_downhill=True)
-        if args.state:
-            chosen = [row for row in rows if _resort_name(row) and _in_state(row, args.state)]
+        if args.state or args.country:
+            chosen = [row for row in rows if _resort_name(row)]
+            if args.country:
+                chosen = [row for row in chosen if _in_country(row, args.country)]
+            if args.state:
+                chosen = [row for row in chosen if _in_state(row, args.state)]
             if args.batch:
                 chosen = chosen[: args.batch]
         else:
-            chosen = pick_test_rows(rows, count)
+            chosen = pick_test_rows(rows, args.batch if args.batch else 50)
         chosen = _dedupe_rows(chosen)
         critic_model = args.critic_model or (args.model if args.llm_critic else None)
         if args.dry_batch:

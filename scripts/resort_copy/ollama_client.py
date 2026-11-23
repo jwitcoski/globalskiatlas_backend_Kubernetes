@@ -126,7 +126,9 @@ def ollama_chat(
             last_error = e
             # A timeout already used the whole deadline. Repeating it waits the same
             # length again and still returns nothing. Connection drops are worth a retry.
-            if attempt == 2 or isinstance(e, TimeoutError):
+            # A looping model ("token repeat limit") will loop again on the same prompt.
+            msg = str(e).lower()
+            if attempt == 2 or isinstance(e, TimeoutError) or "repeat limit" in msg or "prediction aborted" in msg:
                 break
             print(
                 f"    ollama connection failed ({e}); retry {attempt + 2}/3",

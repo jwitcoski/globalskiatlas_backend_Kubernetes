@@ -28,10 +28,20 @@ _MARKETING = re.compile(
     r"most extraordinary|world-class|world class|hidden gem|\bnestled\b|"
     r"best ski|once-in-a-lifetime|unforgettable|bucket list|"
     r"download (?:the|our) app|\bsknowed\b|steak and malbec|finest ski|"
-    r"premier destination|book now|limited time|you(?:'|’)ll love",
+    r"premier destination|book now|limited time|you(?:'|’)ll love|"
+    r"top destination for",
     re.IGNORECASE,
 )
 _PRICE_TOPIC = re.compile(r"day pass|lift ticket|day ticket|season pass|admission|ticket price", re.IGNORECASE)
+_EMPTY_FACT = re.compile(
+    r"no specific information|not found in search|no information is provided|"
+    r"pages? (?:do not|don't) (?:say|mention)",
+    re.IGNORECASE,
+)
+_ENCYCLOPEDIA = re.compile(
+    r"transient dominant vegetation|vegetation types of|vegetation forms of",
+    re.IGNORECASE,
+)
 _CURRENCY = re.compile(
     r"(?:[$€£¥])\s?\d|\d[\d.,]*\s?(?:USD|CAD|AUD|NZD|EUR|GBP|CHF|JPY|SEK|NOK|KRW)\b|"
     r"\b(?:USD|CAD|AUD|NZD|EUR|GBP|CHF|JPY|SEK|NOK)\s?\$?\s?\d",
@@ -84,9 +94,9 @@ _COUNTRY_ALIASES = {
     "republic of korea": ("south korea", "korea"),
 }
 
-MEDIUM_SECTIONS = ("history", "access", "terrain", "prices", "lodging", "scene", "who")
+MEDIUM_SECTIONS = ("history", "access", "town", "terrain", "prices", "lodging", "scene", "who")
 LARGE_SECTIONS = (
-    "history", "access", "terrain", "lifts", "prices", "passes",
+    "history", "access", "town", "terrain", "lifts", "prices", "passes",
     "lodging", "season", "school", "scene", "food", "who",
 )
 
@@ -209,24 +219,40 @@ def sanitize_notes(
     snippets = snippets or []
     kept: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
+    seen_year = False
+    seen_ownership = False
     for note in notes:
         topic = str(note.get("topic") or "")
         text = str(note.get("text") or "")
         if is_marketing(text):
             errors.append({"topic": topic, "reason": "marketing", "text": text[:180]})
             continue
+        if _EMPTY_FACT.search(text):
+            errors.append({"topic": topic, "reason": "empty_fact", "text": text[:180]})
+            continue
+        if _ENCYCLOPEDIA.search(text):
+            errors.append({"topic": topic, "reason": "encyclopedia", "text": text[:180]})
+            continue
         if topic == "year_started":
             year = opening_year(text)
             if year is None:
                 errors.append({"topic": topic, "reason": "year_rejected", "text": text[:180]})
                 continue
+            if seen_year:
+                errors.append({"topic": topic, "reason": "duplicate_anchor", "text": text[:180]})
+                continue
             note = {**note, "value": year}
+            seen_year = True
         elif topic == "public_or_private":
             kind = ownership_kind(text)
             if kind is None:
                 errors.append({"topic": topic, "reason": "ownership_rejected", "text": text[:180]})
                 continue
+            if seen_ownership:
+                errors.append({"topic": topic, "reason": "duplicate_anchor", "text": text[:180]})
+                continue
             note = {**note, "value": kind}
+            seen_ownership = True
         elif topic == "price" or _PRICE_TOPIC.search(text):
             if re.search(r"\d", text) and not price_has_currency(text):
                 errors.append({"topic": topic or "price", "reason": "price_missing_currency", "text": text[:180]})
@@ -255,6 +281,7 @@ def section_for_note(note: dict[str, Any]) -> str:
         "price": "prices",
         "pass": "passes",
         "lodging": "lodging",
+        "town": "town",
         "scene": "scene",
         "review": "scene",
         "who": "who",
@@ -264,6 +291,13 @@ def section_for_note(note: dict[str, Any]) -> str:
         return mapped[topic]
     if re.search(r"ski school|childcare|kids club|lesson", text, re.IGNORECASE):
         return "school"
+    if re.search(
+        r"\b(?:bar|brewery|apres|après|outlet|access road|pizza|downtown|"
+        r"village shops|after skiing)\b",
+        text,
+        re.IGNORECASE,
+    ):
+        return "town"
     if re.search(r"restaurant|dining|lunch|food", text, re.IGNORECASE):
         return "food"
     if re.search(r"season|opens in|closes|snowmaking|night ski", text, re.IGNORECASE):
@@ -347,11 +381,27 @@ def unused_notes(text: str, notes: list[dict[str, Any]]) -> list[dict[str, Any]]
     low = (text or "").lower()
     unused: list[dict[str, Any]] = []
     for note in notes:
-        words = [w for w in re.findall(r"[a-z0-9]+", str(note.get("text") or "").lower()) if len(w) >= 5]
+        words = [
+            w
+            for w in re.findall(r"[a-z0-9]+", str(note.get("text") or "").lower())
+            if len(w) >= 5
+            and w
+            not in {
+                "resort",
+                "mountain",
+                "skier",
+                "skiers",
+                "skiing",
+                "trails",
+                "vermont",
+                "located",
+                "offers",
+            }
+        ]
         if not words:
             continue
         hits = sum(1 for w in words if w in low)
-        if hits < max(2, int(0.25 * len(words))):
+        if hits < max(2, int(0.3 * len(words))):
             unused.append(note)
     return unused
 

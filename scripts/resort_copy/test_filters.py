@@ -32,6 +32,23 @@ class FilterTests(unittest.TestCase):
         self.assertTrue(flags["ski_rentals"]["value"])
         self.assertTrue(flags["ski_instructors"]["value"])
 
+    def test_snowmaking_and_waterpark_are_not_snowtubing(self) -> None:
+        notes = [
+            {
+                "topic": "other",
+                "text": (
+                    "Camelback Mountain Resort usually opens in December with notable snowmaking "
+                    "facilities on ski slopes, primarily relying on portable snow guns."
+                ),
+            },
+            {
+                "topic": "lodging",
+                "text": "Aquatopia Indoor Waterpark has a virtual reality slide and a mountain coaster.",
+            },
+        ]
+        flags = extract_filters(notes=notes)
+        self.assertIsNone(flags["snowtubing"]["value"])
+
     def test_vacation_rental_is_not_a_ski_rental(self) -> None:
         notes = [{"topic": "lodging", "text": "Condo rentals and vacation rentals sit in the village."}]
         flags = extract_filters(notes=notes)
@@ -75,6 +92,17 @@ class FilterTests(unittest.TestCase):
             {"pass_products": [{"value": "Epic Pass"}, {"value": "Ikon Pass"}, {"value": "Mountain Collective"}]}
         )
         self.assertEqual(passes, [])
+        official = resort_passes(
+            {
+                "website": {"value": "https://killington.com/"},
+                "pass_products": [
+                    {"value": "Ikon", "sources": ["https://killington.com/lift-tickets"]},
+                    {"value": "Indy", "sources": ["https://www.indyskipass.com/our-resorts"]},
+                    {"value": "Mountain Collective", "sources": ["https://mtninfo.com/passes/"]},
+                ],
+            }
+        )
+        self.assertEqual(official, ["Ikon"])
         self.assertEqual(resort_passes({"pass_affiliation": {"value": "Nord Pass"}}), ["Nord Pass"])
         self.assertEqual(resort_passes({"pass_affiliation": {"value": "Local area pass: Not found in search results."}}), [])
         self.assertEqual(

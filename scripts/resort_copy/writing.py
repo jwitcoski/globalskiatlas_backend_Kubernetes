@@ -61,9 +61,10 @@ def outline_beats(
     model: str,
     num_ctx: int,
     timeout: float,
+    brief: str | None = None,
 ) -> list[str]:
     system = (
-        "You are the outline pass. Order the NOTES into beats the writer will turn into paragraphs. "
+        "You are the outline pass. Order the PAGE BRIEF into beats the writer will turn into paragraphs. "
         "Output one JSON object and nothing else. "
         '{"beats":["short beat, 15 words or fewer"]}. '
         f"Use up to {beat_cap} beats. One beat is one paragraph. "
@@ -72,30 +73,40 @@ def outline_beats(
             if beat_cap <= 6
             else "This is half a page or more. Use a separate beat for each paragraph. Do not collapse the page into one beat. "
         )
-        + "Use only NOTES. Do not add facts. "
+        + "Use only the brief. Do not add facts. Copy a heading into a beat, never paste a whole paragraph. "
         "The page title is already the resort name, so do not spend a beat on the name or the state. "
-        "One beat is the setting, not the town name. "
-        "When NOTES support them, give separate beats to who skis there, how a visitor gets there, who the hill is for, and what a day costs. "
-        "If notes name linked villages, a race, or which base to stay in, give those their own beats. "
+        "When the brief has them, give separate beats to who skis there, how a visitor gets there, the town after skiing, who the hill is for, and what a day costs. "
+        "If the brief names linked villages, a race, or which base to stay in, give those their own beats. "
         "This is not an essay outline. No headings like Historically or Overall."
     )
+    material = brief.strip() if brief and brief.strip() else json.dumps(notes, ensure_ascii=False)
     try:
         payload = _chat_json(
             base_url=base_url,
             model=model,
             system_text=system,
-            user_text=f"Resort: {resort_label}\n\nNOTES:\n{json.dumps(notes, ensure_ascii=False)}\n",
+            user_text=f"Resort: {resort_label}\n\nPAGE BRIEF:\n{material}\n",
             temperature=0.2,
             num_predict=max(400, beat_cap * 40),
             num_ctx=num_ctx,
             timeout=timeout,
         )
     except (json.JSONDecodeError, OllamaJsonError):
-        return [n["text"] for n in notes[:beat_cap]]
-    raw = payload.get("beats")
+        raw = None
+    else:
+        raw = payload.get("beats")
     if not isinstance(raw, list):
+        if brief:
+            heads = [line[1:-1] for line in brief.splitlines() if line.startswith("[") and line.endswith("]")]
+            if heads:
+                return heads[:beat_cap]
         return [n["text"] for n in notes[:beat_cap]]
     beats = [str(b).strip() for b in raw if str(b).strip()]
+    if beats:
+        return beats[:beat_cap]
+    if brief:
+        heads = [line[1:-1] for line in brief.splitlines() if line.startswith("[") and line.endswith("]")]
+        return heads[:beat_cap] or [n["text"] for n in notes][:beat_cap]
     return (beats or [n["text"] for n in notes])[:beat_cap]
 
 
@@ -163,6 +174,7 @@ def write_draft(
     model: str,
     num_ctx: int,
     timeout: float,
+    brief: str | None = None,
 ) -> str:
     key = _tier_key(tier)
     length_rule = bedrock.layout_instruction(key) + " "
@@ -191,7 +203,8 @@ def write_draft(
     )
     user = (
         f"Resort: {resort_label}\n\nOUTLINE:\n{json.dumps(beats, ensure_ascii=False)}\n\n"
-        f"NOTES:\n{json.dumps(notes, ensure_ascii=False)}\n"
+        + (f"PAGE BRIEF:\n{brief}\n\n" if brief else "")
+        + f"NOTES:\n{json.dumps(notes, ensure_ascii=False)}\n"
     )
     raw = ollama_chat(
         base_url=base_url,
@@ -439,6 +452,7 @@ def produce_draft(
     timeout: float,
     name: str = "",
     section_writing: bool | None = None,
+    brief: str | None = None,
 ) -> str:
     use_sections = section_writing_for(tier) if section_writing is None else section_writing
     if use_sections:
@@ -461,6 +475,7 @@ def produce_draft(
         model=model,
         num_ctx=num_ctx,
         timeout=timeout,
+        brief=brief,
     )
 
 
