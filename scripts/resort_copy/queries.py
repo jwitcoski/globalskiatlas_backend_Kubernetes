@@ -166,7 +166,10 @@ def followup_queries(
     if "year_started" in missing:
         queries.append(f"{quoted} ski opened OR founded OR established {place}")
     if "pass" in missing:
-        queries.append(f"{quoted} ski pass membership")
+        queries.append(
+            f"{quoted} ski Ikon OR Epic OR Indy OR \"season pass\" "
+            f"site:ikonpass.com OR site:epicpass.com"
+        )
     if "public_or_private" in missing:
         queries.append(f"{quoted} \"not-for-profit\" OR \"ski club\" OR private OR municipal")
     if "setting" in missing:
@@ -194,14 +197,14 @@ def followup_queries(
 _TOPIC_QUERY = {
     "year_started": '{q} ski opened OR founded OR established',
     "history": '{q} ski history founded opened',
-    "pass": '{q} ski "ski pass" OR Epic OR Ikon OR "season pass"',
-    "passes": '{q} ski "ski pass" OR Epic OR Ikon OR "season pass"',
+    "pass": '{q} ski (Ikon OR Epic OR Indy OR "season pass") (site:ikonpass.com OR site:epicpass.com OR site:indyskipass.com OR pass)',
+    "passes": '{q} ski (Ikon OR Epic OR Indy OR "season pass") (site:ikonpass.com OR site:epicpass.com OR site:indyskipass.com OR pass)',
     "public_or_private": '{q} ski club OR municipal OR private OR "not-for-profit"',
     "who": '{q} ski beginners OR families OR members',
     "setting": '{q} ski valley OR overlooks OR mountain',
     "access": '{q} ski airport OR "km from" OR "drive from"',
-    "price": '{q} ski "lift ticket" OR "day pass" price',
-    "prices": '{q} ski "lift ticket" OR "day pass" price',
+    "price": '{q} ski ("lift ticket" OR "day pass" OR "adult ticket") (price OR rates OR tickets)',
+    "prices": '{q} ski ("lift ticket" OR "day pass" OR "adult ticket") (price OR rates OR tickets)',
     "lodging": '{q} ski lodging OR hotel OR "where to stay"',
     "terrain": '{q} ski vertical OR trails OR terrain',
     "lifts": '{q} ski chairlift OR gondola OR lifts',

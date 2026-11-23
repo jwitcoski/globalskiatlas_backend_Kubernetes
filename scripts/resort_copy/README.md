@@ -40,7 +40,7 @@ Imports only point down this list, so there are no cycles.
 | `web_fetch.py` | Live and archived page fetch, block extraction, excerpts |
 | `notes.py` | Search pass: snippets and pages to NOTES, topic tagging, de-duplication, page facts |
 | `stickies.py` | Sticky-question pass: one grounded note per reader question against a growing page pile |
-| `topup.py` | After stickies: dedupe notes, mine fetched pages (skip Stay22/booking), search gap topics. Write needs **both** the note-count floor and the plate character minimum. Search keeps going until pantry chars hit 2× the plate (or the window budget). Prefer-stop at 12 page windows once both write floors are met; keep going to 24 if still short. Empty searches stop. |
+| `topup.py` | After stickies: search pass/price first, mine fetched pages (pass sites before Wikipedia; skip Stay22/booking). Write needs **both** the note-count floor and the plate character minimum. Search keeps going until pantry chars hit 2× the plate or 24 windows. Empty searches stop. |
 | `grounding.py` | Anti-hallucination rule and `_strip_ungrounded` (mood words, unbacked numbers, low note overlap) |
 | `writing.py` | Outline, writer, critic, editor, extend, layout fitting |
 | `key_points.py` | Structured key points (prices, passes, audience, links) and `key_points.jsonl` upsert |

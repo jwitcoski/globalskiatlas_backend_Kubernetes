@@ -17,6 +17,8 @@ from resort_copy.config import (  # noqa: E402
     NOTE_TEXT_MAX_WORDS,
     TIER_FACT_MIN,
     fact_min_for,
+    search_ladder_for,
+    write_char_floor_for,
     write_floor_for,
 )
 from resort_copy.writing import _stitch_unused_notes  # noqa: E402
@@ -36,6 +38,7 @@ from resort_copy.stay22 import lodging_weekend, stay22_map_url, add_stay22_lodgi
 from resort_copy.stickies import stickies_for_tier  # noqa: E402
 from resort_copy import topup  # noqa: E402
 from resort_copy.topup import dedupe_notes, top_up_notes  # noqa: E402
+from resort_copy.pipeline import _write_blockers  # noqa: E402
 from datetime import date  # noqa: E402
 from resort_copy.validators import (  # noqa: E402
     deterministic_critique,
@@ -113,6 +116,27 @@ class FieldTests(unittest.TestCase):
         self.assertIn("pass_from_reseller", reasons)
         self.assertEqual([note["text"] for note in kept], ["The resort opened in 1983."])
 
+    def test_sanitize_drops_empty_encyclopedia_and_duplicate_anchors(self) -> None:
+        notes = [
+            {"topic": "year_started", "text": "The resort opened in 1963.", "snippet_ids": ["A"]},
+            {"topic": "year_started", "text": "Camelback opened in December 1963 after a land deal.", "snippet_ids": ["B"]},
+            {"topic": "price", "text": "No specific information is provided about lift tickets.", "snippet_ids": ["C"]},
+            {
+                "topic": "other",
+                "text": "Camelback has transient dominant vegetation types of Northern Hardwood (106).",
+                "snippet_ids": ["D"],
+            },
+            {"topic": "who", "text": "a top destination for families, thrill-seekers and first-time visitors", "snippet_ids": ["E"]},
+        ]
+        kept, errors = sanitize_notes(notes, name="Camelback")
+        reasons = {err["reason"] for err in errors}
+        self.assertIn("empty_fact", reasons)
+        self.assertIn("encyclopedia", reasons)
+        self.assertIn("duplicate_anchor", reasons)
+        self.assertIn("marketing", reasons)
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(kept[0]["topic"], "year_started")
+
 
 class EntityTests(unittest.TestCase):
     def test_afriski_snippet_is_not_malbun(self) -> None:
@@ -169,6 +193,21 @@ class LengthAndCriticTests(unittest.TestCase):
         self.assertEqual(write_floor_for("small"), 6)
         self.assertEqual(write_floor_for("medium"), 22)
         self.assertEqual(write_floor_for("large"), 22)
+        self.assertEqual(write_char_floor_for("small"), 1450)
+        self.assertEqual(write_char_floor_for("medium"), 3700)
+        self.assertEqual(write_char_floor_for("large"), 7400)
+        self.assertEqual(search_ladder_for("small"), ("small", "medium"))
+        self.assertEqual(search_ladder_for("medium"), ("medium", "large"))
+        self.assertEqual(search_ladder_for("large"), ("large",))
+        short_notes = [{"text": "Opened in 1968 as a club hill."}] * 22
+        self.assertIn("note characters is below", _write_blockers(short_notes, "medium") or "")
+        few = [{"text": "A " + ("long grounded visit fact about the ridge and the lodge. " * 20)}] * 5
+        self.assertIn("notes is below", _write_blockers(few, "medium") or "")
+        enough = [
+            {"text": f"A {i} long grounded visit fact about the ridge and the lodge. " * 20}
+            for i in range(22)
+        ]
+        self.assertIsNone(_write_blockers(enough, "medium"))
 
     def test_wikipedia_article_is_split_and_the_ski_page_wins(self) -> None:
         self.assertGreater(
@@ -406,14 +445,63 @@ class TopUpTests(unittest.TestCase):
         topup.read_page_facts = lambda *a, **k: calls.append("x") or []  # type: ignore[assignment]
         try:
             notes = [
-                {"topic": "year_started", "text": "Tahko opened in 1968 as a club hill.", "snippet_ids": ["X1"], "value": 1968},
-                {"topic": "setting", "text": "Tahko sits above Lake Syväri in Nilsiä.", "snippet_ids": ["X1"]},
-                {"topic": "lodging", "text": "Tahko Spa hotel has an indoor pool and sauna wing.", "snippet_ids": ["X1"]},
-                {"topic": "scene", "text": "The snow park hosts a freestyle week each March.", "snippet_ids": ["X1"]},
-                {"topic": "who", "text": "Guides call the front side friendly for families and beginners.", "snippet_ids": ["X1"]},
-                {"topic": "other", "text": "Rentals and lessons meet at the Break Sokos base lodge.", "snippet_ids": ["X1"]},
+                {
+                    "topic": "year_started",
+                    "text": (
+                        "Tahko opened in 1968 as a club hill on the Nilsiä ridge, with volunteer "
+                        "rope tows before the first chair and a later spa hotel at the base."
+                    )
+                    * 6,
+                    "snippet_ids": ["X1"],
+                    "value": 1968,
+                },
+                {
+                    "topic": "setting",
+                    "text": (
+                        "Tahko sits above Lake Syväri in Nilsiä, Finland, with forested lake views "
+                        "from the ridge and a long access road down to the village shoreline."
+                    )
+                    * 6,
+                    "snippet_ids": ["X1"],
+                },
+                {
+                    "topic": "lodging",
+                    "text": (
+                        "Tahko Spa hotel has an indoor pool, a sauna wing, and slope-side rooms "
+                        "sold as weekend packages next to the Break Sokos plaza."
+                    )
+                    * 6,
+                    "snippet_ids": ["X1"],
+                },
+                {
+                    "topic": "scene",
+                    "text": (
+                        "The snow park hosts a freestyle week each March with local riders, "
+                        "judges, and a torchlight descent on the Pehkubaari pitch."
+                    )
+                    * 6,
+                    "snippet_ids": ["X1"],
+                },
+                {
+                    "topic": "who",
+                    "text": (
+                        "Guides call the front side friendly for families and beginners, with "
+                        "rental meeting points at the Break Sokos base lodge every morning."
+                    )
+                    * 6,
+                    "snippet_ids": ["X1"],
+                },
+                {
+                    "topic": "other",
+                    "text": (
+                        "Rentals and lessons meet at the Break Sokos base lodge, then ski school "
+                        "groups ride the Tahko lifts to the mid-station classroom."
+                    )
+                    * 6,
+                    "snippet_ids": ["X1"],
+                },
             ]
-            out, attempts, errors, windows = top_up_notes(
+            out, attempts, errors, windows, _mined = top_up_notes(
                 notes,
                 [{"id": "X1", "source": "searxng", "title": "Tahko", "url": "https://tahko.fi", "text": "Tahko ski resort", "body": "x" * 500, "fetched": True}],
                 resort_label="Tahko, Finland",
@@ -447,14 +535,38 @@ class TopUpTests(unittest.TestCase):
 
         facts_by_page = {
             "W1": [
-                "Tahko Spa hotel has an indoor pool and a sauna wing for guests.",
-                "The snow park hosts a freestyle week each March with local riders.",
-                "Guides call the front side friendly for families and beginners.",
-                "Rentals and lessons meet at the Break Sokos base lodge.",
+                (
+                    "Tahko Spa hotel has an indoor pool and a sauna wing for guests staying on the ridge. "
+                    "Weekend packages include a slope-side room, breakfast, and a shuttle to the lifts."
+                )
+                * 5,
+                (
+                    "The snow park hosts a freestyle week each March with local riders and judges. "
+                    "The course uses the Pehkubaari pitch and a night session after last chair."
+                )
+                * 5,
+                (
+                    "Guides call the front side friendly for families and beginners on the Nilsiä pitch. "
+                    "Ski school groups meet below the first chair before riding to the mid-station."
+                )
+                * 5,
+                (
+                    "Rentals and lessons meet at the Break Sokos base lodge every winter morning. "
+                    "Boots, helmets, and a locker key are issued at the plaza desk."
+                )
+                * 5,
             ],
             "X1": [
-                "The Tahko Golf clubhouse serves lunch to skiers in winter.",
-                "A torchlight descent closes the season on the Pehkubaari slope.",
+                (
+                    "The Tahko Golf clubhouse serves lunch to skiers in winter beside the first fairway. "
+                    "The kitchen stays open after the last lift and sells a slope-side soup."
+                )
+                * 5,
+                (
+                    "A torchlight descent closes the season on the Pehkubaari slope after last chair. "
+                    "Staff light the pitch and skiers gather at the grill before walking down."
+                )
+                * 5,
             ],
         }
 
@@ -466,10 +578,27 @@ class TopUpTests(unittest.TestCase):
         topup.read_page_facts = fake_read  # type: ignore[assignment]
         try:
             start = [
-                {"topic": "year_started", "text": "Tahko opened in 1968 as a club hill.", "snippet_ids": ["W1"], "value": 1968},
-                {"topic": "setting", "text": "Tahko sits above Lake Syväri in Nilsiä.", "snippet_ids": ["W1"]},
+                {
+                    "topic": "year_started",
+                    "text": (
+                        "Tahko opened in 1968 as a club hill, with volunteer rope tows before the first "
+                        "chair and a later spa hotel at the Nilsiä base."
+                    )
+                    * 5,
+                    "snippet_ids": ["W1"],
+                    "value": 1968,
+                },
+                {
+                    "topic": "setting",
+                    "text": (
+                        "Tahko sits above Lake Syväri in Nilsiä, Finland, with forested lake views from "
+                        "the ridge and a long access road down to the village shoreline."
+                    )
+                    * 5,
+                    "snippet_ids": ["W1"],
+                },
             ]
-            out, attempts, errors, windows = top_up_notes(
+            out, attempts, errors, windows, _mined = top_up_notes(
                 start,
                 pile,
                 resort_label="Tahko, Finland",
@@ -495,6 +624,194 @@ class TopUpTests(unittest.TestCase):
         mined = {n["text"]: n["snippet_ids"] for n in out[2:]}
         self.assertEqual(mined[facts_by_page["W1"][0]], ["W1"], "page facts cite the page they came from")
         self.assertTrue(all(ids in (["W1"], ["X1"]) for ids in mined.values()))
+
+    def test_top_up_keeps_mining_when_short_of_the_floor(self) -> None:
+        """24 windows stay available until the pantry target, not only the write floor."""
+        body = "Tahko ski resort. " * 80
+        pile = [
+            {
+                "id": f"X{i}",
+                "source": "searxng",
+                "title": "Tahko",
+                "url": f"https://tahko.fi/page{i}",
+                "text": "Tahko ski resort in Finland.",
+                "body": body,
+                "fetched": True,
+            }
+            for i in range(1, 6)
+        ]
+        asked: list[str] = []
+        original = topup.read_page_facts
+        orig_cap, orig_short = topup.TOPUP_MAX_WINDOWS, topup.TOPUP_MAX_WINDOWS_IF_SHORT
+        topup.TOPUP_MAX_WINDOWS = 3
+        topup.TOPUP_MAX_WINDOWS_IF_SHORT = 20
+
+        def fake_read(page, **kwargs):
+            asked.append(page["id"])
+            n = len(asked)
+            extras = [
+                (
+                    "Pehkubaari grill books Friday tables for ski-in diners and keeps a wood stove going until midnight.",
+                    "Torchlight descent volunteers walk the pitch with lanterns after last chair in March.",
+                ),
+                (
+                    "Break Sokos spa sells overnight rooms with indoor pool access and a locker for rental boots.",
+                    "A village ski bus loops Nilsiä every half hour and drops families at the plaza.",
+                ),
+                (
+                    "Syväri lakeside cabins sleep eight, with saunas facing the ice and a ski-bus stop at the dock.",
+                    "Ice fishing weekends rent huts on the lake and serve pea soup in the clubhouse.",
+                ),
+                (
+                    "The golf clubhouse restaurant plates elk stew in winter and seats groups beside the first fairway.",
+                    "A midsummer slope concert uses the mid-station stage and a fireworks cue at dusk.",
+                ),
+                (
+                    "Huoneisto apartments above the plaza include kitchens, drying rooms, and underground parking.",
+                    "World cup slalom training sets gates on the steepest Nilsiä pitch each January.",
+                ),
+            ]
+            a, b = extras[n - 1]
+            pad_a = " ".join(f"cabindetail{n}a{i}" for i in range(40))
+            pad_b = " ".join(f"nightdetail{n}b{i}" for i in range(40))
+            return [
+                {"topic": "other", "text": f"{a} {pad_a}"},
+                {"topic": "other", "text": f"{b} {pad_b}"},
+            ]
+
+        topup.read_page_facts = fake_read  # type: ignore[assignment]
+        try:
+            out, attempts, errors, windows, _mined = top_up_notes(
+                [{"topic": "year_started", "text": "Tahko opened in 1968 as a club hill.", "snippet_ids": ["X1"], "value": 1968}],
+                pile,
+                resort_label="Tahko, Finland",
+                name="Tahko",
+                state=None,
+                country="Finland",
+                tier="small",
+                base_url="http://127.0.0.1:1",
+                model="m",
+                num_ctx=4096,
+                timeout=1,
+                page_limit=4,
+                use_ddg=False,
+                gap_topics=lambda notes: [],
+            )
+        finally:
+            topup.read_page_facts = original  # type: ignore[assignment]
+            topup.TOPUP_MAX_WINDOWS = orig_cap
+            topup.TOPUP_MAX_WINDOWS_IF_SHORT = orig_short
+        self.assertGreaterEqual(len(asked), 2, "kept reading after the 12-window prefer-stop")
+        self.assertGreaterEqual(len(out), 6)
+        self.assertEqual(attempts, 0)
+
+    def test_top_up_skips_stay22_and_stops_empty_searches(self) -> None:
+        stay = {
+            "id": "P1",
+            "source": "dataset",
+            "title": "Stay22",
+            "url": "https://www.stay22.com/map?address=Tahko",
+            "text": "Map of hotels near Tahko ski resort. " * 20,
+            "body": "Map of hotels near Tahko ski resort. " * 20,
+            "fetched": True,
+        }
+        wiki = {
+            "id": "W1",
+            "source": "wikipedia",
+            "title": "Tahko",
+            "url": "https://en.wikipedia.org/wiki/Tahko",
+            "text": "Tahko ski resort in Finland.",
+            "body": "Tahko ski resort in Nilsiä, Finland. " * 40,
+            "fetched": True,
+        }
+        asked: list[str] = []
+        searches = {"n": 0}
+        original = topup.read_page_facts
+        orig_add = topup.add_web_snippets
+        orig_fetch = topup.fetch_resort_pages
+
+        def fake_read(page, **kwargs):
+            asked.append(page["id"])
+            return [{"topic": "lodging", "text": "Tahko Spa hotel has an indoor pool and a sauna wing for guests."}]
+
+        def fake_add(snippets, queries, **kwargs):
+            searches["n"] += 1
+            return snippets
+
+        def fake_fetch(*a, **k):
+            return 0
+
+        topup.read_page_facts = fake_read  # type: ignore[assignment]
+        topup.add_web_snippets = fake_add  # type: ignore[assignment]
+        topup.fetch_resort_pages = fake_fetch  # type: ignore[assignment]
+        try:
+            out, attempts, errors, windows, _mined = top_up_notes(
+                [{"topic": "year_started", "text": "Tahko opened in 1968 as a club hill.", "snippet_ids": ["W1"], "value": 1968}],
+                [stay, wiki],
+                resort_label="Tahko, Finland",
+                name="Tahko",
+                state=None,
+                country="Finland",
+                tier="small",
+                base_url="http://127.0.0.1:1",
+                model="m",
+                num_ctx=4096,
+                timeout=1,
+                page_limit=4,
+                use_ddg=True,
+                gap_topics=lambda notes: ["lodging", "prices"],
+            )
+        finally:
+            topup.read_page_facts = original  # type: ignore[assignment]
+            topup.add_web_snippets = orig_add  # type: ignore[assignment]
+            topup.fetch_resort_pages = orig_fetch  # type: ignore[assignment]
+        self.assertEqual(asked, ["W1"])
+        self.assertLessEqual(searches["n"], 2, "pass/price search then one empty stop, not a retry storm")
+        self.assertLessEqual(attempts, 2)
+
+
+class BriefTests(unittest.TestCase):
+    def test_filler_does_not_count_toward_the_plate(self) -> None:
+        from resort_copy.brief import is_filler_note, page_brief, usable_note_chars
+
+        filler = {
+            "topic": "scene",
+            "text": "Snow tubing is available at the resort, but no specific details are provided in the indexed pages.",
+        }
+        real = {
+            "topic": "year_started",
+            "text": "Killington Resort opened on December 13, 1958, after Perry H. Merrill developed the area with Preston Leete Smith.",
+        }
+        self.assertTrue(is_filler_note(filler))
+        self.assertFalse(is_filler_note(real))
+        self.assertLess(usable_note_chars([filler, real]), note_chars([filler, real]))
+
+    def test_brief_gets_ikon_from_the_fact_card(self) -> None:
+        from resort_copy.brief import compact_key_points, inject_fact_notes, page_brief
+
+        points = compact_key_points(
+            {
+                "website": {"value": "https://killington.com/", "sources": ["https://killington.com/"]},
+                "year_started": {
+                    "value": "Killington Resort opened on December 13, 1958, after Perry H. Merrill developed the area."
+                },
+                "pass_products": [
+                    {"value": "Ikon", "sources": ["https://killington.com/lift-tickets"], "snippet_ids": ["X29"]},
+                    {"value": "Indy", "sources": ["https://www.indyskipass.com/our-resorts"]},
+                ],
+            }
+        )
+        self.assertEqual(points["year_started"]["value"], "1958")
+        notes = inject_fact_notes(
+            [{"topic": "setting", "text": "Killington Peak sits in the Green Mountains of Vermont, west of the town."}],
+            points,
+        )
+        text = " ".join(str(n.get("text") or "") for n in notes)
+        self.assertIn("Ikon", text)
+        brief = page_brief(notes, name="Killington", key_points=points)
+        self.assertIn("[passes]", brief)
+        self.assertIn("Ikon", brief)
+        self.assertNotIn("snippet_ids", brief)
 
 
 if __name__ == "__main__":

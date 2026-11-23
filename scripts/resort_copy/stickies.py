@@ -328,12 +328,19 @@ def run_sticky_search(
     page_limit: int,
     char_target: int,
     checkpoint: CheckpointCallback | None = None,
+    existing_notes: list[dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any], int]:
     """Walk stickies against a growing page pile. Returns trimmed, notes, key_points, dropped."""
-    stickies = stickies_for_tier(tier)
+    notes = list(existing_notes or [])
+    have = {str(n.get("sticky") or "") for n in notes if n.get("sticky")}
+    stickies = [s for s in stickies_for_tier(tier) if s.id not in have]
+    if not stickies:
+        trimmed, dropped = _select_snippets(
+            snippets, limit=max(8, page_limit), chars=650, name=name, state=state, country=country
+        )
+        return trimmed, notes, {}, dropped
     # Seed the pile: read the best pages we already have URLs for.
     fetch_resort_pages(snippets, name=name, state=state, limit=page_limit)
-    notes: list[dict[str, Any]] = []
     reply_tokens = 700
     budget = int((num_ctx - reply_tokens - SEARCH_SYSTEM_TOKENS) * 3.2)
     budget = max(3500, min(budget, 12000))

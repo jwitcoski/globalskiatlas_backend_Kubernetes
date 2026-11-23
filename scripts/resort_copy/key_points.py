@@ -190,7 +190,7 @@ _YES_PATTERNS = {
     "night_skiing": r"night ski",
     "terrain_park": r"terrain park",
     "nordic": r"\bnordic\b|cross-country|cross country",
-    "tubing": r"\btubing\b",
+    "tubing": r"snow tubing|snowtubing|tube park|tubing park|tubing hill",
 }
 
 

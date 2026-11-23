@@ -106,6 +106,7 @@ _SPECS: tuple[_Spec, ...] = (
         "snowtubing",
         r"snow tubing|snowtubing|snowtube|tube park|tubing park|tubing hill",
         r"\b(?:no|not|without)\b[^.]{0,40}(?:snow tubing|snowtubing|tube park|tubing park)",
+        reject=r"waterpark|water park|mat racing|mountain coaster|indoor water",
         key_point="tubing",
     ),
     _Spec(
@@ -208,10 +209,39 @@ _PASS_HOSTS = (
     "ikonpass.com",
     "indypass.com",
     "indy-pass.com",
+    "indyskipass.com",
     "mountaincollective.com",
     "powerpass.com",
     "nord.ski",
 )
+_ROUNDUP_PASS_HOSTS = (
+    "zrankings.com",
+    "mtninfo.com",
+    "onthesnow.com",
+    "ski.com",
+    "wikipedia.org",
+    "wikidata.org",
+)
+
+
+def pass_url_trusted(url: str, official_host: str, pass_name: str) -> bool:
+    """True when this page is about THIS resort's pass, not a roundup of every pass."""
+    host = _host(url)
+    if not host:
+        return False
+    if official_host and (host == official_host or host.endswith("." + official_host)):
+        return True
+    if any(host == h or host.endswith("." + h) for h in _ROUNDUP_PASS_HOSTS):
+        return False
+    if not any(host == h or host.endswith("." + h) for h in _PASS_HOSTS):
+        return False
+    path = (url or "").lower()
+    if re.search(r"/our-resorts/?$|/passes/?$|/ski-resorts/season-passes", path):
+        return False
+    slug = re.sub(r"[^a-z]+", "", (pass_name or "").lower().replace("pass", ""))
+    if "ikon" in slug and "ikonpass.com" in host:
+        return "destination" in path or "killington" in path or len(path) > 40
+    return "destination" in path or "resort" in path
 
 
 def classify_source(urls: list[str], official_host: str) -> dict[str, str]:
@@ -415,6 +445,18 @@ def _named_passes(text: str) -> list[str]:
     return found
 
 
+def _pass_items(key_points: dict[str, Any] | None) -> list[tuple[str, list[str]]]:
+    points = key_points or {}
+    items: list[tuple[str, list[str]]] = []
+    raw = points.get("pass_affiliation")
+    if isinstance(raw, dict) and raw.get("value"):
+        items.append((str(raw.get("value") or ""), list(raw.get("sources") or [])))
+    for product in points.get("pass_products") or []:
+        if isinstance(product, dict) and product.get("value"):
+            items.append((str(product.get("value") or ""), list(product.get("sources") or [])))
+    return items
+
+
 def _passes_cite(
     key_points: dict[str, Any] | None,
     notes: list[dict[str, Any]] | None = None,
@@ -422,35 +464,40 @@ def _passes_cite(
 ) -> tuple[list[str], list[str]]:
     """Named passes and the pages that named them."""
     index = _snippet_index(snippets or [])
-    points = key_points or {}
+    official_host = _host(_point_text((key_points or {}).get("website")))
     chunks: list[tuple[str, list[str]]] = []
-    for field in ("pass_affiliation", "pass_products"):
-        raw = points.get(field)
-        text = _point_text(raw)
-        if text:
-            chunks.append((text, _point_urls(raw, index)))
+    for text, sources in _pass_items(key_points):
+        chunks.append((text, sources or []))
     for note in notes or []:
         if note.get("topic") == "pass":
             chunks.append((str(note.get("text") or ""), _urls_from_ids(note.get("snippet_ids"), index)))
-    names: list[str] = []
-    urls: list[str] = []
+    trusted: list[str] = []
+    trusted_urls: list[str] = []
+    weak: list[str] = []
+    weak_urls: list[str] = []
     for chunk, cites in chunks:
-        added = False
         for piece in re.split(r"\s*\|\s*|,\s*", chunk):
             for name in _named_passes(piece):
-                if name not in names:
-                    names.append(name)
-                    added = True
-        if added:
-            for url in cites:
-                if url not in urls:
-                    urls.append(url)
-    mega = [name for name in names if name in _MEGA_PASSES]
+                ok = any(pass_url_trusted(url, official_host, name) for url in cites) if cites else False
+                if ok:
+                    if name not in trusted:
+                        trusted.append(name)
+                    for url in cites:
+                        if url not in trusted_urls:
+                            trusted_urls.append(url)
+                else:
+                    if name not in weak and name not in trusted:
+                        weak.append(name)
+                    for url in cites:
+                        if url not in weak_urls:
+                            weak_urls.append(url)
+    if trusted:
+        return trusted, trusted_urls
+    mega = [name for name in weak if name in _MEGA_PASSES]
     if len(mega) >= 2:
-        names = [name for name in names if name not in _MEGA_PASSES]
-        if not names:
-            urls = []
-    return names, urls
+        names = [name for name in weak if name not in _MEGA_PASSES]
+        return names, (weak_urls if names else [])
+    return weak, weak_urls
 
 
 def resort_passes(key_points: dict[str, Any] | None, notes: list[dict[str, Any]] | None = None) -> list[str]:

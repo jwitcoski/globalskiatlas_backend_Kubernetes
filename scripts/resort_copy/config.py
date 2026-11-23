@@ -260,12 +260,35 @@ def fact_min_for(tier: str) -> int:
 
 
 def write_floor_for(tier: str) -> int:
-    """Notes required before a page is written. Search still aims at fact_min_for.
+    """How many distinct notes are required before a page is written.
 
-    A large resort stays in search until 45 facts, but 22 grounded notes are already
-    a page. Refusing to write at 34 threw away a real article.
+    Small 6, medium and large 22. Character length is a separate gate
+    (`write_char_floor_for`). Both must pass.
     """
     return min(fact_min_for(tier), 22)
+
+
+def write_char_floor_for(tier: str) -> int:
+    """How many characters of note text are required before a page is written.
+
+    The printed plate minimum: small 1450, medium 3700, large 7400. A resort can
+    have 22 notes and still fail this if they are too short to fill the plate.
+    """
+    return int(bedrock.copy_goal_for_tier(tier).characters[0])
+
+
+def search_ladder_for(tier: str) -> tuple[str, ...]:
+    """Print tier stays put. Search may step up a size if the pantry is still thin.
+
+    Small keeps researching like medium; medium like large; large stays large then
+    gets an extra top-up pass (see LARGE_EXTRA_WINDOWS in topup).
+    """
+    key = _tier_key(tier)
+    if key == "small":
+        return ("small", "medium")
+    if key == "medium":
+        return ("medium", "large")
+    return ("large",)
 
 
 def note_cap_for(tier: str) -> int:

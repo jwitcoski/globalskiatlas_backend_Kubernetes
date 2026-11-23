@@ -14,11 +14,21 @@ from .config import (
     TIER_SNIPPETS,
     _tier_key,
     fact_min_for,
+    search_ladder_for,
+    write_char_floor_for,
     write_floor_for,
+)
+from .brief import (
+    compact_key_points,
+    inject_fact_notes,
+    page_brief,
+    usable_note_chars,
+    writing_notes,
 )
 from .filters import (
     filter_row,
 )
+from .key_points import assemble_key_points
 from .notes import (
     _color_notes,
     _missing_topics,
@@ -32,6 +42,8 @@ from .snippets import (
     _select_snippets,
 )
 from .topup import (
+    LARGE_EXTRA_NOTES,
+    LARGE_EXTRA_WINDOWS,
     dedupe_notes,
     top_up_notes,
 )
@@ -76,6 +88,34 @@ def _gap_topics(notes: list[dict[str, Any]]) -> list[str]:
         if section not in have:
             gaps.append(section)
     return gaps
+
+
+def _write_blockers(notes: list[dict[str, Any]], tier: str) -> str | None:
+    """None when the pile has enough notes *and* enough characters to fill the plate."""
+    bits: list[str] = []
+    n_have, n_need = len(notes), write_floor_for(tier)
+    c_have, c_need = usable_note_chars(notes), write_char_floor_for(tier)
+    if n_have < n_need:
+        bits.append(f"{n_have} notes is below the {n_need} needed")
+    if c_have < c_need:
+        bits.append(f"{c_have} note characters is below the {c_need} needed")
+    if not bits:
+        return None
+    return " and ".join(bits) + f" to write a {_tier_key(tier)} page"
+
+
+def _ground_notes(
+    notes: list[dict[str, Any]],
+    snippets: list[dict[str, Any]],
+    *,
+    name: str,
+    state: str | None,
+    country: str | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    pile, _ = _drop_pages_about_other_places(snippets, name, state, country=country)
+    notes = _keep_grounded(notes, pile, resort_name=name)
+    notes, errors = sanitize_notes(notes, name=name, snippets=pile)
+    return dedupe_notes(notes), errors
 
 
 def _research_view(snippets: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -136,6 +176,8 @@ def run_passes(
         }
     fact_min = fact_min_for(tier)
     char_target = note_char_target(tier)
+    note_floor = write_floor_for(tier)
+    char_floor = write_char_floor_for(tier)
     stage_timings: dict[str, float] = {}
     validation_errors: list[dict[str, str]] = []
     snippets_dropped = 0
@@ -143,63 +185,119 @@ def run_passes(
     if not bedrock.format_snippets_for_prompt(snippets):
         raise RuntimeError("No research snippets.")
     search_ctx = max(num_ctx, TIER_SEARCH_CTX.get(_tier_key(tier), 8192))
-    page_limit = TIER_PAGES.get(_tier_key(tier), 4)
-    print("search: sticky-question pass with growing page pile", file=sys.stderr, flush=True)
-    started = time.time()
-    trimmed, notes, key_points, dropped = run_sticky_search(
-        snippets,
-        resort_label=resort_label,
-        name=name,
-        state=state,
-        country=country,
-        tier=tier,
-        base_url=base_url,
-        model=search_model,
-        num_ctx=search_ctx,
-        timeout=timeout,
-        use_ddg=use_ddg,
-        page_limit=page_limit,
-        char_target=char_target,
-        checkpoint=checkpoint,
-    )
-    stage_timings["sticky_search"] = round(time.time() - started, 2)
-    snippets_dropped += dropped
-    # Ground against every page about this resort, not the eight-page trimmed view:
-    # stickies read up to twelve pages, and a note citing page nine is still a fact.
-    # Pages about some other place are still dropped before grounding.
-    grounding_pile, _ = _drop_pages_about_other_places(snippets, name, state, country=country)
-    notes = _keep_grounded(notes, grounding_pile, resort_name=name)
-    notes, sticky_errors = sanitize_notes(notes, name=name, snippets=grounding_pile)
-    validation_errors.extend(sticky_errors)
-    notes = dedupe_notes(notes)
-    print(
-        f"    sticky_search: {stage_timings['sticky_search']}s, {len(notes)} notes, "
-        f"{note_chars(notes)} note characters",
-        file=sys.stderr,
-        flush=True,
-    )
-    started = time.time()
-    notes, attempts, topup_errors, windows_read = top_up_notes(
-        notes,
-        snippets,
-        resort_label=resort_label,
-        name=name,
-        state=state,
-        country=country,
-        tier=tier,
-        base_url=base_url,
-        model=search_model,
-        num_ctx=search_ctx,
-        timeout=timeout,
-        page_limit=page_limit,
-        use_ddg=use_ddg,
-        gap_topics=_gap_topics,
-        checkpoint=checkpoint,
-    )
-    validation_errors.extend(topup_errors)
-    stage_timings["top_up"] = round(time.time() - started, 2)
+    notes: list[dict[str, Any]] = []
+    key_points: dict[str, Any] = {}
+    trimmed: list[dict[str, Any]] = []
+    mined: set[str] = set()
+    attempts = 0
+    windows_read = 0
+    sticky_seconds = 0.0
+    topup_seconds = 0.0
+    print_tier = _tier_key(tier)
+    for search_tier in search_ladder_for(print_tier):
+        page_limit = TIER_PAGES.get(search_tier, 4)
+        still_short = len(notes) < note_floor or note_chars(notes) < char_target
+        if still_short:
+            print(
+                f"search: sticky-question pass ({search_tier} intensity, print {print_tier})",
+                file=sys.stderr,
+                flush=True,
+            )
+            started = time.time()
+            trimmed, notes, more_points, dropped = run_sticky_search(
+                snippets,
+                resort_label=resort_label,
+                name=name,
+                state=state,
+                country=country,
+                tier=search_tier,
+                base_url=base_url,
+                model=search_model,
+                num_ctx=search_ctx,
+                timeout=timeout,
+                use_ddg=use_ddg,
+                page_limit=page_limit,
+                char_target=char_target,
+                checkpoint=checkpoint,
+                existing_notes=notes,
+            )
+            sticky_seconds += time.time() - started
+            snippets_dropped += dropped
+            if isinstance(more_points, dict) and more_points:
+                key_points.update(more_points)
+            notes, sticky_errors = _ground_notes(
+                notes, snippets, name=name, state=state, country=country
+            )
+            validation_errors.extend(sticky_errors)
+            print(
+                f"    sticky_search {search_tier}: {len(notes)} notes, "
+                f"{note_chars(notes)} note characters",
+                file=sys.stderr,
+                flush=True,
+            )
+        if len(notes) >= note_floor and note_chars(notes) >= char_target:
+            break
+        started = time.time()
+        notes, att, topup_errors, win, mined = top_up_notes(
+            notes,
+            snippets,
+            resort_label=resort_label,
+            name=name,
+            state=state,
+            country=country,
+            tier=print_tier,
+            base_url=base_url,
+            model=search_model,
+            num_ctx=search_ctx,
+            timeout=timeout,
+            page_limit=page_limit,
+            use_ddg=use_ddg,
+            gap_topics=_gap_topics,
+            checkpoint=checkpoint,
+            mined=mined,
+        )
+        topup_seconds += time.time() - started
+        attempts += att
+        windows_read += win
+        validation_errors.extend(topup_errors)
+        if len(notes) >= note_floor and note_chars(notes) >= char_target:
+            break
+    if print_tier == "large" and (len(notes) < note_floor or note_chars(notes) < char_floor):
+        print(
+            f"search: large extra pass (+{LARGE_EXTRA_NOTES} notes / +{LARGE_EXTRA_WINDOWS} windows)",
+            file=sys.stderr,
+            flush=True,
+        )
+        started = time.time()
+        notes, att, topup_errors, win, mined = top_up_notes(
+            notes,
+            snippets,
+            resort_label=resort_label,
+            name=name,
+            state=state,
+            country=country,
+            tier=print_tier,
+            base_url=base_url,
+            model=search_model,
+            num_ctx=search_ctx,
+            timeout=timeout,
+            page_limit=TIER_PAGES.get("large", 12),
+            use_ddg=use_ddg,
+            gap_topics=_gap_topics,
+            checkpoint=checkpoint,
+            mined=mined,
+            extra_windows=LARGE_EXTRA_WINDOWS,
+            extra_note_goal=LARGE_EXTRA_NOTES,
+        )
+        topup_seconds += time.time() - started
+        attempts += att
+        windows_read += win
+        validation_errors.extend(topup_errors)
+    stage_timings["sticky_search"] = round(sticky_seconds, 2)
+    stage_timings["top_up"] = round(topup_seconds, 2)
     stage_timings["top_up_windows"] = windows_read
-    if windows_read or attempts:
+    page_limit = TIER_PAGES.get(print_tier, 4)
+    if windows_read or attempts or not trimmed:
         trimmed, more_dropped = _select_snippets(
             snippets, limit=max(8, page_limit), chars=650, name=name, state=state, country=country
         )
@@ -219,25 +317,26 @@ def run_passes(
                 "snippets_dropped": snippets_dropped,
             },
         )
+    key_points = compact_key_points(assemble_key_points(notes, key_points, snippets, name))
+    notes = inject_fact_notes(notes, key_points)
+    brief = page_brief(notes, name=name, key_points=key_points)
+    page_notes = writing_notes(notes, key_points)
     filters = filter_row(
         resort=resort_label,
         tier=_tier_key(tier),
         country=country,
         state=state,
         notes=notes,
-        snippets=trimmed,
+        snippets=snippets,
         key_points=key_points,
     )
-    write_floor = write_floor_for(tier)
-    if len(notes) < write_floor:
+    blockers = _write_blockers(notes, tier)
+    if blockers:
         return {
             "resort_label": resort_label,
             "tier": _tier_key(tier),
             "status": "insufficient_data",
-            "error": (
-                f"{len(notes)} valid facts is below the {write_floor} needed to write a {_tier_key(tier)} page "
-                f"after {attempts} extra searches"
-            ),
+            "error": f"{blockers} after {attempts} extra searches",
             "ok": False,
             "layout_goal": {
                 "paragraphs": list(bedrock.copy_goal_for_tier(tier).paragraphs),
@@ -258,6 +357,8 @@ def run_passes(
             "search_gaps": gaps,
             "search_attempts": attempts,
             "notes": notes,
+            "writing_notes": page_notes,
+            "page_brief": brief,
             "key_points": key_points,
             "validation_errors": validation_errors,
             "snippets_dropped": snippets_dropped,
@@ -287,6 +388,8 @@ def run_passes(
             "unused_notes": [],
             "filters": filters,
             "notes": notes,
+            "writing_notes": page_notes,
+            "page_brief": brief,
             "key_points": key_points,
             "snippets": [
                 {
@@ -311,13 +414,14 @@ def run_passes(
         page_ctx = max(num_ctx, 8192)
     started = time.time()
     beats = outline_beats(
-        notes,
+        page_notes,
         resort_label=resort_label,
         beat_cap=beat_cap,
         base_url=base_url,
         model=search_model,
         num_ctx=page_ctx,
         timeout=timeout,
+        brief=brief,
     )
     stage_timings["outline"] = round(time.time() - started, 2)
     if checkpoint is not None:
@@ -325,7 +429,7 @@ def run_passes(
     print("write: starting", file=sys.stderr, flush=True)
     started = time.time()
     draft = produce_draft(
-        notes,
+        page_notes,
         beats,
         resort_label=resort_label,
         tier=tier,
@@ -334,10 +438,11 @@ def run_passes(
         num_ctx=page_ctx,
         timeout=timeout,
         name=name,
+        brief=brief,
     )
     if not draft.strip():
         draft = write_draft(
-            notes,
+            page_notes,
             beats,
             resort_label=resort_label,
             tier=tier,
@@ -345,8 +450,9 @@ def run_passes(
             model=writer_model,
             num_ctx=page_ctx,
             timeout=timeout,
+            brief=brief,
         )
-    draft = finish_prose(draft, notes, name=name, country=country, state=state, tier=tier)
+    draft = finish_prose(draft, page_notes, name=name, country=country, state=state, tier=tier)
     stage_timings["draft"] = round(time.time() - started, 2)
     if checkpoint is not None:
         checkpoint("draft_complete", {"draft": draft})
@@ -354,7 +460,7 @@ def run_passes(
     started = time.time()
     critique = critique_for_draft(
         draft,
-        notes,
+        page_notes,
         tier=tier,
         name=name,
         country=country,
@@ -365,7 +471,7 @@ def run_passes(
         timeout=timeout,
         use_llm=use_llm_critic,
     )
-    critique["fixes"] = list(critique.get("fixes") or []) + _reader_fixes(draft, notes, name)
+    critique["fixes"] = list(critique.get("fixes") or []) + _reader_fixes(draft, page_notes, name)
     stage_timings["critique"] = round(time.time() - started, 2)
     if checkpoint is not None:
         checkpoint("critique_complete", {"critique": critique})
@@ -373,7 +479,7 @@ def run_passes(
     if critique.get("fixes"):
         final = edit_draft(
             draft,
-            notes,
+            page_notes,
             critique,
             resort_label=resort_label,
             tier=tier,
@@ -384,11 +490,11 @@ def run_passes(
         )
     else:
         final = draft
-    final = finish_prose(final, notes, name=name, country=country, state=state, tier=tier)
+    final = finish_prose(final, page_notes, name=name, country=country, state=state, tier=tier)
     print("length: starting", file=sys.stderr, flush=True)
     final, short_reason, leftover = length_control_loop(
         final,
-        notes,
+        page_notes,
         resort_label=resort_label,
         tier=tier,
         base_url=base_url,
@@ -396,12 +502,12 @@ def run_passes(
         num_ctx=page_ctx,
         timeout=timeout,
     )
-    final = finish_prose(final, notes, name=name, country=country, state=state, tier=tier)
-    if short_reason_for(final, notes, tier) is None:
+    final = finish_prose(final, page_notes, name=name, country=country, state=state, tier=tier)
+    if short_reason_for(final, page_notes, tier) is None:
         short_reason = None
     else:
-        short_reason = short_reason or short_reason_for(final, notes, tier)
-    leftover = unused_notes(final, notes)
+        short_reason = short_reason or short_reason_for(final, page_notes, tier)
+    leftover = unused_notes(final, page_notes)
     stage_timings["edit"] = round(time.time() - started, 2)
     if checkpoint is not None:
         checkpoint("extend_complete", {"final": final, "short_reason": short_reason})
@@ -431,6 +537,8 @@ def run_passes(
         "search_gaps": gaps,
         "search_attempts": attempts,
         "notes": notes,
+        "writing_notes": page_notes,
+        "page_brief": brief,
         "key_points": key_points,
         "outline": beats,
         "draft": draft,
