@@ -19,7 +19,12 @@ is set. MapLark needs a spatial anchor for tag filters, so planet-wide discovery
 still depends on Overpass.
 
 Set DATA_ROOT to a local output directory (the Docker host volume) to read and
-write that catalog with no S3, DynamoDB, or CloudFront calls.
+write that catalog locally. When a region finishes, the region parquet and DEM
+files are uploaded to S3, and each resort is written to DynamoDB atlas-WikiPages.
+Every resort gets a new AI essay, replacing the article already on the page.
+SKIP_REGION_S3=1 skips the upload. SKIP_REGION_DDB=1 skips DynamoDB.
+SKIP_ESSAY=1 skips the essay. Harvested facts and amenities stay on
+atlas-ResortFacts and atlas-ResortAmenities.
 
 The playable game reads ``game_play/<id>/`` (world.json, detail.u16, backdrop.u16),
 not a ``game_scenes`` cake. This job still exports a scene as scratch, bakes the
@@ -1344,6 +1349,319 @@ def _row_for(frame: pd.DataFrame | None, wid: str) -> dict | None:
     return {k: (None if isinstance(v, float) and v != v else (v.item() if hasattr(v, "item") else v)) for k, v in row.items()}
 
 
+_WIKI_STRINGS = (
+    ("winterSportsId", "winter_sports_id"),
+    ("winterSportsType", "winter_sports_type"),
+    ("englishName", "english_name"),
+    ("country", "country"),
+    ("state", "state"),
+    ("region", "region"),
+    ("totalLifts", "total_lifts"),
+    ("downhillTrails", "downhill_trails"),
+    ("trailsNovice", "trails_novice"),
+    ("trailsEasy", "trails_easy"),
+    ("trailsIntermediate", "trails_intermediate"),
+    ("trailsAdvanced", "trails_advanced"),
+    ("trailsExpert", "trails_expert"),
+    ("trailsFreeride", "trails_freeride"),
+    ("trailsExtreme", "trails_extreme"),
+    ("gladedTerrain", "gladed_terrain"),
+    ("snowPark", "snow_park"),
+    ("sleddingTubing", "sledding_tubing"),
+    ("nightSkiing", "night_skiing"),
+    ("snowmaking", "snowmaking"),
+    ("liftTypes", "lift_types"),
+    ("resortType", "resort_type"),
+    ("website", "website"),
+    ("operator", "operator"),
+    ("openingHours", "opening_hours"),
+    ("phone", "phone"),
+    ("elevationSource", "elevation_source"),
+)
+_WIKI_NUMBERS = (
+    ("centroidLat", "centroid_lat"),
+    ("centroidLon", "centroid_lon"),
+    ("totalAreaHa", "total_area_ha"),
+    ("totalAreaAcres", "total_area_acres"),
+    ("skiableTerrainHa", "skiable_terrain_ha"),
+    ("skiableTerrainAcres", "skiable_terrain_acres"),
+    ("longestLiftMi", "longest_lift_mi"),
+    ("longestTrailMi", "longest_trail_mi"),
+    ("avgTrailMi", "avg_trail_mi"),
+    ("totalTrailMi", "total_trail_mi"),
+    ("litPistes", "lit_pistes"),
+    ("litLifts", "lit_lifts"),
+    ("skiNorthAngle", "ski_north_angle"),
+    ("verticalDropFt", "vertical_drop_ft"),
+    ("highElevationM", "elevation_high_m"),
+    ("lowElevationM", "elevation_low_m"),
+)
+
+
+def _wiki_plain(value):
+    if value is None:
+        return None
+    if hasattr(value, "item"):
+        try:
+            value = value.item()
+        except Exception:
+            return None
+    if isinstance(value, float) and value != value:
+        return None
+    text = str(value).strip()
+    if not text or text.lower() == "nan":
+        return None
+    return value
+
+
+def _wiki_slug(value) -> str:
+    text = str(value or "").strip().lower()
+    text = re.sub(r"\s+", "-", text)
+    text = re.sub(r"[^a-z0-9-]", "", text)
+    text = re.sub(r"-+", "-", text).strip("-")
+    return text or "unknown"
+
+
+def wiki_page_id_from_analyzed(row: dict) -> str:
+    """pageId used by wiki-ingest-parquet.js. The local name wins over english_name."""
+    name = None
+    for key in ("name", "Name", "resort_name", "title", "english_name"):
+        name = _wiki_plain(row.get(key))
+        if name is not None:
+            break
+    state = None
+    for key in ("state", "State", "addr:state", "province", "addr:province", "state_province", "region"):
+        state = _wiki_plain(row.get(key))
+        if state is not None:
+            break
+    country = None
+    for key in ("country", "Country", "addr:country", "country_name"):
+        country = _wiki_plain(row.get(key))
+        if country is not None:
+            break
+    name_slug = _wiki_slug(name)
+    if state is not None:
+        return f"{name_slug}-{_wiki_slug(state)}"
+    if country is not None:
+        return f"{name_slug}-{_wiki_slug(country)}"
+    return name_slug
+
+
+def _wiki_size(row: dict) -> str:
+    kind = str(row.get("resort_type") or "").strip().lower()
+    if kind == "not a downhill ski resort":
+        return "unknown"
+    trails = _wiki_plain(row.get("downhill_trails"))
+    lifts = _wiki_plain(row.get("total_lifts"))
+    acres = _wiki_plain(row.get("skiable_terrain_acres"))
+    if acres is None:
+        ha = _wiki_plain(row.get("skiable_terrain_ha"))
+        if ha is not None:
+            acres = float(ha) * 2.471
+    try:
+        trails_n = float(trails) if trails is not None else None
+        lifts_n = float(lifts) if lifts is not None else None
+        acres_n = float(acres) if acres is not None else None
+    except (TypeError, ValueError):
+        return "unknown"
+    if trails_n is None or lifts_n is None or trails_n < 0 or lifts_n < 0:
+        return "unknown"
+    area = acres_n if acres_n is not None and acres_n >= 0 else 0.0
+    if trails_n >= 200 or area >= 10000:
+        return "mega_resort"
+    if trails_n >= 100 or area >= 5000:
+        return "multiple_mountains"
+    if trails_n >= 50 or area >= 1000:
+        return "ski_mountain"
+    return "small_hill"
+
+
+def _wiki_string_attr(value) -> dict:
+    if isinstance(value, float) and value.is_integer():
+        return {"S": str(int(value))}
+    if isinstance(value, int) and not isinstance(value, bool):
+        return {"S": str(value)}
+    return {"S": str(value).strip()}
+
+
+def _wiki_number_attr(value) -> dict:
+    from decimal import Decimal
+
+    number = Decimal(str(value))
+    if number == number.to_integral():
+        return {"N": str(number.to_integral())}
+    return {"N": format(number, "f")}
+
+
+def wiki_stat_attributes(row: dict) -> dict[str, dict]:
+    """OSM and DEM fields for atlas-WikiPages. Article content is not included."""
+    attrs: dict[str, dict] = {}
+    for dest, src in _WIKI_STRINGS:
+        value = _wiki_plain(row.get(src))
+        if value is not None:
+            attrs[dest] = _wiki_string_attr(value)
+    for dest, src in _WIKI_NUMBERS:
+        value = _wiki_plain(row.get(src))
+        if dest == "highElevationM" and value is None:
+            value = _wiki_plain(row.get("high_elevation_m"))
+        if dest == "lowElevationM" and value is None:
+            value = _wiki_plain(row.get("low_elevation_m"))
+        if value is None:
+            continue
+        try:
+            attrs[dest] = _wiki_number_attr(value)
+        except Exception:
+            continue
+    high = _wiki_plain(row.get("elevation_high_m")) or _wiki_plain(row.get("high_elevation_m"))
+    low = _wiki_plain(row.get("elevation_low_m")) or _wiki_plain(row.get("low_elevation_m"))
+    drop = _wiki_plain(row.get("vertical_drop_m"))
+    if drop is None and high is not None and low is not None:
+        try:
+            if float(high) >= float(low):
+                drop = float(high) - float(low)
+        except (TypeError, ValueError):
+            drop = None
+    if drop is not None:
+        try:
+            if float(drop) >= 0:
+                attrs["verticalDropM"] = _wiki_number_attr(drop)
+        except (TypeError, ValueError):
+            pass
+    attrs["resortSizeCategory"] = {"S": _wiki_size(row)}
+    return attrs
+
+
+def wiki_stat_update(page_id: str, row: dict, now: str, content: str | None = None) -> dict:
+    """Update one wiki page. Pass content to store a new essay."""
+    title = str(_wiki_plain(row.get("english_name")) or _wiki_plain(row.get("name")) or page_id)
+    names = {"#status": "status"}
+    values = {
+        ":now": {"S": now},
+        ":title": {"S": title},
+        ":resort": {"S": "resort"},
+        ":published": {"S": "published"},
+    }
+    if content:
+        values[":essay"] = {"S": content}
+        content_set = "content = :essay"
+    else:
+        values[":stub"] = {"S": f"# {title}\n\n*Add a description for this resort.*"}
+        content_set = "content = if_not_exists(content, :stub)"
+    sets = [
+        "updatedAt = :now",
+        "title = if_not_exists(title, :title)",
+        content_set,
+        "createdAt = if_not_exists(createdAt, :now)",
+        "pageType = if_not_exists(pageType, :resort)",
+        "#status = if_not_exists(#status, :published)",
+    ]
+    for index, (key, attr) in enumerate(wiki_stat_attributes(row).items()):
+        names[f"#a{index}"] = key
+        values[f":a{index}"] = attr
+        sets.append(f"#a{index} = :a{index}")
+    return {
+        "Key": {"pageId": {"S": page_id}},
+        "UpdateExpression": "SET " + ", ".join(sets),
+        "ExpressionAttributeNames": names,
+        "ExpressionAttributeValues": values,
+    }
+
+
+def _write_wiki_stats(row: dict, content: str | None = None) -> None:
+    """Write one analyzed resort onto atlas-WikiPages."""
+    if os.environ.get("SKIP_REGION_DDB") == "1":
+        return
+    page_id = wiki_page_id_from_analyzed(row)
+    now = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).replace(microsecond=0).isoformat()
+    table = os.environ.get("WIKI_TABLE", "atlas-WikiPages")
+    request = wiki_stat_update(page_id, row, now, content=content)
+    client = __import__("boto3").client("dynamodb", region_name=os.environ.get("AWS_REGION", "us-east-1"))
+    client.update_item(TableName=table, **request)
+    print("wiki stats", table, page_id, "essay" if content else "stats", flush=True)
+
+
+def _mirror_s3(bucket: str, key: str, src: Path) -> None:
+    """Upload one finished homeserver file to the output bucket."""
+    if os.environ.get("SKIP_REGION_S3") == "1" or not src.is_file():
+        return
+    try:
+        _s3().upload_file(str(src), bucket, key)
+        print("s3", key, flush=True)
+    except Exception as exc:
+        print(f"s3 upload failed {key}: {exc}", flush=True)
+
+
+def _essay_markdown(payload: dict, row: dict) -> str:
+    final = str(payload.get("final") or "").strip()
+    if not final:
+        return ""
+    if final.startswith("# "):
+        return final
+    name = str(_wiki_plain(row.get("english_name")) or _wiki_plain(row.get("name")) or "Resort")
+    return f"# {name}\n\n{final}"
+
+
+def _write_resort_essay(analyzed: Path, row: dict, wid: str, dest: Path) -> str:
+    """One Bedrock essay for this resort. The search name is the id so punctuation cannot miss."""
+    frame = pd.read_parquet(analyzed)
+    hit = frame
+    if "winter_sports_id" in frame.columns:
+        hit = frame[frame["winter_sports_id"].astype(str) == str(wid)]
+    if hit.empty:
+        hit = frame.head(1)
+    one = hit.head(1).copy()
+    label = str(_wiki_plain(row.get("english_name")) or _wiki_plain(row.get("name")) or "")
+    if "english_name" not in one.columns:
+        one["english_name"] = label
+    elif not str(one["english_name"].iloc[0] or "").strip():
+        one.loc[one.index[:1], "english_name"] = label
+    token = f"wid{wid}"
+    if "name" not in one.columns:
+        one["name"] = token
+    else:
+        one.loc[one.index[:1], "name"] = token
+    row_path = dest.with_suffix(".row.parquet")
+    row_path.parent.mkdir(parents=True, exist_ok=True)
+    one.to_parquet(row_path, index=False)
+    _run([
+        sys.executable, "scripts/generate_resort_copy_bedrock.py",
+        "-i", str(row_path),
+        "--name", token,
+        "--tier", "auto",
+        "--out-json", str(dest),
+    ])
+    payload = json.loads(dest.read_text(encoding="utf-8"))
+    return _essay_markdown(payload, row)
+
+
+def _publish_held_wiki(path: Path, wid: str, region: str, bucket: str) -> None:
+    analyzed = path / "ski_areas_analyzed.parquet"
+    if not analyzed.is_file():
+        print("publish: no analyzed parquet for wiki", wid, flush=True)
+        return
+    frame = pd.read_parquet(analyzed)
+    row = _row_for(frame, wid)
+    if row is None and len(frame.index) == 1:
+        row = _row_for(frame.assign(winter_sports_id=str(wid)), wid)
+    if row is None:
+        print("publish: no analyzed row for wiki", wid, flush=True)
+        return
+    content = None
+    if os.environ.get("SKIP_ESSAY") != "1":
+        essay_path = path / "wiki.json"
+        try:
+            content = _write_resort_essay(analyzed, row, wid, essay_path) or None
+        except Exception as exc:
+            print(f"publish: essay failed {wid}: {exc}", flush=True)
+            content = None
+        if content and essay_path.is_file():
+            _mirror_s3(bucket, f"{region.strip('/')}/wiki/{wid}.json", essay_path)
+    try:
+        _write_wiki_stats(row, content)
+    except Exception as exc:
+        print(f"publish: wiki stats failed {wid}: {exc}", flush=True)
+
+
 def _publish_wiki(s3, bucket: str, action: str, wid: str, work: Path) -> None:
     if os.environ.get("SKIP_WIKI") == "1" or s3 is None:
         return
@@ -1383,29 +1701,13 @@ def _publish_wiki(s3, bucket: str, action: str, wid: str, work: Path) -> None:
         ddb.delete_item(TableName=table, Key={"pageId": {"S": page_id}})
         print("wiki deleted", page_id, flush=True)
         return
-    lat = row.get("centroid_lat")
-    lon = row.get("centroid_lon")
-    now = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
     if action == "update":
-        values = {
-            ":u": {"S": now},
-            ":w": {"S": str(wid)},
-            ":d": {"S": str(row.get("downhill_trails") or "")},
-            ":l": {"S": str(row.get("total_lifts") or "")},
-        }
-        expr = "SET updatedAt = :u, winterSportsId = :w, downhillTrails = :d, totalLifts = :l"
-        if lat is not None and lon is not None:
-            values[":lat"] = {"N": str(Decimal(str(lat)))}
-            values[":lon"] = {"N": str(Decimal(str(lon)))}
-            expr += ", centroidLat = :lat, centroidLon = :lon"
-        ddb.update_item(
-            TableName=table,
-            Key={"pageId": {"S": page_id}},
-            UpdateExpression=expr,
-            ExpressionAttributeValues=values,
-        )
-        print("wiki updated", page_id, flush=True)
+        try:
+            _write_wiki_stats(row)
+        except Exception as exc:
+            print(f"wiki stats failed {wid}: {exc}", flush=True)
         return
+    now = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
     content = ""
     wiki_path = work / "wiki.json"
     if wiki_path.is_file():
@@ -2006,7 +2308,7 @@ def _merge_parquet_light(existing: Path, incoming: Path, wid: str, dest: Path) -
         writer.close()
 
 
-def _patch_prefix_light(s3, bucket: str, prefix: str, work: Path, wid: str) -> None:
+def _patch_prefix_light(s3, bucket: str, prefix: str, work: Path, wid: str, mirror_s3: bool = False) -> None:
     """Merge one resort into a published prefix using Arrow, not GeoPandas."""
     scratch = work / "_publish"
     for name in TABLES:
@@ -2031,6 +2333,8 @@ def _patch_prefix_light(s3, bucket: str, prefix: str, work: Path, wid: str) -> N
         else:
             _merge_parquet_light(remote, local, wid, out)
         _store_file(s3, bucket, key, out)
+        if mirror_s3:
+            _mirror_s3(bucket, key, out)
     csv_name = "ski_areas_analyzed.csv"
     local_csv = work / csv_name
     if local_csv.is_file():
@@ -2041,13 +2345,18 @@ def _patch_prefix_light(s3, bucket: str, prefix: str, work: Path, wid: str) -> N
         out = scratch / "out" / csv_name
         _write_table(merged, out)
         _store_file(s3, bucket, key, out)
+        if mirror_s3:
+            _mirror_s3(bucket, key, out)
     dem_root = work / "dems"
     if dem_root.is_dir():
         for dem in dem_root.rglob(f"{wid}.tif"):
             if "scene" in dem.parts:
                 continue
             rel = dem.relative_to(work).as_posix()
-            _store_file(s3, bucket, f"{prefix.strip('/')}/{rel}", dem)
+            dem_key = f"{prefix.strip('/')}/{rel}"
+            _store_file(s3, bucket, dem_key, dem)
+            if mirror_s3:
+                _mirror_s3(bucket, dem_key, dem)
     shutil.rmtree(scratch, ignore_errors=True)
 
 
@@ -2085,7 +2394,8 @@ def _flush_region_publish(s3, bucket: str) -> None:
         if publish_combined:
             prefixes.append("combined")
         for prefix in prefixes:
-            _patch_prefix_light(s3, bucket, prefix, path, wid)
+            _patch_prefix_light(s3, bucket, prefix, path, wid, mirror_s3=True)
+        _publish_held_wiki(path, wid, region, bucket)
         shutil.rmtree(path, ignore_errors=True)
         gc.collect()
     shutil.rmtree(root, ignore_errors=True)

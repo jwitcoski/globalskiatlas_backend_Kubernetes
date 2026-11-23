@@ -1606,7 +1606,7 @@ def load_resort_row(parquet_path: Path, name_substr: str) -> dict[str, Any]:
     df = pd.read_parquet(parquet_path)
     if "name" not in df.columns:
         raise SystemExit("Parquet missing 'name' column")
-    mask = df["name"].astype(str).str.contains(name_substr, case=False, na=False)
+    mask = df["name"].astype(str).str.contains(name_substr, case=False, na=False, regex=False)
     if mask.sum() == 0:
         raise SystemExit(f"No row matching name contains {name_substr!r}")
     row = df.loc[mask].iloc[0].to_dict()
