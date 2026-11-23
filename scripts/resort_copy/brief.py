@@ -223,6 +223,74 @@ def page_brief(notes: list[dict[str, Any]], *, name: str = "", key_points: dict[
     return "\n".join(lines).strip()
 
 
+# Visitor order for the outline. History is last so the page does not open with 1958.
+VISITOR_BEATS: tuple[tuple[str, str], ...] = (
+    ("who", "Who the hill is for, and whether it is public, a club, or independent"),
+    ("access", "How a visitor gets there from town, highway, or airport"),
+    ("terrain", "The mountain, linked hills, and what the skiing is like"),
+    ("school", "Ski school, lessons, and who they serve"),
+    ("prices", "What a day ticket costs, as a number from the brief"),
+    ("passes", "Which season or multi-resort pass includes this hill"),
+    ("town", "What is in town or on the access road after skiing"),
+    ("food", "Where people eat on the mountain or nearby"),
+    ("lodging", "Where to stay at the base or in town"),
+    ("season", "When it opens and closes, and snowmaking"),
+    ("scene", "The on-mountain scene: parks, night skiing, a signature run"),
+    ("history", "How and when the place started"),
+)
+
+
+def brief_sections(brief: str) -> dict[str, list[str]]:
+    """Parse PAGE BRIEF `[section]` blocks into lists of sentences."""
+    buckets: dict[str, list[str]] = {}
+    current = ""
+    for line in (brief or "").splitlines():
+        raw = line.strip()
+        if raw.startswith("[") and raw.endswith("]") and len(raw) > 2:
+            current = raw[1:-1].strip().lower()
+            buckets.setdefault(current, [])
+            continue
+        if current and raw:
+            buckets[current].append(raw)
+    return buckets
+
+
+def default_visitor_beats(brief: str, beat_cap: int) -> list[str]:
+    """Deterministic outline: visitor order, only sections the brief actually has."""
+    sections = brief_sections(brief)
+    beats: list[str] = []
+    for key, line in VISITOR_BEATS:
+        if sections.get(key):
+            beats.append(line)
+        if len(beats) >= beat_cap:
+            break
+    return beats[:beat_cap]
+
+
+def blocks_for_beat(beat: str, brief: str, notes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Brief sentences (as notes) that belong under this outline beat."""
+    sections = brief_sections(brief)
+    beat_l = (beat or "").strip().lower()
+    matched_key = ""
+    for key, line in VISITOR_BEATS:
+        if beat_l == key or beat_l == line.lower() or key in beat_l:
+            matched_key = key
+            break
+    texts = list(sections.get(matched_key) or [])
+    if not texts:
+        words = [w for w in re.findall(r"[a-z0-9]+", beat_l) if len(w) >= 5]
+        for key, items in sections.items():
+            blob = " ".join(items).lower()
+            if words and sum(1 for w in words if w in blob or w in key) >= max(1, len(words) // 3):
+                texts.extend(items)
+    if not texts:
+        for note in notes:
+            blob = str(note.get("text") or "").lower()
+            if beat_l and any(part in blob for part in beat_l.split() if len(part) >= 5):
+                return [note]
+    return [{"topic": matched_key or "scene", "text": text} for text in texts]
+
+
 def writing_notes(notes: list[dict[str, Any]], key_points: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     pile = inject_fact_notes(usable_notes(notes), key_points or {})
     for note in pile:

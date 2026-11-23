@@ -64,6 +64,7 @@ from .writing import (
     length_control_loop,
     outline_beats,
     produce_draft,
+    rewrite_draft,
     write_draft,
 )
 
@@ -491,6 +492,25 @@ def run_passes(
     else:
         final = draft
     final = finish_prose(final, page_notes, name=name, country=country, state=state, tier=tier)
+    print("rewrite: starting", file=sys.stderr, flush=True)
+    started_rewrite = time.time()
+    rewritten = rewrite_draft(
+        final,
+        page_notes,
+        beats,
+        resort_label=resort_label,
+        tier=tier,
+        base_url=base_url,
+        model=writer_model,
+        num_ctx=page_ctx,
+        timeout=timeout,
+        brief=brief,
+    )
+    rewritten = finish_prose(rewritten, page_notes, name=name, country=country, state=state, tier=tier)
+    stage_timings["rewrite"] = round(time.time() - started_rewrite, 2)
+    if checkpoint is not None:
+        checkpoint("rewrite_complete", {"rewrite": rewritten})
+    final = rewritten
     print("length: starting", file=sys.stderr, flush=True)
     final, short_reason, leftover = length_control_loop(
         final,
@@ -543,6 +563,7 @@ def run_passes(
         "outline": beats,
         "draft": draft,
         "critique": critique,
+        "rewrite": rewritten,
         "final": final,
         "final_word_count": measured["words"],
         "final_char_count": measured["characters"],

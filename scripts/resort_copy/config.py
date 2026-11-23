@@ -309,7 +309,7 @@ def section_writing_for(tier: str) -> bool:
     block = _tier_block(tier)
     if "section_writing" in block:
         return bool(block["section_writing"])
-    return _tier_key(tier) in {"medium", "large"}
+    return False
 
 
 def configured_models() -> dict[str, str]:

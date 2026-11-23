@@ -7,6 +7,7 @@ from typing import Any
 
 from . import bedrock
 
+from .brief import blocks_for_beat, default_visitor_beats
 from .config import (
     _tier_key,
     section_writing_for,
@@ -64,7 +65,7 @@ def outline_beats(
     brief: str | None = None,
 ) -> list[str]:
     system = (
-        "You are the outline pass. Order the PAGE BRIEF into beats the writer will turn into paragraphs. "
+        "You are the outline pass. Plan the PAGE as a visitor reads it, not as a pile of topics. "
         "Output one JSON object and nothing else. "
         '{"beats":["short beat, 15 words or fewer"]}. '
         f"Use up to {beat_cap} beats. One beat is one paragraph. "
@@ -73,11 +74,12 @@ def outline_beats(
             if beat_cap <= 6
             else "This is half a page or more. Use a separate beat for each paragraph. Do not collapse the page into one beat. "
         )
-        + "Use only the brief. Do not add facts. Copy a heading into a beat, never paste a whole paragraph. "
-        "The page title is already the resort name, so do not spend a beat on the name or the state. "
-        "When the brief has them, give separate beats to who skis there, how a visitor gets there, the town after skiing, who the hill is for, and what a day costs. "
-        "If the brief names linked villages, a race, or which base to stay in, give those their own beats. "
-        "This is not an essay outline. No headings like Historically or Overall."
+        + "Visitor order: who the hill is for and how they get there; the mountain and linked hills; "
+        "a ski day (school, ticket price, pass); after skiing (town, food); lodging; season; then history last. "
+        "Use only the brief. Do not add facts. Do not copy bracket headings like history or access as beats. "
+        "Write each beat as a reader job, e.g. 'How a visitor reaches the base from town'. "
+        "Skip a beat when the brief has nothing for it. "
+        "The page title is already the resort name. No headings like Historically or Overall."
     )
     material = brief.strip() if brief and brief.strip() else json.dumps(notes, ensure_ascii=False)
     try:
@@ -95,19 +97,17 @@ def outline_beats(
         raw = None
     else:
         raw = payload.get("beats")
+    fallback = default_visitor_beats(brief or "", beat_cap)
     if not isinstance(raw, list):
-        if brief:
-            heads = [line[1:-1] for line in brief.splitlines() if line.startswith("[") and line.endswith("]")]
-            if heads:
-                return heads[:beat_cap]
-        return [n["text"] for n in notes[:beat_cap]]
+        return fallback or [n["text"] for n in notes[:beat_cap]]
     beats = [str(b).strip() for b in raw if str(b).strip()]
-    if beats:
-        return beats[:beat_cap]
-    if brief:
-        heads = [line[1:-1] for line in brief.splitlines() if line.startswith("[") and line.endswith("]")]
-        return heads[:beat_cap] or [n["text"] for n in notes][:beat_cap]
-    return (beats or [n["text"] for n in notes])[:beat_cap]
+    heading_only = bool(beats) and all(
+        re.fullmatch(r"[a-z][a-z_ ]{0,20}", b.lower()) and " " not in b.strip()
+        for b in beats
+    )
+    if heading_only or not beats:
+        return fallback or beats[:beat_cap] or [n["text"] for n in notes[:beat_cap]]
+    return beats[:beat_cap]
 
 
 def _clean_prose(text: str) -> str:
@@ -392,6 +392,107 @@ def extend_draft(
     return longer
 
 
+def write_from_outline(
+    notes: list[dict[str, Any]],
+    beats: list[str],
+    *,
+    resort_label: str,
+    tier: str,
+    base_url: str,
+    model: str,
+    num_ctx: int,
+    timeout: float,
+    brief: str | None = None,
+    name: str = "",
+) -> str:
+    """One paragraph per outline beat, using the brief blocks that belong to that beat."""
+    parts: list[str] = []
+    for beat in beats:
+        group = blocks_for_beat(beat, brief or "", notes)
+        if not group:
+            continue
+        room = max(280, min(note_chars(group) + 100, 1400))
+        system = (
+            "You are the writer. Write one paragraph for this OUTLINE beat. "
+            f"The beat is: {beat}. "
+            f"About {room} characters (stay between {max(180, room - 80)} and {room + 120}). "
+            "Use only the BLOCKS. If a price or pass is in the blocks, use that name or number. "
+            "Do not guess a ticket price. Do not name a pass that is not in the blocks. "
+            "Do not start with the resort name. Plain prose. No title, no markdown, no bullet list. "
+            + _STYLE
+            + _GROUNDING_RULE
+        )
+        raw = ollama_chat(
+            base_url=base_url,
+            model=model,
+            system_text=system,
+            user_text=(
+                f"Resort: {resort_label}\n\nOUTLINE BEAT: {beat}\n\n"
+                f"BLOCKS:\n{json.dumps(group, ensure_ascii=False)}\n"
+            ),
+            temperature=0.3,
+            num_predict=max(400, room // 2),
+            num_ctx=num_ctx,
+            timeout=timeout,
+        )
+        paragraph = _clean_prose(raw).replace("\n", " ").strip()
+        if paragraph:
+            parts.append(paragraph)
+    text = "\n\n".join(parts)
+    return _strip_ungrounded(text, notes, tier, name or resort_label)
+
+
+def rewrite_draft(
+    draft: str,
+    notes: list[dict[str, Any]],
+    beats: list[str],
+    *,
+    resort_label: str,
+    tier: str,
+    base_url: str,
+    model: str,
+    num_ctx: int,
+    timeout: float,
+    brief: str | None = None,
+) -> str:
+    """Whole-page rewrite after the editor: one article in outline order."""
+    goal = bedrock.copy_goal_for_tier(tier)
+    system = (
+        "You rewrite the edited draft as one article a visitor would read. "
+        "Follow OUTLINE order. One paragraph per beat, in that order. "
+        "Keep every fact that is already in the draft or NOTES. Do not add facts. "
+        "Join paragraphs so the page moves: arrive, ski, eat/town, stay, then history last. "
+        "Do not open with the resort name. Do not paste outline headings. "
+        f"{bedrock._measured_brief(bedrock.measure_copy(draft, tier), goal)} "
+        f"{bedrock.layout_instruction(tier)} "
+        "Plain paragraphs, one blank line between them. No title, no markdown. "
+        + _STYLE
+        + _GROUNDING_RULE
+        + " "
+        + bedrock._BANNED_TRAVEL_CLICHES_RULE
+    )
+    user = (
+        f"Resort: {resort_label}\n\nOUTLINE:\n{json.dumps(beats, ensure_ascii=False)}\n\n"
+        + (f"PAGE BRIEF:\n{brief}\n\n" if brief else "")
+        + f"NOTES:\n{json.dumps(notes, ensure_ascii=False)}\n\n"
+        f"EDITED DRAFT:\n{draft}\n"
+    )
+    raw = ollama_chat(
+        base_url=base_url,
+        model=model,
+        system_text=system,
+        user_text=user,
+        temperature=0.25,
+        num_predict=_num_predict(tier),
+        num_ctx=num_ctx,
+        timeout=timeout,
+    )
+    rewritten = _fit_to_layout(_strip_ungrounded(_clean_prose(raw), notes, tier, resort_label), tier)
+    if not rewritten.strip():
+        return draft
+    return rewritten
+
+
 def write_by_section(
     notes: list[dict[str, Any]],
     *,
@@ -466,6 +567,21 @@ def produce_draft(
             timeout=timeout,
             name=name,
         )
+    if beats:
+        text = write_from_outline(
+            notes,
+            beats,
+            resort_label=resort_label,
+            tier=tier,
+            base_url=base_url,
+            model=model,
+            num_ctx=num_ctx,
+            timeout=timeout,
+            brief=brief,
+            name=name,
+        )
+        if text.strip():
+            return text
     return write_draft(
         notes,
         beats,
