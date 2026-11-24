@@ -1056,6 +1056,7 @@ def write_run_status(s3, bucket: str) -> None:
     jobs.mkdir(parents=True, exist_ok=True)
     recent = []
     counts = {"succeeded": 0, "failed": 0, "running": 0, "queued": 0}
+    osm_sources = {}
     for path in jobs.glob("*.json"):
         if path.name in ("status.json", "region-cursor.json") or path.name.startswith("lock-"):
             continue
@@ -1065,6 +1066,11 @@ def write_run_status(s3, bucket: str) -> None:
             continue
         status = str(body.get("status") or "unknown")
         counts[status] = counts.get(status, 0) + 1
+        src = str(body.get("osm_source") or "").strip() or "No source recorded"
+        src_counts = osm_sources.setdefault(
+            src, {"succeeded": 0, "failed": 0, "running": 0, "queued": 0}
+        )
+        src_counts[status] = src_counts.get(status, 0) + 1
         recent.append({
             "jobId": body.get("jobId") or path.stem,
             "status": status,
@@ -1094,6 +1100,7 @@ def write_run_status(s3, bucket: str) -> None:
         "regionIndex": index,
         "regionCount": len(paths),
         "counts": counts,
+        "osm_sources": osm_sources,
         "running": running,
         "recent": recent[:20],
     }
