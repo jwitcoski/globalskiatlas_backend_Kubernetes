@@ -28,6 +28,7 @@ from .pass_chips import (
     leftover_pass_label,
     match_pass_labels,
 )
+from .pass_lists import apply_overlay
 
 
 FACTS_PATH = output_path("resort_facts", "facts.jsonl")
@@ -232,6 +233,12 @@ def fact_row(
             amenities[column] = True
         else:
             amenities[column] = None
+    apply_overlay(amenities, winter_sports_id)
+    for key in PASS_COLUMNS:
+        if amenities.get(key) is True:
+            label = PASS_LABELS[key]
+            if label not in passes:
+                passes.append(label)
 
     notes = copy_record.get("notes") or []
     note_count = len(notes) if isinstance(notes, list) else None

@@ -167,11 +167,27 @@ def _first_match(text: str, pattern: str) -> str:
     return match.group(0) if match else ""
 
 
-def inject_fact_notes(notes: list[dict[str, Any]], key_points: dict[str, Any]) -> list[dict[str, Any]]:
+def overlay_pass_labels(winter_sports_id: str | None) -> list[str]:
+    """Mega-pass names from the operator-list merge, not from per-resort search."""
+    if not winter_sports_id:
+        return []
+    from .pass_chips import PASS_COLUMNS, PASS_LABELS
+    from .pass_lists import load_chip_overlay
+
+    item = load_chip_overlay().get(str(winter_sports_id).strip()) or {}
+    return [PASS_LABELS[key] for key in PASS_COLUMNS if item.get(key) is True]
+
+
+def inject_fact_notes(
+    notes: list[dict[str, Any]],
+    key_points: dict[str, Any],
+    *,
+    winter_sports_id: str | None = None,
+) -> list[dict[str, Any]]:
     """Put typed table facts into the page pile so the writer can use them."""
     out = list(notes)
     blob = " ".join(str(n.get("text") or "") for n in notes).lower()
-    passes = resort_passes(key_points, notes)
+    passes = overlay_pass_labels(winter_sports_id) or resort_passes(key_points, notes)
     if passes and not re.search(r"\bikon\b|\bepic\b|\bindy\b|mountain collective", blob):
         ids: list[str] = []
         aff = key_points.get("pass_affiliation")
@@ -195,7 +211,13 @@ def inject_fact_notes(notes: list[dict[str, Any]], key_points: dict[str, Any]) -
     return out
 
 
-def page_brief(notes: list[dict[str, Any]], *, name: str = "", key_points: dict[str, Any] | None = None) -> str:
+def page_brief(
+    notes: list[dict[str, Any]],
+    *,
+    name: str = "",
+    key_points: dict[str, Any] | None = None,
+    winter_sports_id: str | None = None,
+) -> str:
     """Plain sectioned material for outline + writer. No JSON, no snippet ids."""
     writing = usable_notes(notes)
     buckets: dict[str, list[str]] = {key: [] for key in BRIEF_SECTIONS}
@@ -208,7 +230,7 @@ def page_brief(notes: list[dict[str, Any]], *, name: str = "", key_points: dict[
         text = str(note.get("text") or "").strip()
         if text and text not in buckets[section]:
             buckets[section].append(text)
-    passes = resort_passes(key_points or {}, notes)
+    passes = overlay_pass_labels(winter_sports_id) or resort_passes(key_points or {}, notes)
     if passes and not buckets.get("passes"):
         buckets["passes"] = [f"This resort is on the {', '.join(passes)} pass."]
     lines = [f"Resort: {name}".strip()] if name else []
@@ -230,7 +252,7 @@ VISITOR_BEATS: tuple[tuple[str, str], ...] = (
     ("terrain", "The mountain, linked hills, and what the skiing is like"),
     ("school", "Ski school, lessons, and who they serve"),
     ("prices", "What a day ticket costs, as a number from the brief"),
-    ("passes", "Which season or multi-resort pass includes this hill"),
+    ("passes", "This hill's own season pass, plus any mega-pass from the operator list"),
     ("town", "What is in town or on the access road after skiing"),
     ("food", "Where people eat on the mountain or nearby"),
     ("lodging", "Where to stay at the base or in town"),

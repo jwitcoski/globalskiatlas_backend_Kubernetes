@@ -26,6 +26,7 @@ from resort_copy.facts_api import serve  # noqa: E402
 from resort_copy.facts_ddb import TABLE_NAME, apply_user_edit, ensure_table, push_facts, wiki_columns  # noqa: E402
 from resort_copy.filters import FILTERS_PATH, FILTER_COLUMNS  # noqa: E402
 from resort_copy.pass_chips import PASS_COLUMNS, PASS_LABELS, add_pass  # noqa: E402
+from resort_copy.pass_lists import main as harvest_pass_lists  # noqa: E402
 
 
 def main() -> int:
@@ -59,7 +60,25 @@ def main() -> int:
     parser.add_argument("--pass-key", help="Optional id for --add-pass (default: slug of the label)")
     parser.add_argument("--pass-pattern", help="Optional regex for --add-pass")
     parser.add_argument("--pass-host", action="append", default=[], help="Pass-operator hostname (repeatable)")
+    parser.add_argument(
+        "--harvest-pass-lists",
+        action="store_true",
+        help="Fetch mega-pass destination pages and match names to the atlas parquet",
+    )
+    parser.add_argument("--parquet", type=Path, default=Path("output/combined/ski_areas_analyzed.parquet"))
+    parser.add_argument(
+        "--only-pass",
+        action="append",
+        default=[],
+        help="Limit --harvest-pass-lists to these catalog keys (repeatable)",
+    )
     args = parser.parse_args()
+
+    if args.harvest_pass_lists:
+        extra = ["--parquet", str(args.parquet)]
+        for key in args.only_pass:
+            extra.extend(["--pass-key", key])
+        return harvest_pass_lists(extra)
 
     if args.add_pass:
         chip = add_pass(args.add_pass, key=args.pass_key, pattern=args.pass_pattern, hosts=args.pass_host)

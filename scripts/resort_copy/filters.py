@@ -23,6 +23,7 @@ from .pass_chips import (  # noqa: E402
     pass_hosts,
     true_pass_labels,
 )
+from .pass_lists import apply_overlay
 
 FILTERS_PATH = output_path("resort_filters", "filters.jsonl")
 
@@ -671,6 +672,9 @@ def filter_row(
         row[key] = item["value"]
         if item["value"] is not None and item["evidence"]:
             evidence[key] = item["evidence"]
+    apply_overlay(row, winter_sports_id or "")
+    passes = [PASS_LABELS[key] for key in PASS_COLUMNS if row.get(key) is True]
+    row["passes"] = passes
     sources: dict[str, dict[str, str]] = {}
     if website:
         evidence["website"] = website

@@ -394,6 +394,7 @@ def main() -> int:
                         writer_model=args.writer_model,
                         critic_model=critic_model,
                         search_only=args.search_only,
+                        winter_sports_id=wid or None,
                     )
                     break
                 except Exception as exc:
@@ -593,6 +594,7 @@ def main() -> int:
             writer_model=args.writer_model,
             critic_model=critic_model,
             checkpoint=save_checkpoint,
+            winter_sports_id=_cell(row, "winter_sports_id") if row is not None else None,
         )
     except Exception as exc:
         checkpoint_data["status"] = "failed"

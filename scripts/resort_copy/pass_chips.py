@@ -25,6 +25,7 @@ class PassChip:
     label: str
     pattern: str
     hosts: tuple[str, ...] = ()
+    list_urls: tuple[str, ...] = ()
 
 
 CATALOG_PATH = Path(__file__).with_name("pass_catalog.json")
@@ -81,11 +82,12 @@ def _chip_from_dict(raw: dict[str, Any]) -> PassChip:
     label = str(raw.get("label") or key).strip()
     pattern = str(raw.get("pattern") or "").strip() or rf"\b{re.escape(label)}\b"
     hosts = tuple(str(h).strip().lower() for h in (raw.get("hosts") or []) if str(h).strip())
+    list_urls = tuple(str(u).strip() for u in (raw.get("list_urls") or []) if str(u).strip())
     if not _KEY_RE.match(key):
         raise ValueError(f"invalid pass key {key!r}")
     if key in _RESERVED:
         raise ValueError(f"pass key {key} is reserved")
-    return PassChip(key=key, label=label, pattern=pattern, hosts=hosts)
+    return PassChip(key=key, label=label, pattern=pattern, hosts=hosts, list_urls=list_urls)
 
 
 def _load_json(path: Path) -> list[dict[str, Any]]:

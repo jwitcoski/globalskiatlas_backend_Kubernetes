@@ -166,10 +166,7 @@ def followup_queries(
     if "year_started" in missing:
         queries.append(f"{quoted} ski opened OR founded OR established {place}")
     if "pass" in missing:
-        queries.append(
-            f"{quoted} ski Ikon OR Epic OR Indy OR \"season pass\" "
-            f"site:ikonpass.com OR site:epicpass.com"
-        )
+        queries.append(f'{quoted} ski ("season pass" OR "season ticket") (price OR rates OR buy)')
     if "public_or_private" in missing:
         queries.append(f"{quoted} \"not-for-profit\" OR \"ski club\" OR private OR municipal")
     if "setting" in missing:
@@ -197,8 +194,8 @@ def followup_queries(
 _TOPIC_QUERY = {
     "year_started": '{q} ski opened OR founded OR established',
     "history": '{q} ski history founded opened',
-    "pass": '{q} ski (Ikon OR Epic OR Indy OR "season pass") (site:ikonpass.com OR site:epicpass.com OR site:indyskipass.com OR pass)',
-    "passes": '{q} ski (Ikon OR Epic OR Indy OR "season pass") (site:ikonpass.com OR site:epicpass.com OR site:indyskipass.com OR pass)',
+    "pass": '{q} ski ("season pass" OR "season ticket") (price OR rates OR buy)',
+    "passes": '{q} ski ("season pass" OR "season ticket") (price OR rates OR buy)',
     "public_or_private": '{q} ski club OR municipal OR private OR "not-for-profit"',
     "who": '{q} ski beginners OR families OR members',
     "setting": '{q} ski valley OR overlooks OR mountain',

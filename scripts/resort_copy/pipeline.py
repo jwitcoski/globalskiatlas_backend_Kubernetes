@@ -152,6 +152,7 @@ def run_passes(
     critic_model: str | None = None,
     search_only: bool = False,
     checkpoint: CheckpointCallback | None = None,
+    winter_sports_id: str | None = None,
 ) -> dict[str, Any]:
     search_model = search_model or model
     writer_model = writer_model or model
@@ -319,14 +320,15 @@ def run_passes(
             },
         )
     key_points = compact_key_points(assemble_key_points(notes, key_points, snippets, name))
-    notes = inject_fact_notes(notes, key_points)
-    brief = page_brief(notes, name=name, key_points=key_points)
+    notes = inject_fact_notes(notes, key_points, winter_sports_id=winter_sports_id)
+    brief = page_brief(notes, name=name, key_points=key_points, winter_sports_id=winter_sports_id)
     page_notes = writing_notes(notes, key_points)
     filters = filter_row(
         resort=resort_label,
         tier=_tier_key(tier),
         country=country,
         state=state,
+        winter_sports_id=winter_sports_id,
         notes=notes,
         snippets=snippets,
         key_points=key_points,
