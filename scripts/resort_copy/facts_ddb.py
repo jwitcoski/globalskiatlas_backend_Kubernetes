@@ -16,6 +16,7 @@ from decimal import Decimal
 from typing import Any
 
 from .filters import FILTER_COLUMNS
+from .pass_chips import PASS_COLUMNS
 
 
 TABLE_NAME = os.environ.get("RESORT_FACTS_TABLE", "atlas-ResortFacts")
@@ -49,8 +50,9 @@ WIKI_TEXT = (
     "terrain",
 )
 WIKI_NUMBERS = ("year_started", "lift_ticket_amount", "lift_ticket_usd")
-WIKI_LISTS = ("passes",)
-WIKI_COLUMNS = (*FILTER_COLUMNS, *WIKI_TEXT, *WIKI_NUMBERS, *WIKI_LISTS)
+WIKI_LISTS = ("passes", "other_passes")
+def wiki_columns() -> tuple[str, ...]:
+    return (*FILTER_COLUMNS, *PASS_COLUMNS, *WIKI_TEXT, *WIKI_NUMBERS, *WIKI_LISTS)
 
 
 def _now() -> str:
@@ -133,7 +135,7 @@ def _cited(row: dict[str, Any], column: str) -> tuple[str, str, str]:
 
 
 def _ddb_value(column: str, value: Any) -> dict[str, Any] | None:
-    if column in FILTER_COLUMNS:
+    if column in FILTER_COLUMNS or column in PASS_COLUMNS:
         if value is True:
             return {"BOOL": True}
         if value is False:
@@ -141,7 +143,7 @@ def _ddb_value(column: str, value: Any) -> dict[str, Any] | None:
         return None
     if column in WIKI_NUMBERS or column in ("note_count", "note_chars", "search_attempts"):
         return _n(value)
-    if column == "passes":
+    if column in WIKI_LISTS:
         names = [str(name).strip() for name in (value or []) if str(name).strip()]
         if not names:
             return None
@@ -162,7 +164,7 @@ def apply_ai_row(client: Any, row: dict[str, Any], *, table_name: str = TABLE_NA
     stamp = _now()
     _touch_identity(client, row, table_name=table_name, stamp=stamp)
     _write_ops(client, row, table_name=table_name, stamp=stamp)
-    for column in WIKI_COLUMNS:
+    for column in wiki_columns():
         encoded = _ddb_value(column, row.get(column))
         if encoded is None:
             continue
@@ -203,7 +205,7 @@ def apply_user_edit(
     note: str = "",
 ) -> None:
     """Wiki/user write: set the cell and lock it. None clears the cell and the lock."""
-    if column not in WIKI_COLUMNS:
+    if column not in wiki_columns():
         raise ValueError(f"unknown fact field {column}")
     resort_id = winter_sports_id.strip()
     if not resort_id:
@@ -308,13 +310,14 @@ def to_item(row: dict[str, Any], *, stamp: str | None = None) -> dict[str, Any]:
         encoded = _n(row.get(field))
         if encoded:
             item[field] = encoded
-    for column in FILTER_COLUMNS:
+    for column in (*FILTER_COLUMNS, *PASS_COLUMNS):
         encoded = _ddb_value(column, row.get(column))
         if encoded:
             item[column] = encoded
-    encoded_passes = _ddb_value("passes", row.get("passes"))
-    if encoded_passes:
-        item["passes"] = encoded_passes
+    for list_col in WIKI_LISTS:
+        encoded_list = _ddb_value(list_col, row.get(list_col))
+        if encoded_list:
+            item[list_col] = encoded_list
     return item
 
 

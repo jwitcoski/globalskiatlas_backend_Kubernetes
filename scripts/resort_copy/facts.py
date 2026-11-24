@@ -14,13 +14,21 @@ from .config import KEY_POINTS_PATH, output_path
 from .filters import (
     FILTER_COLUMNS,
     FILTERS_PATH,
-    _MEGA_PASSES,
     _point_text,
     classify_source,
     parse_native_day_price,
     price_band,
     resort_passes,
 )
+from .pass_chips import (
+    PASS_COLUMNS,
+    PASS_LABELS,
+    harvest_other_passes,
+    harvest_pass_chips,
+    leftover_pass_label,
+    match_pass_labels,
+)
+from .pass_lists import apply_overlay
 
 
 FACTS_PATH = output_path("resort_facts", "facts.jsonl")
@@ -47,8 +55,6 @@ _TICKET_RAW = (
     ("night_ticket", "night_ticket_raw"),
     ("season_pass", "season_pass_raw"),
 )
-
-_MEGA_FOR_ROUNDUP = frozenset({"Epic", "Ikon", "Indy", "Mountain Collective"})
 
 _YEAR = re.compile(r"\b(1[89]\d{2}|20\d{2})\b")
 
@@ -100,10 +106,31 @@ def _host_from_website(url: str | None) -> str:
     return match.group(1).removeprefix("www.") if match else ""
 
 
+def _split_known_and_other(names: list[Any]) -> tuple[list[str], list[str]]:
+    known: list[str] = []
+    other: list[str] = []
+    for raw in names:
+        text = str(raw).strip()
+        if not text:
+            continue
+        keys = match_pass_labels(text)
+        for key in keys:
+            label = PASS_LABELS[key]
+            if label not in known:
+                known.append(label)
+        extra = leftover_pass_label(text)
+        if extra and extra not in other:
+            other.append(extra)
+        elif not keys and text not in other:
+            other.append(text)
+    return known, other
+
+
 def _passes_from_records(filters: dict[str, Any], key_points: dict[str, Any]) -> list[str]:
     existing = filters.get("passes")
     if isinstance(existing, list):
-        return [str(name) for name in existing if str(name).strip()]
+        known, _other = _split_known_and_other(existing)
+        return known
     return resort_passes(key_points)
 
 
@@ -130,10 +157,17 @@ def fact_row(
     website = _text_or_none(filters.get("website")) or _text_or_none(_point_text(key_points.get("website")))
     official_host = _host_from_website(website)
     passes = _passes_from_records(filters, key_points)
-    mega = [name for name in passes if name in _MEGA_FOR_ROUNDUP]
-    local = [name for name in passes if name not in _MEGA_PASSES and name not in _MEGA_FOR_ROUNDUP]
-    if len(mega) >= 2 and not local:
-        passes = []
+    if not passes:
+        passes = [PASS_LABELS[key] for key in PASS_COLUMNS if filters.get(key) is True]
+    other_passes = filters.get("other_passes")
+    if not isinstance(other_passes, list):
+        other_passes = harvest_other_passes(key_points=key_points, official_host=official_host)
+        mixed = filters.get("passes")
+        if isinstance(mixed, list):
+            _known, extra = _split_known_and_other(mixed)
+            for name in extra:
+                if name not in other_passes:
+                    other_passes.append(name)
 
     lift = _point(key_points, "lift_ticket")
     lift_raw = _text_or_none(_point_text(lift))
@@ -188,6 +222,23 @@ def fact_row(
             cited_amenity = _cite(_point(key_points, point_key), official_host)
             if cited_amenity:
                 sources[column] = cited_amenity
+    harvested = harvest_pass_chips(key_points=key_points, official_host=official_host)
+    labels_lower = {str(name).lower() for name in passes}
+    for column in PASS_COLUMNS:
+        if column in filters:
+            amenities[column] = filters.get(column)
+        elif (harvested.get(column) or {}).get("value") is not None:
+            amenities[column] = harvested[column]["value"]
+        elif PASS_LABELS[column].lower() in labels_lower:
+            amenities[column] = True
+        else:
+            amenities[column] = None
+    apply_overlay(amenities, winter_sports_id)
+    for key in PASS_COLUMNS:
+        if amenities.get(key) is True:
+            label = PASS_LABELS[key]
+            if label not in passes:
+                passes.append(label)
 
     notes = copy_record.get("notes") or []
     note_count = len(notes) if isinstance(notes, list) else None
@@ -211,6 +262,7 @@ def fact_row(
         "tier": _text_or_none(filters.get("tier") or kp_wrap.get("tier") or copy_record.get("tier")),
         "website": website,
         "passes": passes,
+        "other_passes": other_passes,
         "owner": _text_or_none(_point_text(key_points.get("owner"))),
         "operator_group": _text_or_none(_point_text(key_points.get("operator_group"))),
         "operator_status": _text_or_none(_point_text(key_points.get("operator_status"))),

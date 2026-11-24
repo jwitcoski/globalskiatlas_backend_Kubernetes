@@ -813,6 +813,23 @@ class BriefTests(unittest.TestCase):
         self.assertIn("Ikon", brief)
         self.assertNotIn("snippet_ids", brief)
 
+    def test_visitor_outline_puts_history_last(self) -> None:
+        from resort_copy.brief import blocks_for_beat, default_visitor_beats
+
+        brief = (
+            "[history]\nOpened in 1958 after Merrill and Smith built the hill.\n\n"
+            "[who]\nPublic hill for families and intermediates.\n\n"
+            "[access]\nThirty minutes from Rutland by road.\n\n"
+            "[passes]\nThis resort is on the Ikon pass.\n"
+        )
+        beats = default_visitor_beats(brief, 12)
+        self.assertEqual(beats[0].lower().split()[0], "who")
+        self.assertTrue(any("pass" in b.lower() for b in beats))
+        self.assertIn("started", beats[-1].lower())
+        self.assertLess(beats.index(next(b for b in beats if "pass" in b.lower())), len(beats) - 1)
+        ikon = blocks_for_beat(next(b for b in beats if "pass" in b.lower()), brief, [])
+        self.assertTrue(any("Ikon" in str(n.get("text")) for n in ikon))
+
 
 if __name__ == "__main__":
     unittest.main()

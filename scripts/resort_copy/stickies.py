@@ -67,8 +67,8 @@ _STICKIES: tuple[Sticky, ...] = (
     Sticky(
         "pass",
         "pass",
-        "Which season pass or multi-resort pass includes {name}? "
-        "Name a pass only when a page says THIS resort is on it.",
+        "What season pass or ticket product does {name} sell for THIS hill "
+        "(its own season pass, not Epic/Ikon/Indy)? Name price or what it includes if stated.",
         ("pass", "passes"),
     ),
     Sticky(

@@ -72,7 +72,8 @@ class FactsDdbTests(unittest.TestCase):
         self.assertEqual(item["snowtubing"], {"BOOL": False})
         self.assertNotIn("childcare", item)
         self.assertEqual(item["lift_ticket_raw"], {"S": "$34.00 CAD (day)"})
-        self.assertEqual(item["passes"], {"SS": ["Camelbeach Season Passes"]})
+        self.assertNotIn("passes", item)
+        self.assertEqual(item["other_passes"], {"SS": ["Camelbeach Season Passes"]})
 
     def test_harvest_skips_a_wiki_locked_cell(self) -> None:
         client = _Client(locked={"night_skiing"})

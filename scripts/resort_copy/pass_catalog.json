@@ -1,0 +1,23 @@
+{
+  "passes": [
+    {"key": "epic", "label": "Epic", "pattern": "\\bepic(?:\\s+pass)?\\b", "hosts": ["epicpass.com"], "list_urls": ["https://www.epicpass.com/regions.aspx", "https://www.epicpass.com/regions/partner-resorts.aspx"]},
+    {"key": "ikon", "label": "Ikon", "pattern": "\\bikon(?:\\s+(?:pass|base))?\\b", "hosts": ["ikonpass.com"], "list_urls": ["https://www.ikonpass.com/en/opening-closing-dates", "https://www.ikonpass.com/en/destinations"]},
+    {"key": "indy", "label": "Indy", "pattern": "\\bindy(?:\\s+pass)?\\b", "hosts": ["indyskipass.com", "indypass.com", "indy-pass.com"], "list_urls": ["https://www.indyskipass.com/our-resorts"]},
+    {"key": "mountain_collective", "label": "Mountain Collective", "pattern": "mountain collective", "hosts": ["mountaincollective.com"], "list_urls": ["https://mountaincollective.com/resorts/"]},
+    {"key": "powder_alliance", "label": "Powder Alliance", "pattern": "powder alliance", "hosts": ["powderalliance.com"], "list_urls": ["https://www.powderalliance.com/"]},
+    {"key": "super_pass", "label": "Super Pass", "pattern": "\\bsuper pass\\b", "hosts": []},
+    {"key": "power_pass", "label": "Power Pass", "pattern": "\\bpower pass\\b", "hosts": ["powerpass.com"]},
+    {"key": "ski_utah_gold", "label": "Ski Utah Gold Pass", "pattern": "ski utah gold(?:\\s+pass)?", "hosts": ["skiutah.com"]},
+    {"key": "superskicard", "label": "SuperSkiCard", "pattern": "superskicard|super ski card", "hosts": ["superskicard.com"]},
+    {"key": "magic_pass", "label": "Magic Pass", "pattern": "\\bmagic pass\\b", "hosts": ["magicpass.ch", "magicpass.com"], "list_urls": ["https://www.magicpass.ch/en/stations"]},
+    {"key": "snowpass_valais", "label": "Snowpass Valais", "pattern": "snowpass valais|valais snowpass", "hosts": ["valais.ch"]},
+    {"key": "schneepass_zentralschweiz", "label": "Schneepass Zentralschweiz", "pattern": "schneepass zentralschweiz|zentralschweiz schneepass", "hosts": []},
+    {"key": "graubuenden_card", "label": "graubündenCARD", "pattern": "graub[uü]nden\\s*card|snowpass graub[uü]nden", "hosts": ["graubuenden.ch", "graubunden.ch"]},
+    {"key": "topcard", "label": "TopCard", "pattern": "\\btopcard\\b|\\btop card\\b", "hosts": ["topcard.ch"]},
+    {"key": "top4ski", "label": "Top4ski", "pattern": "\\btop4ski\\b|\\btop 4 ski\\b", "hosts": ["top4ski.ch"]},
+    {"key": "skistar_all_winter", "label": "SkiStar All Winter", "pattern": "skistar all winter|all winter pass", "hosts": ["skistar.com"], "list_urls": ["https://www.skistar.com/en/ski-destinations"]},
+    {"key": "niseko_united", "label": "Niseko United All Mountain Pass", "pattern": "niseko united(?:\\s+all mountain(?:\\s+pass)?)?", "hosts": ["niseko.ne.jp", "niseko-united.com"], "list_urls": ["https://www.niseko.ne.jp/en/"]},
+    {"key": "snow_card_tirol", "label": "Snow Card Tirol", "pattern": "snow ?card tirol", "hosts": ["snowcard.tirol", "tirol.at"]},
+    {"key": "powder_pass", "label": "Powder Pass", "pattern": "\\bpowder pass\\b", "hosts": []}
+  ]
+}

@@ -9,6 +9,7 @@ from typing import Any
 
 from .config import output_path
 from .filters import FILTER_COLUMNS
+from .pass_chips import PASS_COLUMNS
 
 
 DB_PATH = output_path("resort_facts", "resort_facts.sqlite")
@@ -26,6 +27,7 @@ CREATE TABLE IF NOT EXISTS resort_facts (
     updated_at TEXT NOT NULL,
     website TEXT,
     passes TEXT NOT NULL DEFAULT '[]',
+    other_passes TEXT NOT NULL DEFAULT '[]',
     owner TEXT,
     operator_group TEXT,
     operator_status TEXT,
@@ -75,6 +77,12 @@ def connect(path: Path = DB_PATH) -> sqlite3.Connection:
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
     conn.execute(SCHEMA)
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(resort_facts)")}
+    for column in PASS_COLUMNS:
+        if column not in existing:
+            conn.execute(f"ALTER TABLE resort_facts ADD COLUMN {column} INTEGER")
+    if "other_passes" not in existing:
+        conn.execute("ALTER TABLE resort_facts ADD COLUMN other_passes TEXT NOT NULL DEFAULT '[]'")
     return conn
 
 
@@ -98,8 +106,9 @@ def upsert_fact(conn: sqlite3.Connection, row: dict[str, Any]) -> None:
     payload = dict(row)
     payload["updated_at"] = _now()
     payload["passes"] = json.dumps(row.get("passes") or [], ensure_ascii=False)
+    payload["other_passes"] = json.dumps(row.get("other_passes") or [], ensure_ascii=False)
     payload["sources"] = json.dumps(row.get("sources") or {}, ensure_ascii=False)
-    for column in AMENITY_COLUMNS:
+    for column in (*AMENITY_COLUMNS, *PASS_COLUMNS):
         payload[column] = _tri(row.get(column))
     columns = [
         "winter_sports_id",
@@ -111,6 +120,7 @@ def upsert_fact(conn: sqlite3.Connection, row: dict[str, Any]) -> None:
         "updated_at",
         "website",
         "passes",
+        "other_passes",
         "owner",
         "operator_group",
         "operator_status",
@@ -128,6 +138,7 @@ def upsert_fact(conn: sqlite3.Connection, row: dict[str, Any]) -> None:
         "night_ticket_raw",
         "season_pass_raw",
         *AMENITY_COLUMNS,
+        *PASS_COLUMNS,
         "drive",
         "parking",
         "season_open",
@@ -160,8 +171,9 @@ def replace_facts(conn: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
 def _row_out(raw: sqlite3.Row) -> dict[str, Any]:
     item = dict(raw)
     item["passes"] = json.loads(item.get("passes") or "[]")
+    item["other_passes"] = json.loads(item.get("other_passes") or "[]")
     item["sources"] = json.loads(item.get("sources") or "{}")
-    for column in AMENITY_COLUMNS:
+    for column in (*AMENITY_COLUMNS, *PASS_COLUMNS):
         item[column] = _from_tri(item.get(column))
     return item
 
@@ -185,8 +197,19 @@ def query_facts(
         clauses.append("state = ?")
         values.append(state)
     if pass_name:
-        clauses.append("EXISTS (SELECT 1 FROM json_each(resort_facts.passes) WHERE value = ?)")
-        values.append(pass_name)
+        from .pass_chips import PASS_LABELS
+
+        key = pass_name.replace("-", "_").lower()
+        by_label = {label.lower(): col for col, label in PASS_LABELS.items()}
+        column = key if key in PASS_COLUMNS else by_label.get(pass_name.lower())
+        if column:
+            clauses.append(
+                f"({column} = 1 OR EXISTS (SELECT 1 FROM json_each(resort_facts.passes) WHERE value = ?))"
+            )
+            values.append(PASS_LABELS[column])
+        else:
+            clauses.append("EXISTS (SELECT 1 FROM json_each(resort_facts.passes) WHERE value = ?)")
+            values.append(pass_name)
     if amenity:
         if amenity not in AMENITY_COLUMNS:
             raise ValueError(f"unknown amenity {amenity}")

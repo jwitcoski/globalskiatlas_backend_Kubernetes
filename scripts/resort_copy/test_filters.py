@@ -103,8 +103,34 @@ class FilterTests(unittest.TestCase):
             }
         )
         self.assertEqual(official, ["Ikon"])
-        self.assertEqual(resort_passes({"pass_affiliation": {"value": "Nord Pass"}}), ["Nord Pass"])
+        row = filter_row(
+            resort="Killington",
+            key_points={
+                "website": {"value": "https://killington.com/"},
+                "pass_products": [
+                    {"value": "Ikon", "sources": ["https://killington.com/lift-tickets"]},
+                    {"value": "Indy", "sources": ["https://www.indyskipass.com/our-resorts"]},
+                ],
+            },
+        )
+        self.assertIs(row["ikon"], True)
+        self.assertIsNone(row["epic"])
+        self.assertIsNone(row["indy"])
+        self.assertEqual(row["passes"], ["Ikon"])
+        self.assertEqual(resort_passes({"pass_affiliation": {"value": "Nord Pass"}}), [])
         self.assertEqual(resort_passes({"pass_affiliation": {"value": "Local area pass: Not found in search results."}}), [])
+        unknown = filter_row(
+            resort="Nordic",
+            key_points={
+                "website": {"value": "https://nordic.com/"},
+                "pass_products": [
+                    {"value": "Nord Pass", "sources": ["https://nordic.com/tickets"]},
+                    {"value": "Ikon", "sources": ["https://zrankings.com/passes"]},
+                ],
+            },
+        )
+        self.assertEqual(unknown["other_passes"], ["Nord Pass"])
+        self.assertIsNone(unknown["ikon"])
         self.assertEqual(
             resort_website({"website": {"value": "https://www.fallscreek.com.au/winter"}}),
             "https://www.fallscreek.com.au/winter",
@@ -129,6 +155,51 @@ class FilterTests(unittest.TestCase):
         self.assertEqual(row["sources"]["price_band"]["kind"], "third_party")
         self.assertIn("liftopia.com", row["sources"]["price_band"]["url"])
         self.assertEqual(row["sources"]["website"]["kind"], "official")
+
+
+class ExtraPassTests(unittest.TestCase):
+    def setUp(self) -> None:
+        import os
+        import tempfile
+
+        from resort_copy.pass_chips import reload_catalog
+
+        self._tmp = tempfile.TemporaryDirectory()
+        self._extra = Path(self._tmp.name) / "extra_passes.json"
+        self._old = os.environ.get("PASS_CHIPS_EXTRA")
+        os.environ["PASS_CHIPS_EXTRA"] = str(self._extra)
+        reload_catalog()
+
+    def tearDown(self) -> None:
+        import os
+
+        from resort_copy.pass_chips import reload_catalog
+
+        if self._old is None:
+            os.environ.pop("PASS_CHIPS_EXTRA", None)
+        else:
+            os.environ["PASS_CHIPS_EXTRA"] = self._old
+        reload_catalog()
+        self._tmp.cleanup()
+
+    def test_add_pa_pass_chip(self) -> None:
+        from resort_copy.filters import filter_row
+        from resort_copy.pass_chips import PASS_COLUMNS, add_pass
+
+        chip = add_pass("PA Pass")
+        self.assertEqual(chip.key, "pa_pass")
+        self.assertIn("pa_pass", PASS_COLUMNS)
+        row = filter_row(
+            resort="Camelback",
+            key_points={
+                "website": {"value": "https://camelback.com/"},
+                "pass_products": [
+                    {"value": "PA Pass", "sources": ["https://camelback.com/tickets"]},
+                ],
+            },
+        )
+        self.assertIs(row["pa_pass"], True)
+        self.assertEqual(row["passes"], ["PA Pass"])
 
 
 if __name__ == "__main__":

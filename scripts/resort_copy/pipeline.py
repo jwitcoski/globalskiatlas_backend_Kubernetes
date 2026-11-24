@@ -64,6 +64,7 @@ from .writing import (
     length_control_loop,
     outline_beats,
     produce_draft,
+    rewrite_draft,
     write_draft,
 )
 
@@ -151,6 +152,7 @@ def run_passes(
     critic_model: str | None = None,
     search_only: bool = False,
     checkpoint: CheckpointCallback | None = None,
+    winter_sports_id: str | None = None,
 ) -> dict[str, Any]:
     search_model = search_model or model
     writer_model = writer_model or model
@@ -318,14 +320,15 @@ def run_passes(
             },
         )
     key_points = compact_key_points(assemble_key_points(notes, key_points, snippets, name))
-    notes = inject_fact_notes(notes, key_points)
-    brief = page_brief(notes, name=name, key_points=key_points)
+    notes = inject_fact_notes(notes, key_points, winter_sports_id=winter_sports_id)
+    brief = page_brief(notes, name=name, key_points=key_points, winter_sports_id=winter_sports_id)
     page_notes = writing_notes(notes, key_points)
     filters = filter_row(
         resort=resort_label,
         tier=_tier_key(tier),
         country=country,
         state=state,
+        winter_sports_id=winter_sports_id,
         notes=notes,
         snippets=snippets,
         key_points=key_points,
@@ -491,6 +494,25 @@ def run_passes(
     else:
         final = draft
     final = finish_prose(final, page_notes, name=name, country=country, state=state, tier=tier)
+    print("rewrite: starting", file=sys.stderr, flush=True)
+    started_rewrite = time.time()
+    rewritten = rewrite_draft(
+        final,
+        page_notes,
+        beats,
+        resort_label=resort_label,
+        tier=tier,
+        base_url=base_url,
+        model=writer_model,
+        num_ctx=page_ctx,
+        timeout=timeout,
+        brief=brief,
+    )
+    rewritten = finish_prose(rewritten, page_notes, name=name, country=country, state=state, tier=tier)
+    stage_timings["rewrite"] = round(time.time() - started_rewrite, 2)
+    if checkpoint is not None:
+        checkpoint("rewrite_complete", {"rewrite": rewritten})
+    final = rewritten
     print("length: starting", file=sys.stderr, flush=True)
     final, short_reason, leftover = length_control_loop(
         final,
@@ -543,6 +565,7 @@ def run_passes(
         "outline": beats,
         "draft": draft,
         "critique": critique,
+        "rewrite": rewritten,
         "final": final,
         "final_word_count": measured["words"],
         "final_char_count": measured["characters"],

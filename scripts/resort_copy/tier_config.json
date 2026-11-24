@@ -22,7 +22,7 @@
       "pages": 8,
       "beats": 16,
       "search_retries": 5,
-      "section_writing": true
+      "section_writing": false
     },
     "large": {
       "paragraphs": [10, 14],
@@ -34,7 +34,7 @@
       "pages": 12,
       "beats": 24,
       "search_retries": 6,
-      "section_writing": true
+      "section_writing": false
     }
   },
   "models": {

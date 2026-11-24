@@ -23,8 +23,10 @@ from resort_copy.config import KEY_POINTS_PATH  # noqa: E402
 from resort_copy.fact_store import DB_PATH, connect, fact_stats, query_facts, replace_facts  # noqa: E402
 from resort_copy.facts import harvest_fact_rows  # noqa: E402
 from resort_copy.facts_api import serve  # noqa: E402
-from resort_copy.facts_ddb import TABLE_NAME, WIKI_COLUMNS, apply_user_edit, ensure_table, push_facts  # noqa: E402
+from resort_copy.facts_ddb import TABLE_NAME, apply_user_edit, ensure_table, push_facts, wiki_columns  # noqa: E402
 from resort_copy.filters import FILTERS_PATH, FILTER_COLUMNS  # noqa: E402
+from resort_copy.pass_chips import PASS_COLUMNS, PASS_LABELS, add_pass  # noqa: E402
+from resort_copy.pass_lists import main as harvest_pass_lists  # noqa: E402
 
 
 def main() -> int:
@@ -53,7 +55,36 @@ def main() -> int:
     parser.add_argument("--amenity")
     parser.add_argument("--price-band")
     parser.add_argument("--tier")
+    parser.add_argument("--list-passes", action="store_true", help="Print the pass-chip catalog")
+    parser.add_argument("--add-pass", metavar="LABEL", help="Add a regional pass chip, e.g. 'PA Pass'")
+    parser.add_argument("--pass-key", help="Optional id for --add-pass (default: slug of the label)")
+    parser.add_argument("--pass-pattern", help="Optional regex for --add-pass")
+    parser.add_argument("--pass-host", action="append", default=[], help="Pass-operator hostname (repeatable)")
+    parser.add_argument(
+        "--harvest-pass-lists",
+        action="store_true",
+        help="Fetch mega-pass destination pages and match names to the atlas parquet",
+    )
+    parser.add_argument("--parquet", type=Path, default=Path("output/combined/ski_areas_analyzed.parquet"))
+    parser.add_argument(
+        "--only-pass",
+        action="append",
+        default=[],
+        help="Limit --harvest-pass-lists to these catalog keys (repeatable)",
+    )
     args = parser.parse_args()
+
+    if args.harvest_pass_lists:
+        extra = ["--parquet", str(args.parquet)]
+        for key in args.only_pass:
+            extra.extend(["--pass-key", key])
+        return harvest_pass_lists(extra)
+
+    if args.add_pass:
+        chip = add_pass(args.add_pass, key=args.pass_key, pattern=args.pass_pattern, hosts=args.pass_host)
+        print(f"added pass chip {chip.key}={chip.label}", file=sys.stderr)
+    if args.list_passes:
+        print(json.dumps([{"key": key, "label": PASS_LABELS[key]} for key in PASS_COLUMNS], ensure_ascii=False, indent=2))
 
     rows: list | None = None
     if args.ingest or args.push:
@@ -76,15 +107,15 @@ def main() -> int:
         if args.set:
             resort_id, column, raw = args.set
             column = column.replace("-", "_")
-            if column not in WIKI_COLUMNS:
+            if column not in wiki_columns():
                 raise SystemExit(f"unknown fact field {column}")
             if raw == "clear":
                 value = None
-            elif column in FILTER_COLUMNS:
+            elif column in FILTER_COLUMNS or column in PASS_COLUMNS:
                 if raw not in {"true", "false"}:
                     raise SystemExit("--set for an amenity must be true, false, or clear")
                 value = raw == "true"
-            elif column == "passes":
+            elif column in {"passes", "other_passes"}:
                 value = [part.strip() for part in raw.split(",") if part.strip()]
             elif column in {"year_started", "lift_ticket_amount", "lift_ticket_usd"}:
                 value = raw

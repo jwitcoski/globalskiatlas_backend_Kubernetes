@@ -13,6 +13,17 @@ from pathlib import Path
 from typing import Any
 
 from .config import output_path
+from .pass_chips import (  # noqa: E402
+    PASS_CHIPS,
+    PASS_COLUMNS,
+    PASS_LABELS,
+    harvest_other_passes,
+    harvest_pass_chips,
+    leftover_pass_label,
+    pass_hosts,
+    true_pass_labels,
+)
+from .pass_lists import apply_overlay
 
 FILTERS_PATH = output_path("resort_filters", "filters.jsonl")
 
@@ -30,12 +41,13 @@ FILTER_COLUMNS: tuple[str, ...] = (
 )
 
 # Text columns. Blank means the run did not establish the value.
-PROFILE_COLUMNS: tuple[str, ...] = ("website", "passes", "price_band")
+PROFILE_COLUMNS: tuple[str, ...] = ("website", "passes", "other_passes", "price_band")
 
 # CSV headers. Each value is followed by a Source column holding the page URL.
 COLUMN_LABELS: dict[str, str] = {
     "website": "Website",
     "passes": "Passes",
+    "other_passes": "Other passes",
     "price_band": "Price",
     "snowtubing": "Snowtubing",
     "ski_rentals": "Ski Rentals",
@@ -47,6 +59,7 @@ COLUMN_LABELS: dict[str, str] = {
     "snowmaking": "Snowmaking",
     "glacier": "Glacier",
 }
+COLUMN_LABELS.update({key: label for key, label in PASS_LABELS.items()})
 
 # Approximate USD rates so a euro or yen day ticket lands in the same band.
 _USD_RATES: dict[str, float] = {
@@ -204,16 +217,6 @@ def _point_urls(value: Any, index: dict[str, str]) -> list[str]:
     return []
 
 
-_PASS_HOSTS = (
-    "epicpass.com",
-    "ikonpass.com",
-    "indypass.com",
-    "indy-pass.com",
-    "indyskipass.com",
-    "mountaincollective.com",
-    "powerpass.com",
-    "nord.ski",
-)
 _ROUNDUP_PASS_HOSTS = (
     "zrankings.com",
     "mtninfo.com",
@@ -233,7 +236,7 @@ def pass_url_trusted(url: str, official_host: str, pass_name: str) -> bool:
         return True
     if any(host == h or host.endswith("." + h) for h in _ROUNDUP_PASS_HOSTS):
         return False
-    if not any(host == h or host.endswith("." + h) for h in _PASS_HOSTS):
+    if not any(host == h or host.endswith("." + h) for h in pass_hosts()):
         return False
     path = (url or "").lower()
     if re.search(r"/our-resorts/?$|/passes/?$|/ski-resorts/season-passes", path):
@@ -258,7 +261,7 @@ def classify_source(urls: list[str], official_host: str) -> dict[str, str]:
             return {"kind": "wikipedia", "url": url}
     for url in cleaned:
         host = _host(url)
-        if any(host == site or host.endswith("." + site) for site in _PASS_HOSTS):
+        if any(host == site or host.endswith("." + site) for site in pass_hosts()):
             return {"kind": "pass_site", "url": url}
     if cleaned:
         return {"kind": "third_party", "url": cleaned[0]}
@@ -501,9 +504,10 @@ def _passes_cite(
 
 
 def resort_passes(key_points: dict[str, Any] | None, notes: list[dict[str, Any]] | None = None) -> list[str]:
-    """Named passes. Two or more of Epic, Ikon, Indy, or Mountain Collective means a roundup, not this resort."""
-    names, _urls = _passes_cite(key_points, notes)
-    return names
+    """Labels of pass chips that are true for this resort."""
+    official = _host(_point_text((key_points or {}).get("website")))
+    flags = harvest_pass_chips(key_points=key_points, notes=notes, official_host=official)
+    return true_pass_labels(flags)
 
 
 def _amount(token: str) -> float | None:
@@ -644,19 +648,52 @@ def filter_row(
         if item["value"] is not None and item["evidence"]:
             evidence[key] = item["evidence"]
     website, website_urls = _website_cite(key_points, notes, snippets)
-    passes, pass_urls = _passes_cite(key_points, notes, snippets)
+    official_host = _host(website or "")
+    pass_flags = harvest_pass_chips(
+        key_points=key_points,
+        notes=notes,
+        snippets=snippets,
+        official_host=official_host,
+    )
+    passes = true_pass_labels(pass_flags)
+    other_passes = harvest_other_passes(
+        key_points=key_points,
+        notes=notes,
+        snippets=snippets,
+        official_host=official_host,
+    )
     band, price_evidence, price_urls = _price_cite(key_points, notes, snippets)
     row["website"] = website
     row["passes"] = passes
+    row["other_passes"] = other_passes
     row["price_band"] = band
-    official_host = _host(website or "")
+    for key in PASS_COLUMNS:
+        item = pass_flags[key]
+        row[key] = item["value"]
+        if item["value"] is not None and item["evidence"]:
+            evidence[key] = item["evidence"]
+    apply_overlay(row, winter_sports_id or "")
+    passes = [PASS_LABELS[key] for key in PASS_COLUMNS if row.get(key) is True]
+    row["passes"] = passes
     sources: dict[str, dict[str, str]] = {}
     if website:
         evidence["website"] = website
         sources["website"] = classify_source(website_urls, official_host)
     if passes:
         evidence["passes"] = ", ".join(passes)
-        sources["passes"] = classify_source(pass_urls, official_host)
+        first_true = next((pass_flags[k] for k in PASS_COLUMNS if pass_flags[k]["value"] is True), None)
+        sources["passes"] = classify_source(list((first_true or {}).get("sources") or []), official_host)
+    if other_passes:
+        evidence["other_passes"] = ", ".join(other_passes)
+        sources["other_passes"] = classify_source(
+            [
+                url
+                for text, urls in _pass_items(key_points)
+                if leftover_pass_label(text)
+                for url in urls
+            ],
+            official_host,
+        )
     if price_evidence:
         evidence["price_band"] = price_evidence
         sources["price_band"] = classify_source(price_urls, official_host)
@@ -664,6 +701,10 @@ def filter_row(
         if row.get(key) is None:
             continue
         sources[key] = classify_source(list(flags[key].get("sources") or []), official_host)
+    for key in PASS_COLUMNS:
+        if row.get(key) is None:
+            continue
+        sources[key] = classify_source(list(pass_flags[key].get("sources") or []), official_host)
     row["evidence"] = evidence
     row["sources"] = sources
     return row
@@ -747,10 +788,10 @@ def rows_from_copy_jsonl(path: Path) -> list[dict[str, Any]]:
 
 def write_filter_csv(rows: list[dict[str, Any]], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    columns = (*PROFILE_COLUMNS, *FILTER_COLUMNS)
+    columns = (*PROFILE_COLUMNS, *PASS_COLUMNS, *FILTER_COLUMNS)
     fieldnames = ["Resort"]
     for column in columns:
-        label = COLUMN_LABELS[column]
+        label = PASS_LABELS.get(column) or COLUMN_LABELS.get(column) or column
         fieldnames.extend((label, f"{label} Source"))
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
@@ -759,7 +800,7 @@ def write_filter_csv(rows: list[dict[str, Any]], path: Path) -> None:
             cited = row.get("sources") if isinstance(row.get("sources"), dict) else {}
             flat = {"Resort": row.get("resort") or ""}
             for column in columns:
-                label = COLUMN_LABELS[column]
+                label = PASS_LABELS.get(column) or COLUMN_LABELS.get(column) or column
                 value = row.get(column)
                 if isinstance(value, list):
                     shown = ", ".join(str(item) for item in value)
@@ -780,7 +821,7 @@ def write_filter_csv(rows: list[dict[str, Any]], path: Path) -> None:
 
 def select_rows(rows: list[dict[str, Any]], wanted: list[str], *, match_all: bool = True) -> list[dict[str, Any]]:
     """Keep resorts whose filter cells are true. Unknown and false stay out."""
-    keys = [key for key in wanted if key in FILTER_COLUMNS]
+    keys = [key for key in wanted if key in FILTER_COLUMNS or key in PASS_COLUMNS]
     if not keys:
         return rows
 

@@ -48,6 +48,24 @@ class FactsTests(unittest.TestCase):
             }
         )
         self.assertEqual(row["passes"], [])
+        self.assertIsNone(row["epic"])
+        self.assertIsNone(row["ikon"])
+
+    def test_official_ikon_sets_chip(self) -> None:
+        row = fact_row(
+            key_points_record={
+                "winterSportsId": "1",
+                "key_points": {
+                    "website": {"value": "https://killington.com/"},
+                    "pass_products": [
+                        {"value": "Ikon", "sources": ["https://killington.com/lift-tickets"]},
+                    ],
+                },
+            }
+        )
+        self.assertIs(row["ikon"], True)
+        self.assertIsNone(row["epic"])
+        self.assertEqual(row["passes"], ["Ikon"])
 
     def test_local_and_ikon_can_both_be_stored(self) -> None:
         row = fact_row(
@@ -57,7 +75,8 @@ class FactsTests(unittest.TestCase):
                 "passes": ["Ikon", "Vermont Skipass"],
             }
         )
-        self.assertEqual(row["passes"], ["Ikon", "Vermont Skipass"])
+        self.assertEqual(row["passes"], ["Ikon"])
+        self.assertEqual(row["other_passes"], ["Vermont Skipass"])
 
     def test_null_amenity_is_unknown_not_false(self) -> None:
         row = fact_row(

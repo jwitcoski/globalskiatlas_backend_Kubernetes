@@ -79,8 +79,8 @@ TOPICS: tuple[Topic, ...] = (
     _topic(
         "multi_mountain_pass", "Multi-mountain pass affiliation", "access",
         [
-            ['"{name}" multi mountain pass affiliation', 'site:{domain} season passes partner passes'],
-            ['"{name}" Indy OR Ikon OR Epic OR "Mountain Collective" pass', 'site:{domain} partner pass benefits'],
+            ['site:{domain} season passes', '"{name}" season pass price {region}'],
+            ['site:{domain} pass holders benefits', '"{name}" season ticket this mountain'],
         ],
         _PASS_WORDS,
         kind="list", legacy_topic="pass", legacy_field="pass_affiliation",
