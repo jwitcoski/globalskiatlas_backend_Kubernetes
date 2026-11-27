@@ -175,20 +175,74 @@ def _page_text(snippet: dict[str, Any]) -> str:
     return str(snippet.get("body") or snippet.get("text") or "").strip()
 
 
-def _score_page(snippet: dict[str, Any], ask: str) -> int:
+# Filler from the sticky prompt template. Do NOT put topic words here (ticket, price, pass…).
+_ASK_STOP = frozenset(
+    """
+    what when where which does have from with that this only page pages says said stated
+    include named name resort mountain people about best they them their according visitor
+    guides praise warn clearly offered offer offers includes first operate operated
+    area areas then keep vivid grounded detail same range age lessons meet
+    invent recite return found false true text snippet ids indexed
+    question answer answers reader atlas entry sentences sentence
+    """.split()
+)
+
+_FACT_URL_BITS = (
+    "lift-ticket",
+    "lift_ticket",
+    "lift-tickets",
+    "/tickets",
+    "/rates",
+    "season-pass",
+    "day-pass",
+    "/pass",
+    "ikonpass",
+    "epicpass",
+    "indyskipass",
+    "mountaincollective",
+)
+
+
+def _ask_terms(ask: str, name: str) -> list[str]:
+    """Question words only — never the resort name, never filler verbs."""
+    name_parts = set(re.findall(r"[a-z]{3,}", (name or "").lower()))
+    out: list[str] = []
+    seen: set[str] = set()
+    for word in re.findall(r"[a-z]{4,}", ask.lower()):
+        if word in _ASK_STOP or word in name_parts or word in seen:
+            continue
+        seen.add(word)
+        out.append(word)
+    return out
+
+
+def _score_page(snippet: dict[str, Any], ask: str, *, name: str = "") -> int:
+    """Prefer pages whose URL/body match the *question*, not pages that merely name the resort."""
     blob = f"{snippet.get('title') or ''} {_page_text(snippet)}".lower()
+    url = str(snippet.get("url") or "").lower()
     score = 0
     if snippet.get("fetched") or snippet.get("body"):
-        score += 5
-    src = str(snippet.get("source") or "")
-    if src == "wikipedia":
         score += 4
+    src = str(snippet.get("source") or "")
+    if src in {"official", "pass_provider"}:
+        score += 10
+    if any(bit in url for bit in _FACT_URL_BITS):
+        score += 8
+    if src == "wikipedia":
+        score += 1
     if src == "stay22":
-        score += 2
-    for word in re.findall(r"[a-z]{4,}", ask.lower()):
-        if word in blob:
-            score += 1
+        score += 1
+    terms = _ask_terms(ask, name)
+    hits = sum(1 for word in terms if word in blob)
+    score += hits * 4
+    if terms and hits == 0:
+        score -= 6
     return score
+
+
+def _score_window(window: str, terms: list[str]) -> int:
+    low = window.lower()
+    return sum(3 for word in terms if word in low)
 
 
 def _pile_windows(
@@ -196,23 +250,27 @@ def _pile_windows(
     *,
     ask: str,
     max_chars: int,
+    name: str = "",
 ) -> tuple[str, list[str]]:
-    """Best windows from the indexed pile for one sticky, sized for the 8B context."""
-    ranked = sorted(snippets, key=lambda s: _score_page(s, ask), reverse=True)
-    chunks: list[tuple[str, str]] = []
-    for snippet in ranked:
+    """Best windows for one sticky: rank by question terms, not resort-name overlap."""
+    terms = _ask_terms(ask, name)
+    ranked = sorted(snippets, key=lambda s: _score_page(s, ask, name=name), reverse=True)
+    chunks: list[tuple[int, str, str]] = []
+    for snippet in ranked[:12]:
         text = _page_text(snippet)
         if len(text) < 120:
             continue
         sid = str(snippet.get("id") or "")
-        for window in split_page_windows(text, size=PAGE_FACT_WINDOW_CHARS, limit=4):
-            chunks.append((sid, window))
-        if len(chunks) >= 16:
-            break
+        for window in split_page_windows(text, size=PAGE_FACT_WINDOW_CHARS, limit=6):
+            chunks.append((_score_window(window, terms), sid, window))
+    chunks.sort(key=lambda c: c[0], reverse=True)
     picked: list[str] = []
     used_ids: list[str] = []
     used = 0
-    for sid, window in chunks:
+    for win_score, sid, window in chunks:
+        if terms and win_score <= 0 and picked:
+            # Keep at most one zero-hit window once we already have on-topic text.
+            continue
         block = f"[{sid}]\n{window}"
         if used and used + 2 + len(block) > max_chars:
             continue
@@ -220,7 +278,7 @@ def _pile_windows(
         if sid and sid not in used_ids:
             used_ids.append(sid)
         used += len(block) + 2
-        if used >= max_chars:
+        if used >= max_chars or len(picked) >= 10:
             break
     return "\n\n".join(picked), used_ids
 
@@ -345,9 +403,10 @@ def run_sticky_search(
     budget = int((num_ctx - reply_tokens - SEARCH_SYSTEM_TOKENS) * 3.2)
     budget = max(3500, min(budget, 12000))
 
+    critical = {"price", "pass", "access", "year_started", "setting"}
     for index, sticky in enumerate(stickies, start=1):
         ask = sticky.ask.format(name=name)
-        pile_block, _ids = _pile_windows(snippets, ask=ask, max_chars=budget)
+        pile_block, _ids = _pile_windows(snippets, ask=ask, max_chars=budget, name=name)
         print(
             f"  sticky {index}/{len(stickies)} {sticky.id}: "
             f"{sum(1 for s in snippets if s.get('fetched'))} indexed pages, "
@@ -384,7 +443,7 @@ def run_sticky_search(
                 tier=tier,
                 page_limit=page_limit,
             )
-            pile_block, _ids = _pile_windows(snippets, ask=ask, max_chars=budget)
+            pile_block, _ids = _pile_windows(snippets, ask=ask, max_chars=budget, name=name)
             if pile_block:
                 started = time.time()
                 note = _answer_sticky(
@@ -417,10 +476,11 @@ def run_sticky_search(
                     },
                 },
             )
-        if sum(len(n["text"]) for n in notes) >= char_target:
+        have_topics = {str(n.get("topic") or "") for n in notes}
+        if sum(len(n["text"]) for n in notes) >= char_target and critical.issubset(have_topics):
             print(
                 f"  sticky search reached note character target "
-                f"({sum(len(n['text']) for n in notes)}/{char_target})",
+                f"({sum(len(n['text']) for n in notes)}/{char_target}) with critical topics",
                 file=sys.stderr,
                 flush=True,
             )

@@ -13,6 +13,7 @@ from .config import (
     TIER_SEARCH_CTX,
     TIER_SNIPPETS,
     _tier_key,
+    cache_root,
     fact_min_for,
     search_ladder_for,
     write_char_floor_for,
@@ -133,6 +134,91 @@ def _research_view(snippets: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
+def _merge_snippets(base: list[dict[str, Any]], extra: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Append research pages into the sticky pile without losing already-fetched bodies."""
+    by_url = {
+        str(s.get("url") or "").rstrip("/").lower(): s
+        for s in base
+        if str(s.get("url") or "").strip()
+    }
+    by_id = {str(s.get("id") or ""): s for s in base if s.get("id")}
+    for row in extra:
+        url = str(row.get("url") or "").rstrip("/").lower()
+        sid = str(row.get("id") or "")
+        if url and url in by_url:
+            dest = by_url[url]
+            if row.get("body") and not dest.get("body"):
+                dest["body"] = row["body"]
+                dest["fetched"] = True
+            continue
+        if sid and sid in by_id:
+            continue
+        base.append(row)
+        if url:
+            by_url[url] = row
+        if sid:
+            by_id[sid] = row
+    return base
+
+
+def _run_structured_research(
+    *,
+    name: str,
+    state: str | None,
+    country: str | None,
+    base_url: str,
+    search_model: str,
+    num_ctx: int,
+    timeout: float,
+    use_ddg: bool,
+    searxng_url: str | None,
+    seed_official_url: str | None,
+    checkpoint: CheckpointCallback | None,
+) -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
+    """Official-site-first harvest. Returns notes, key_points, snippets, timing blob."""
+    from .research import make_llm, run_research
+
+    started = time.time()
+    result = run_research(
+        name=name,
+        state=state,
+        country=country,
+        llm=make_llm(base_url, search_model, num_ctx, timeout),
+        cache_dir=cache_root() / "research",
+        seed_official_url=seed_official_url,
+        searxng_url=searxng_url,
+        use_ddg=use_ddg,
+    )
+    notes = result.to_notes()
+    key_points = result.to_key_points()
+    snippets = result.snippets()
+    timing = {
+        "structured_research": round(time.time() - started, 2),
+        "verified_count": result.verified_count(),
+        "gaps": result.gaps(),
+        "official_domain": result.entity.official_domain,
+    }
+    if checkpoint is not None:
+        checkpoint(
+            "structured_research",
+            {
+                "notes": notes,
+                "key_points": key_points,
+                "entity": result.entity.to_dict(),
+                "verified_count": result.verified_count(),
+                "gaps": result.gaps(),
+            },
+        )
+    print(
+        f"search: structured research → {len(notes)} notes, "
+        f"domain={result.entity.official_domain or 'none'}, "
+        f"gaps={','.join(result.gaps()) or 'none'}",
+        file=sys.stderr,
+        flush=True,
+    )
+    return notes, key_points, snippets, timing
+
+
 def run_passes(
     *,
     resort_label: str,
@@ -153,6 +239,9 @@ def run_passes(
     search_only: bool = False,
     checkpoint: CheckpointCallback | None = None,
     winter_sports_id: str | None = None,
+    structured_research: bool = True,
+    seed_official_url: str | None = None,
+    searxng_url: str | None = None,
 ) -> dict[str, Any]:
     search_model = search_model or model
     writer_model = writer_model or model
@@ -184,8 +273,6 @@ def run_passes(
     validation_errors: list[dict[str, str]] = []
     snippets_dropped = 0
     limit = max(snippet_limit, TIER_SNIPPETS.get(_tier_key(tier), 10))
-    if not bedrock.format_snippets_for_prompt(snippets):
-        raise RuntimeError("No research snippets.")
     search_ctx = max(num_ctx, TIER_SEARCH_CTX.get(_tier_key(tier), 8192))
     notes: list[dict[str, Any]] = []
     key_points: dict[str, Any] = {}
@@ -196,6 +283,32 @@ def run_passes(
     sticky_seconds = 0.0
     topup_seconds = 0.0
     print_tier = _tier_key(tier)
+    if structured_research:
+        try:
+            research_notes, research_points, research_snips, research_timing = _run_structured_research(
+                name=name,
+                state=state,
+                country=country,
+                base_url=base_url,
+                search_model=search_model or model,
+                num_ctx=search_ctx,
+                timeout=timeout,
+                use_ddg=use_ddg,
+                searxng_url=searxng_url,
+                seed_official_url=seed_official_url,
+                checkpoint=checkpoint,
+            )
+            stage_timings.update({k: v for k, v in research_timing.items() if isinstance(v, (int, float))})
+            stage_timings["research_verified"] = research_timing.get("verified_count", 0)
+            notes.extend(research_notes)
+            if isinstance(research_points, dict):
+                key_points.update({k: v for k, v in research_points.items() if v})
+            _merge_snippets(snippets, research_snips)
+        except Exception as exc:
+            print(f"search: structured research failed ({exc}); falling back to sticky search", file=sys.stderr, flush=True)
+            validation_errors.append({"topic": "structured_research", "reason": str(exc), "text": ""})
+    if not bedrock.format_snippets_for_prompt(snippets) and not notes:
+        raise RuntimeError("No research snippets.")
     for search_tier in search_ladder_for(print_tier):
         page_limit = TIER_PAGES.get(search_tier, 4)
         still_short = len(notes) < note_floor or note_chars(notes) < char_target

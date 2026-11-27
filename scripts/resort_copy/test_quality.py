@@ -293,6 +293,40 @@ class LengthAndCriticTests(unittest.TestCase):
         self.assertIn("A ridge above the valley town.", texts)
         self.assertIn("Adult day tickets start at $89.", texts)
 
+    def test_ask_terms_drop_resort_name_and_filler(self) -> None:
+        from resort_copy.stickies import _ask_terms, _score_page
+
+        terms = _ask_terms(
+            "What is a day lift ticket or adult ticket price for Killington, with currency, if stated?",
+            "Killington",
+        )
+        self.assertIn("ticket", terms)
+        self.assertIn("price", terms)
+        self.assertNotIn("killington", terms)
+        self.assertNotIn("what", terms)
+
+        ticket_page = {
+            "id": "T1",
+            "source": "official",
+            "title": "Lift tickets",
+            "url": "https://killington.com/lift-tickets",
+            "body": "Adult day lift ticket is $129. Season pass products are listed separately.",
+            "fetched": True,
+        }
+        wiki_page = {
+            "id": "W1",
+            "source": "wikipedia",
+            "title": "Killington Ski Resort",
+            "url": "https://en.wikipedia.org/wiki/Killington_Ski_Resort",
+            "body": "Killington is a ski resort in Vermont with many trails and lifts on the mountain.",
+            "fetched": True,
+        }
+        ask = "What is a day lift ticket or adult ticket price for Killington, with currency, if stated?"
+        self.assertGreater(
+            _score_page(ticket_page, ask, name="Killington"),
+            _score_page(wiki_page, ask, name="Killington"),
+        )
+
     def test_sticky_counts_grow_with_tier(self) -> None:
         self.assertEqual(len(stickies_for_tier("small")), 10)
         self.assertEqual(len(stickies_for_tier("medium")), 16)

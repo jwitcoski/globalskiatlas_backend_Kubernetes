@@ -19,11 +19,19 @@ model call is running.
 
 ## Pass order
 
-1. **Search**: build queries, fetch pages, answer the sticky questions, then top up: dedupe, mine the fetched pages in fact windows, search gap topics (`topup.py`).
+1. **Search** (structured first): seed the official (or thin community/Facebook) URL from the reference layer (`url_refs.py` — US ski-area sheet hyperlinks + mega-pass rosters + parquet website), resolve/verify that domain, crawl its navigation (`research.py` / `entity.py` / `sources.py`), extract evidence-backed facts per topic. JS-empty official pages fall back to Jina Reader. Then sticky questions + top-up fill remaining gaps (`stickies.py`, `topup.py`). Pass `--no-structured-research` for the legacy sticky-only path. Seed with `--official-url` when you already know the site.
+
+Rebuild the URL reference table after updating the sheet or pass rosters:
+
+```
+python -m resort_copy.url_refs --sheet scripts/resort_copy/data/active_us_ski_areas.xlsx
+```
 2. **Outline**: order the notes into beats.
 3. **Write**: paragraphs from outline + notes.
 4. **Critique**: unsupported claims and clichés (no new facts).
 5. **Edit / extend**: apply fixes, fit the print layout, add notes-only material if short.
+
+For the OpenRouter Qwen writer run, keep this search path local (SearXNG + fetch). Only LLM calls should hit OpenRouter — thin search still burns paid tokens on empty notes.
 
 Medium and large drafts also go through `grounding.py` after each writing pass.
 

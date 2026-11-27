@@ -66,6 +66,33 @@ def _resort_name(row: dict[str, Any]) -> str | None:
     return None
 
 
+def _official_url_from_row(row: dict[str, Any] | None, explicit: str | None = None) -> str | None:
+    """CLI --official-url wins; then parquet website; then sheet/pass URL reference index."""
+    if explicit and str(explicit).strip():
+        return str(explicit).strip()
+    if row is not None:
+        for key in (
+            "website",
+            "official_website",
+            "url",
+            "homepage",
+            "osm_website",
+            "contact_website",
+        ):
+            text = _cell(row, key)
+            if text and ("." in text or text.startswith("http")):
+                return text if text.startswith("http") else f"https://{text}"
+    try:
+        from .url_refs import lookup_seed_url
+    except Exception:
+        return None
+    name = _resort_name(row) if row is not None else None
+    state = _cell(row, "state") if row is not None else None
+    country = _cell(row, "country") if row is not None else None
+    wid = _cell(row, "winter_sports_id") if row is not None else None
+    return lookup_seed_url(name=name, state=state, country=country, winter_sports_id=wid or None)
+
+
 def _round_robin(rows: list[dict[str, Any]], n: int) -> list[dict[str, Any]]:
     """Spread a sample across countries instead of taking the first rows of one nation."""
     if n <= 0 or not rows:
@@ -294,6 +321,17 @@ def main() -> int:
     ap.add_argument("--demo-state", type=str, default=None)
     ap.add_argument("--demo-country", type=str, default=None)
     ap.add_argument("--research-only", action="store_true")
+    ap.add_argument(
+        "--no-structured-research",
+        action="store_true",
+        help="Skip official-site topic harvest; use sticky search only (legacy).",
+    )
+    ap.add_argument(
+        "--official-url",
+        type=str,
+        default=None,
+        help="Seed the official resort website (skips discovery when the homepage verifies).",
+    )
     ap.add_argument("--no-ddg", action="store_true")
     ap.add_argument("--brave-api-key", type=str, default=None)
     ap.add_argument(
@@ -395,6 +433,9 @@ def main() -> int:
                         critic_model=critic_model,
                         search_only=args.search_only,
                         winter_sports_id=wid or None,
+                        structured_research=not args.no_structured_research,
+                        seed_official_url=_official_url_from_row(row, args.official_url),
+                        searxng_url=searx_url,
                     )
                     break
                 except Exception as exc:
@@ -595,6 +636,9 @@ def main() -> int:
             critic_model=critic_model,
             checkpoint=save_checkpoint,
             winter_sports_id=_cell(row, "winter_sports_id") if row is not None else None,
+            structured_research=not args.no_structured_research,
+            seed_official_url=_official_url_from_row(row, args.official_url),
+            searxng_url=searx_url,
         )
     except Exception as exc:
         checkpoint_data["status"] = "failed"

@@ -368,6 +368,76 @@ class DdgsSearch:
         return []
 
 
+class SearxSearch:
+    """Local SearXNG adapter. Prefer this on the AI boxes so research and stickies share one engine."""
+
+    def __init__(self, base_url: str | None = None, *, max_per_query: int = 8) -> None:
+        self.base_url = (base_url or os.environ.get("SEARXNG_URL") or "").rstrip("/")
+        self.max_per_query = max_per_query
+
+    @property
+    def available(self) -> bool:
+        return bool(self.base_url)
+
+    def __call__(self, query: str, max_results: int) -> list[dict[str, str]]:
+        if not self.base_url:
+            return []
+        try:
+            from generate_resort_copy_bedrock import fetch_searxng_snippets
+        except ImportError:
+            return []
+        rows = fetch_searxng_snippets(
+            [query],
+            base_url=self.base_url,
+            max_per_query=min(max_results, self.max_per_query),
+            max_total=max_results,
+            id_start=1,
+        )
+        return [
+            {
+                "url": str(r.get("url") or "").strip(),
+                "title": str(r.get("title") or "").strip(),
+                "snippet": str(r.get("text") or "").strip(),
+            }
+            for r in rows
+            if str(r.get("url") or "").strip()
+        ]
+
+
+def jina_get(url: str, timeout: float = 25.0) -> HttpResult:
+    """Read a JS-heavy page through Jina Reader (Markdown). Free tier; use only as a fallback."""
+    target = url if url.startswith("http") else f"https://{url}"
+    reader = f"https://r.jina.ai/{target}"
+    req = urllib.request.Request(
+        reader,
+        headers={
+            "User-Agent": USER_AGENT,
+            "Accept": "text/plain,text/markdown,*/*",
+            "X-Return-Format": "markdown",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=_ssl_context()) as resp:
+            raw = resp.read(2_000_000)
+            body = raw.decode(resp.headers.get_content_charset() or "utf-8", errors="replace")
+            return HttpResult(resp.status, "text/markdown", body, target)
+    except urllib.error.HTTPError as exc:
+        return HttpResult(exc.code, "", "", target, f"jina HTTP {exc.code}")
+    except Exception as exc:
+        return HttpResult(None, "", "", target, f"jina {type(exc).__name__}: {exc}")
+
+
+def default_search(*, searxng_url: str | None = None, use_ddg: bool = True) -> Callable[[str, int], list[dict[str, str]]]:
+    """Prefer SearXNG, then DuckDuckGo. Returns a no-op callable when neither works."""
+    sx = SearxSearch(searxng_url)
+    if sx.available:
+        return sx
+    ddg = DdgsSearch()
+    if use_ddg and ddg.available:
+        return ddg
+    return lambda _q, _n: []
+
+
 # ----- Registry -----------------------------------------------------------------------------------------------
 
 
@@ -496,7 +566,15 @@ class SourceRegistry:
             self._sleep(wait)
         self._host_last[host] = time.time()
 
-    def fetch(self, url: str, *, reason: str, topic: str = "", force: bool = False) -> dict[str, Any] | None:
+    def fetch(
+        self,
+        url: str,
+        *,
+        reason: str,
+        topic: str = "",
+        force: bool = False,
+        allow_blocked: bool = False,
+    ) -> dict[str, Any] | None:
         """Fetch one page into the registry. Returns the source record, or None when the budget or policy refuses."""
         known = self.known_url(url)
         if known and not force:
@@ -506,7 +584,9 @@ class SourceRegistry:
         host = host_of(url)
         if not url.lower().startswith("http") or url.lower().split("?")[0].endswith((".pdf", ".jpg", ".png", ".zip")):
             return None
-        if any(bad in host + "/" for bad in NO_FETCH_HOSTS):
+        # Facebook and social hosts stay blocked for discovery, but sheet-seeded
+        # small-hill pages may be the only public record.
+        if (not allow_blocked) and any(bad in host + "/" for bad in NO_FETCH_HOSTS):
             return None
         if self.fetches_left() <= 0:
             self.log(f"    fetch budget exhausted, skipped {url}")
@@ -546,7 +626,22 @@ class SourceRegistry:
         # A page that states one fact per row is short but still evidence. Only treat a page as
         # contentless when it produced no usable block at all; JSON-LD alone is enough to keep it.
         if not text.strip():
-            js = page["script_count"] >= 5 or re.search(r"__NEXT_DATA__|id=\"(?:root|app|__nuxt)\"|ng-app", res.body[:200000])
+            js = page["script_count"] >= 5 or re.search(
+                r"__NEXT_DATA__|id=\"(?:root|app|__nuxt)\"|ng-app", res.body[:200000]
+            )
+            # Official resort sites are often SPA shells. Jina Reader returns Markdown prose.
+            jina = jina_get(res.final_url or url, timeout=max(20.0, self.budgets.fetch_timeout))
+            if jina.body and len(jina.body.strip()) >= 200 and not jina.error:
+                md_page = {
+                    "title": page.get("title") or "",
+                    "canonical_url": page.get("canonical_url") or "",
+                    "blocks": [jina.body.strip()],
+                    "text": jina.body.strip()[:60000],
+                    "links": page.get("links") or [],
+                    "script_count": page.get("script_count") or 0,
+                }
+                self.log(f"    jina reader recovered {url}")
+                return self._store(url, res, md_page, "ok", reason + "+jina", topic)
             return self._store(url, res, page, "js_dependent" if js else "empty", reason, topic)
         return self._store(url, res, page, "ok", reason, topic)
 

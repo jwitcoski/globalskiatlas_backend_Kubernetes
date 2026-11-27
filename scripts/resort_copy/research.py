@@ -145,14 +145,25 @@ class ResearchResult:
         return points
 
     def snippets(self) -> list[dict[str, Any]]:
-        return [
-            {
-                "id": r["source_id"], "source": r.get("source_type"), "title": r.get("title"), "url": r.get("url"),
-                "read_in_full": r.get("fetch_status") == "ok", "relevance": r.get("relevance"),
-                "text": (r.get("text") or "")[:1500],
-            }
-            for r in self.registry.sources.values()
-        ]
+        """Snippet-shaped rows for the sticky/top-up pile (full body when fetch succeeded)."""
+        out: list[dict[str, Any]] = []
+        for r in self.registry.sources.values():
+            ok = r.get("fetch_status") == "ok"
+            text = r.get("text") or ""
+            out.append(
+                {
+                    "id": r["source_id"],
+                    "source": r.get("source_type") or "research",
+                    "title": r.get("title"),
+                    "url": r.get("final_url") or r.get("url"),
+                    "read_in_full": ok,
+                    "fetched": ok,
+                    "relevance": r.get("relevance"),
+                    "text": text[:1500],
+                    "body": text if ok else "",
+                }
+            )
+        return out
 
     def to_checkpoint(self) -> dict[str, Any]:
         return {
@@ -230,6 +241,9 @@ def run_research(
     fetcher: Callable[..., Any] = http_get,
     log: Callable[[str], None] | None = None,
     sleep: Callable[[float], None] | None = None,
+    seed_official_url: str | None = None,
+    searxng_url: str | None = None,
+    use_ddg: bool = True,
 ) -> ResearchResult:
     events: list[str] = []
 
@@ -244,11 +258,20 @@ def run_research(
         kwargs["sleep"] = sleep
     registry = SourceRegistry(**kwargs)
     if search is None:
-        search = DdgsSearch()
+        from .sources import default_search
+
+        search = default_search(searxng_url=searxng_url, use_ddg=use_ddg)
     region = ", ".join(p for p in (state, country) if p)
 
     emit(f"research: resolving entity for {name} ({region})")
-    entity = resolve_entity(name, state, country, search=search, registry=registry)
+    entity = resolve_entity(
+        name,
+        state,
+        country,
+        search=search,
+        registry=registry,
+        seed_official_url=seed_official_url,
+    )
     for note in entity.resolution_notes:
         emit(f"  entity: {note}")
     store = FactStore(registry, entity, log=emit)

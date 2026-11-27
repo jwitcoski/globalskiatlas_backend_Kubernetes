@@ -219,10 +219,54 @@ def resolve_entity(
     search: SearchFn,
     registry: SourceRegistry,
     round_index: int = 0,
+    seed_official_url: str | None = None,
 ) -> EntityRecord:
     """Find and verify the official domain before any broad fact extraction."""
     entity = new_entity(name, state, country)
     region = ", ".join(p for p in (state, country) if p)
+    if seed_official_url:
+        seed = seed_official_url.strip()
+        if seed and not seed.startswith("http"):
+            seed = f"https://{seed}"
+        host = host_of(seed)
+        thin = bool(host and any(b in host + "/" for b in NO_FETCH_HOSTS))
+        if host and not any(d in host for d in DIRECTORY_HOSTS):
+            if thin:
+                # Facebook / social: keep the full seeded URL; do not claim an official domain.
+                home = registry.fetch(seed, reason="entity_seed_thin", topic="entity", allow_blocked=True)
+                if home is not None and home.get("fetch_status") == "ok":
+                    entity.official_url = home.get("final_url") or home.get("url") or seed
+                    entity.official_source_id = home["source_id"]
+                    entity.resolution_notes.append(
+                        f"thin primary source {host} seeded ({home['source_id']}); no official domain"
+                    )
+                    assess_source(entity, home)
+                    return entity
+                entity.resolution_notes.append(
+                    f"thin seed {host} could not be read ({(home or {}).get('fetch_status', 'skipped')})"
+                )
+            else:
+                target = seed if urlparse_depth(seed) <= 1 else f"https://{host}/"
+                home = registry.fetch(target, reason="entity_seed", topic="entity")
+                # Also keep the deep seed (tickets/passes) when the home page verified.
+                if home is not None and home.get("fetch_status") == "ok":
+                    head = f"{home.get('title', '')} {home.get('text', '')[:1500]}"
+                    if (mentions_name(head, name) or squash(name) in squash(host)) and SKI_TERMS.search(head):
+                        entity.official_domain = host
+                        entity.official_url = home.get("final_url") or home.get("url") or seed
+                        entity.official_source_id = home["source_id"]
+                        entity.resolution_notes.append(
+                            f"official domain {host} seeded and verified ({home['source_id']})"
+                        )
+                        assess_source(entity, home)
+                        if seed.rstrip("/") != target.rstrip("/"):
+                            registry.fetch(seed, reason="entity_seed_deep", topic="entity")
+                        return entity
+                    entity.resolution_notes.append(f"seed {host} rejected: homepage does not describe {name}")
+                else:
+                    entity.resolution_notes.append(
+                        f"seed {host or seed} could not be read ({(home or {}).get('fetch_status', 'skipped')})"
+                    )
     queries = [
         f'"{name}" "{state or country or ""}" official resort'.replace(' ""', ""),
         f'"{name}" ski resort {region} official website'.strip(),
