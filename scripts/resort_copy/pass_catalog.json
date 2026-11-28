@@ -37,6 +37,7 @@
     {"key": "skistar_all_winter", "label": "SkiStar All Winter", "pattern": "skistar all winter|all winter pass", "hosts": ["skistar.com"], "list_urls": ["https://www.skistar.com/en/ski-destinations"]},
     {"key": "niseko_united", "label": "Niseko United All Mountain Pass", "pattern": "niseko united(?:\\s+all mountain(?:\\s+pass)?)?", "hosts": ["niseko.ne.jp", "niseko-united.com"], "list_urls": ["https://www.niseko.ne.jp/en/"]},
     {"key": "snow_card_tirol", "label": "Snow Card Tirol", "pattern": "snow ?card tirol", "hosts": ["snowcard.tirol.at", "snowcard.tirol", "tirol.at"], "list_urls": ["https://snowcard.tirol.at/", "https://snowcard.tirol.at/skigebiete"]},
-    {"key": "powder_pass", "label": "Powder Pass", "pattern": "\\bpowder pass\\b", "hosts": []}
+    {"key": "powder_pass", "label": "Powder Pass", "pattern": "\\bpowder pass\\b", "hosts": []},
+    {"key": "x6_plus", "label": "X6+ Season Pass", "pattern": "\\bx6\\+?(?:\\s+season)?\\s*pass\\b|nol\\s+x6", "hosts": ["world.nol.com", "nol.com", "yanolja.com"], "list_urls": ["https://world.nol.com/en/content/festas/01a0c26b-70a3-7d45-b29a-56a50e743190"]}
   ]
 }

@@ -28,6 +28,7 @@ PASS_PROVIDERS: dict[str, str] = {
     "skiwelt wintercard": "skiwelt.at",
     "superskirama": "skirama.it",
     "mont blanc unlimited": "chamonixskipasses.com",
+    "x6+": "world.nol.com",
 }
 
 SKI_TERMS = re.compile(r"\b(?:ski|skiing|snowboard\w*|snow|slopes?|lifts?|trails?|resort|terrain|mountain)\b", re.IGNORECASE)
