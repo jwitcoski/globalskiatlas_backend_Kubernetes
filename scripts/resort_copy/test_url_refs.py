@@ -14,13 +14,19 @@ if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
 from resort_copy.url_refs import (  # noqa: E402
+    DEFAULT_CHINA_DIR,
+    DEFAULT_EU_DIR,
     DEFAULT_SHEET,
+    DEFAULT_SNOWGUIDE,
     UrlRef,
     UrlRefIndex,
     classify_url,
     home_url_for,
     read_sheet_name_links,
+    refs_from_china_directory,
+    refs_from_european_directory,
     refs_from_sheet,
+    refs_from_snowguide,
     seed_url_for,
     write_refs,
 )
@@ -80,6 +86,42 @@ class SheetTests(unittest.TestCase):
             whiteface = idx.lookup(name="Whiteface", state="New York")
         self.assertIsNotNone(whiteface)
         self.assertIn("whiteface.com", seed_url_for(whiteface) or "")
+
+
+class EuropeJapanSeedTests(unittest.TestCase):
+    @unittest.skipUnless(DEFAULT_EU_DIR.is_file(), "EU directory jsonl not vendored")
+    def test_european_directory_has_major_resorts(self) -> None:
+        refs = refs_from_european_directory(DEFAULT_EU_DIR)
+        self.assertGreater(len(refs), 800)
+        by_name = {r.name.lower(): r for r in refs}
+        self.assertIn("grandvalira", by_name)
+        self.assertIn("grandvalira.com", (seed_url_for(by_name["grandvalira"]) or "").lower())
+        self.assertEqual(by_name["grandvalira"].country, "Andorra")
+        self.assertEqual(by_name["grandvalira"].source, "eu_directory")
+
+    @unittest.skipUnless(DEFAULT_SNOWGUIDE.is_file(), "SnowGuide CSV not vendored")
+    def test_snowguide_covers_japan_and_europe(self) -> None:
+        refs = refs_from_snowguide(DEFAULT_SNOWGUIDE)
+        self.assertGreater(len(refs), 2000)
+        jp = [r for r in refs if r.country == "Japan" and r.kind != "directory"]
+        fr = [r for r in refs if r.country == "France"]
+        self.assertGreater(len(jp), 300)
+        self.assertGreater(len(fr), 100)
+        adatara = next((r for r in jp if "adatara" in r.name.lower()), None)
+        self.assertIsNotNone(adatara)
+        self.assertIn("adatara", (seed_url_for(adatara) or "").lower())
+
+    @unittest.skipUnless(DEFAULT_CHINA_DIR.is_file(), "China directory jsonl not vendored")
+    def test_china_directory_major_resorts(self) -> None:
+        refs = refs_from_china_directory(DEFAULT_CHINA_DIR)
+        self.assertGreater(len(refs), 40)
+        by_name = {r.name.lower(): r for r in refs}
+        self.assertTrue(any("beidahu" in n for n in by_name))
+        beidahu = next(r for n, r in by_name.items() if "beidahu" in n)
+        self.assertIn("beidahu.com", (seed_url_for(beidahu) or "").lower())
+        self.assertEqual(beidahu.country, "China")
+        # Chinese-script alias seeds atlas local names.
+        self.assertTrue(any("北大湖" in r.name for r in refs))
 
 
 if __name__ == "__main__":

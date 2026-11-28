@@ -1,0 +1,14 @@
+﻿SnowGuide / OpenSkiData resort table (ODbL 1.0)
+Source: https://snowguide.com/data
+Underlying: OpenSkiData / OpenSkiMap.org, © OpenStreetMap contributors (ODbL), Skimap.org
+Adapted for Global Ski Atlas URL seeding in resort_copy/url_refs.py.
+Keep attribution and share adapted databases under ODbL.
+
+European directory seeds
+Source: http://www.ski-ski-ski.com/European-Ski-Resorts.html
+Vendored as european_ski_resorts.html / european_ski_resorts.jsonl for name→URL research seeds.
+
+China directory seeds
+Sources: https://huaxue.me/en/resorts (official-website / sameAs fields),
+         SnowGuide CN website column, http://www.ski-ski-ski.com/China.html
+Vendored as china_ski_resorts.jsonl for name→URL research seeds.
