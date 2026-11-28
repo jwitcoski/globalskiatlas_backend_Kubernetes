@@ -22,5 +22,7 @@ Vendored as canada_ski_resorts.jsonl for name→URL research seeds.
 Mega-pass destination supplements
 Sources: magicpass.ch/en/stations, snowcard.tirol.at, newenglandpass.com,
          hakubavalley.com, bigsnowamericandream.com/snow-triple-play,
+         skircr.com, skicalifornia.org/resorts, skiwelt.at,
+         skirama.it, chamonixskipasses.com (Mont Blanc Unlimited),
          epicpass.com region pages
 Vendored as pass_list_supplements.jsonl / epic_destinations.jsonl.

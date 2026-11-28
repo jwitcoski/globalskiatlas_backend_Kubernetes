@@ -24,6 +24,10 @@ PASS_PROVIDERS: dict[str, str] = {
     "new england pass": "newenglandpass.com",
     "hakuba valley": "hakubavalley.com",
     "snow triple play": "bigsnowamericandream.com",
+    "ski california gold": "skicalifornia.org",
+    "skiwelt wintercard": "skiwelt.at",
+    "superskirama": "skirama.it",
+    "mont blanc unlimited": "chamonixskipasses.com",
 }
 
 SKI_TERMS = re.compile(r"\b(?:ski|skiing|snowboard\w*|snow|slopes?|lifts?|trails?|resort|terrain|mountain)\b", re.IGNORECASE)
