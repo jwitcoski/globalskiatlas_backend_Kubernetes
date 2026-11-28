@@ -18,3 +18,9 @@ Sources: http://www.ski-ski-ski.com/AllWesternCanada.html,
          http://www.ski-ski-ski.com/AllEasternCanada.html
          (plus provincial pages BC/Alberta/Ontario/Quebec)
 Vendored as canada_ski_resorts.jsonl for name→URL research seeds.
+
+Mega-pass destination supplements
+Sources: magicpass.ch/en/stations, snowcard.tirol.at, newenglandpass.com,
+         hakubavalley.com, bigsnowamericandream.com/snow-triple-play,
+         epicpass.com region pages
+Vendored as pass_list_supplements.jsonl / epic_destinations.jsonl.

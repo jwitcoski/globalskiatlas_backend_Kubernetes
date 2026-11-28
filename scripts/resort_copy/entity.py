@@ -16,10 +16,14 @@ PASS_PROVIDERS: dict[str, str] = {
     "mountain collective": "mountaincollective.com",
     "powder alliance": "powderalliance.com",
     "peak pass": "peakresorts.com",
-    "rcr rockies": "rcrrockiespass.com",
+    "rcr rockies": "skircr.com",
     "magic pass": "magicpass.ch",
     "skistar": "skistar.com",
     "niseko united": "niseko.ne.jp",
+    "snow card tirol": "snowcard.tirol.at",
+    "new england pass": "newenglandpass.com",
+    "hakuba valley": "hakubavalley.com",
+    "snow triple play": "bigsnowamericandream.com",
 }
 
 SKI_TERMS = re.compile(r"\b(?:ski|skiing|snowboard\w*|snow|slopes?|lifts?|trails?|resort|terrain|mountain)\b", re.IGNORECASE)

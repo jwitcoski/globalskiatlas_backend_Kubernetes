@@ -17,10 +17,15 @@
     {"key": "mountain_collective", "label": "Mountain Collective", "pattern": "mountain collective", "hosts": ["mountaincollective.com"], "list_urls": ["https://mountaincollective.com/resorts/"]},
     {"key": "powder_alliance", "label": "Powder Alliance", "pattern": "powder alliance", "hosts": ["powderalliance.com"], "list_urls": ["https://www.powderalliance.com/"]},
     {"key": "super_pass", "label": "Super Pass", "pattern": "\\bsuper pass\\b", "hosts": []},
-    {"key": "power_pass", "label": "Power Pass", "pattern": "\\bpower pass\\b", "hosts": ["powerpass.com"]},
+    {"key": "power_pass", "label": "Power Pass", "pattern": "\\bpower pass\\b", "hosts": ["powerpass.com", "thepowerpass.ski"]},
     {"key": "ski_utah_gold", "label": "Ski Utah Gold Pass", "pattern": "ski utah gold(?:\\s+pass)?", "hosts": ["skiutah.com"]},
+    {"key": "ski_california_gold", "label": "Ski California Gold Pass", "pattern": "ski california gold(?:\\s+pass)?", "hosts": ["skicalifornia.org"]},
+    {"key": "rcr_rockies", "label": "RCR Rockies Pass", "pattern": "\\brcr\\b|rockies pass|resorts of the canadian rockies", "hosts": ["skircr.com", "rcrrockiespass.com"]},
+    {"key": "new_england_pass", "label": "New England Pass", "pattern": "new england pass", "hosts": ["newenglandpass.com", "boyneresorts.com"], "list_urls": ["https://www.newenglandpass.com/"]},
+    {"key": "snow_triple_play", "label": "Snow Triple Play", "pattern": "snow triple play|triple play", "hosts": ["bigsnowamericandream.com", "snowtripleplay.com"], "list_urls": ["https://www.bigsnowamericandream.com/snow-triple-play/"]},
+    {"key": "hakuba_valley", "label": "Hakuba Valley Pass", "pattern": "hakuba valley(?:\\s+(?:all[- ]mountain|season))?\\s*pass|hakuba valley pass", "hosts": ["hakubavalley.com"], "list_urls": ["https://www.hakubavalley.com/en/ski_resort_info_en/", "https://www.hakubavalley.com/en/seasonpass/"]},
     {"key": "superskicard", "label": "SuperSkiCard", "pattern": "superskicard|super ski card", "hosts": ["superskicard.com"]},
-    {"key": "magic_pass", "label": "Magic Pass", "pattern": "\\bmagic pass\\b", "hosts": ["magicpass.ch", "magicpass.com"], "list_urls": ["https://www.magicpass.ch/en/stations"]},
+    {"key": "magic_pass", "label": "Magic Pass", "pattern": "\\bmagic pass\\b", "hosts": ["magicpass.ch", "magicpass.com"], "list_urls": ["https://www.magicpass.ch/en/stations", "https://www.magicpass.ch/en/"]},
     {"key": "snowpass_valais", "label": "Snowpass Valais", "pattern": "snowpass valais|valais snowpass", "hosts": ["valais.ch"]},
     {"key": "schneepass_zentralschweiz", "label": "Schneepass Zentralschweiz", "pattern": "schneepass zentralschweiz|zentralschweiz schneepass", "hosts": []},
     {"key": "graubuenden_card", "label": "graubündenCARD", "pattern": "graub[uü]nden\\s*card|snowpass graub[uü]nden", "hosts": ["graubuenden.ch", "graubunden.ch"]},
@@ -28,7 +33,7 @@
     {"key": "top4ski", "label": "Top4ski", "pattern": "\\btop4ski\\b|\\btop 4 ski\\b", "hosts": ["top4ski.ch"]},
     {"key": "skistar_all_winter", "label": "SkiStar All Winter", "pattern": "skistar all winter|all winter pass", "hosts": ["skistar.com"], "list_urls": ["https://www.skistar.com/en/ski-destinations"]},
     {"key": "niseko_united", "label": "Niseko United All Mountain Pass", "pattern": "niseko united(?:\\s+all mountain(?:\\s+pass)?)?", "hosts": ["niseko.ne.jp", "niseko-united.com"], "list_urls": ["https://www.niseko.ne.jp/en/"]},
-    {"key": "snow_card_tirol", "label": "Snow Card Tirol", "pattern": "snow ?card tirol", "hosts": ["snowcard.tirol", "tirol.at"]},
+    {"key": "snow_card_tirol", "label": "Snow Card Tirol", "pattern": "snow ?card tirol", "hosts": ["snowcard.tirol.at", "snowcard.tirol", "tirol.at"], "list_urls": ["https://snowcard.tirol.at/", "https://snowcard.tirol.at/skigebiete"]},
     {"key": "powder_pass", "label": "Powder Pass", "pattern": "\\bpowder pass\\b", "hosts": []}
   ]
 }

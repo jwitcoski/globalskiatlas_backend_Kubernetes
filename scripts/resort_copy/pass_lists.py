@@ -27,6 +27,7 @@ from .web_fetch import _fetch_archived, _fetch_html
 ROSTER_DIR = output_path("pass_rosters")
 DEFAULT_BY_ID = ROSTER_DIR / "by_winter_sports_id.json"
 EPIC_SUPPLEMENT = Path(__file__).with_name("data") / "epic_destinations.jsonl"
+PASS_SUPPLEMENTS = Path(__file__).with_name("data") / "pass_list_supplements.jsonl"
 _SKIP_SLUGS = {
     "destinations",
     "destination",
@@ -621,11 +622,11 @@ def apply_overlay(amenities: dict[str, Any], winter_sports_id: str, overlay: dic
             amenities[key] = True
 
 
-def _load_epic_supplement() -> list[dict[str, str]]:
-    if not EPIC_SUPPLEMENT.is_file():
+def _load_jsonl_supplement(path: Path, *, default_pass_key: str | None = None, default_pass_label: str | None = None) -> list[dict[str, str]]:
+    if not path.is_file():
         return []
     rows: list[dict[str, str]] = []
-    for line in EPIC_SUPPLEMENT.read_text(encoding="utf-8").splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
         try:
@@ -634,18 +635,28 @@ def _load_epic_supplement() -> list[dict[str, str]]:
             continue
         name = str(row.get("listed_name") or row.get("name") or "").strip()
         url = str(row.get("listed_url") or row.get("url") or "").strip()
-        if not name or not url:
+        pass_key = str(row.get("pass_key") or default_pass_key or "").strip()
+        pass_label = str(row.get("pass_label") or default_pass_label or pass_key).strip()
+        if not name or not url or not pass_key:
             continue
         rows.append(
             {
-                "pass_key": "epic",
-                "pass_label": "Epic",
+                "pass_key": pass_key,
+                "pass_label": pass_label,
                 "listed_name": name,
                 "listed_url": url,
                 "list_url": str(row.get("list_url") or ""),
             }
         )
     return rows
+
+
+def _load_epic_supplement() -> list[dict[str, str]]:
+    return _load_jsonl_supplement(EPIC_SUPPLEMENT, default_pass_key="epic", default_pass_label="Epic")
+
+
+def _load_pass_supplements() -> list[dict[str, str]]:
+    return _load_jsonl_supplement(PASS_SUPPLEMENTS)
 
 
 def _load_parquet(path: Path) -> list[dict[str, Any]]:
@@ -663,6 +674,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pass-key", action="append", default=[], help="Only these catalog keys (repeatable)")
     parser.add_argument("--html", nargs=2, action="append", default=[], metavar=("URL", "FILE"), help="Use a saved HTML file instead of fetching")
     parser.add_argument("--no-epic-supplement", action="store_true")
+    parser.add_argument("--no-pass-supplements", action="store_true")
     args = parser.parse_args(argv)
     html_by_url = {url: Path(file).read_text(encoding="utf-8") for url, file in args.html}
     wanted = set(args.pass_key)
@@ -676,6 +688,13 @@ def main(argv: list[str] | None = None) -> int:
         extra = _load_epic_supplement()
         if extra:
             print(f"epic supplement: {len(extra)} listed names", file=sys.stderr)
+            listed.extend(extra)
+    if not args.no_pass_supplements:
+        extra = _load_pass_supplements()
+        if wanted:
+            extra = [row for row in extra if row["pass_key"] in wanted]
+        if extra:
+            print(f"pass supplements: {len(extra)} listed names", file=sys.stderr)
             listed.extend(extra)
     atlas_rows = _load_parquet(args.parquet) if args.parquet.is_file() else []
     merged = merge_rosters(listed, atlas_rows)
