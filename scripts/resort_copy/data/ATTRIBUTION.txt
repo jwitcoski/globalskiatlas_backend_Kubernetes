@@ -12,3 +12,9 @@ China directory seeds
 Sources: https://huaxue.me/en/resorts (official-website / sameAs fields),
          SnowGuide CN website column, http://www.ski-ski-ski.com/China.html
 Vendored as china_ski_resorts.jsonl for name→URL research seeds.
+
+Canada directory seeds
+Sources: http://www.ski-ski-ski.com/AllWesternCanada.html,
+         http://www.ski-ski-ski.com/AllEasternCanada.html
+         (plus provincial pages BC/Alberta/Ontario/Quebec)
+Vendored as canada_ski_resorts.jsonl for name→URL research seeds.

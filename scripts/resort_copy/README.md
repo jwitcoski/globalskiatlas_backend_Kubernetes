@@ -19,17 +19,18 @@ model call is running.
 
 ## Pass order
 
-1. **Search** (structured first): seed the official (or thin community/Facebook) URL from the reference layer (`url_refs.py` — US ski-area sheet hyperlinks + SnowGuide/OpenSkiData worldwide websites + ski-ski-ski European directory + China Huaxue/SnowGuide seeds + mega-pass rosters + parquet website), resolve/verify that domain, crawl its navigation (`research.py` / `entity.py` / `sources.py`), extract evidence-backed facts per topic. JS-empty official pages fall back to Jina Reader. Then sticky questions + top-up fill remaining gaps (`stickies.py`, `topup.py`). Pass `--no-structured-research` for the legacy sticky-only path. Seed with `--official-url` when you already know the site.
+1. **Search** (structured first): seed the official (or thin community/Facebook) URL from the reference layer (`url_refs.py` — US ski-area sheet + SnowGuide/OpenSkiData + ski-ski-ski Europe/Canada directories + China Huaxue seeds + mega-pass rosters + parquet website), resolve/verify that domain, crawl its navigation (`research.py` / `entity.py` / `sources.py`), extract evidence-backed facts per topic. JS-empty official pages fall back to Jina Reader. Then sticky questions + top-up fill remaining gaps (`stickies.py`, `topup.py`). Pass `--no-structured-research` for the legacy sticky-only path. Seed with `--official-url` when you already know the site.
 
 Rebuild the URL reference table after updating the sheet or pass rosters:
 
 ```
 python -m resort_copy.url_refs --sheet scripts/resort_copy/data/active_us_ski_areas.xlsx
 
-# Europe + Japan + China seeds come from:
+# Europe + Japan + China + Canada seeds come from:
 # - data/snowguide_resorts.csv (OpenSkiData / SnowGuide, ODbL — see data/ATTRIBUTION.txt)
 # - data/european_ski_resorts.jsonl (parsed from ski-ski-ski.com European-Ski-Resorts.html)
 # - data/china_ski_resorts.jsonl (Huaxue resort pages + SnowGuide CN + ski-ski-ski China.html)
+# - data/canada_ski_resorts.jsonl (ski-ski-ski Western/Eastern Canada province lists)
 ```
 2. **Outline**: order the notes into beats.
 3. **Write**: paragraphs from outline + notes.

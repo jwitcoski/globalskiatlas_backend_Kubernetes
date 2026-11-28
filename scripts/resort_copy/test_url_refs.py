@@ -14,6 +14,7 @@ if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
 from resort_copy.url_refs import (  # noqa: E402
+    DEFAULT_CANADA_DIR,
     DEFAULT_CHINA_DIR,
     DEFAULT_EU_DIR,
     DEFAULT_SHEET,
@@ -23,6 +24,7 @@ from resort_copy.url_refs import (  # noqa: E402
     classify_url,
     home_url_for,
     read_sheet_name_links,
+    refs_from_canada_directory,
     refs_from_china_directory,
     refs_from_european_directory,
     refs_from_sheet,
@@ -122,6 +124,17 @@ class EuropeJapanSeedTests(unittest.TestCase):
         self.assertEqual(beidahu.country, "China")
         # Chinese-script alias seeds atlas local names.
         self.assertTrue(any("北大湖" in r.name for r in refs))
+
+    @unittest.skipUnless(DEFAULT_CANADA_DIR.is_file(), "Canada directory jsonl not vendored")
+    def test_canada_directory_major_resorts(self) -> None:
+        refs = refs_from_canada_directory(DEFAULT_CANADA_DIR)
+        self.assertGreater(len(refs), 200)
+        by_name = {r.name.lower(): r for r in refs}
+        self.assertTrue(any("whistler" in n for n in by_name))
+        self.assertTrue(any("norquay" in n for n in by_name))
+        whistler = next(r for n, r in by_name.items() if "whistler" in n and seed_url_for(r))
+        self.assertEqual(whistler.country, "Canada")
+        self.assertEqual(whistler.source, "canada_directory")
 
 
 if __name__ == "__main__":

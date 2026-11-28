@@ -7,7 +7,8 @@ Blind SearXNG discovery is the fallback. This module builds a name→URL table f
 3. SnowGuide / OpenSkiData worldwide website column (Europe + Japan dense).
 4. ski-ski-ski.com European directory name→URL list.
 5. China directory (Huaxue + SnowGuide CN + ski-ski-ski China.html).
-6. Optional parquet / OSM website cells (looked up at runtime).
+6. Canada directory (ski-ski-ski Western/Eastern Canada province lists).
+7. Optional parquet / OSM website cells (looked up at runtime).
 
 Deep ticket/pass links are normalized to the site home. Epic/Ikon/Indy destination
 pages are recorded as pass evidence, not as the resort's official domain.
@@ -40,6 +41,7 @@ DEFAULT_SNOWGUIDE = _DATA / "snowguide_resorts.csv"
 DEFAULT_EU_DIR = _DATA / "european_ski_resorts.jsonl"
 DEFAULT_EU_HTML = _DATA / "european_ski_resorts.html"
 DEFAULT_CHINA_DIR = _DATA / "china_ski_resorts.jsonl"
+DEFAULT_CANADA_DIR = _DATA / "canada_ski_resorts.jsonl"
 DEFAULT_JSONL = REF_DIR / "refs.jsonl"
 DEFAULT_BY_ID = REF_DIR / "by_winter_sports_id.json"
 
@@ -69,6 +71,7 @@ DIRECTORY_SEED_HOSTS = (
     "andorraescapes.",
     "andorraresorts.",
     "ski-ski-ski.com",
+    "canadatrails.",
 )
 
 # ISO 3166-1 alpha-2 → atlas `country` strings used in ski_areas_analyzed.parquet.
@@ -173,7 +176,7 @@ class UrlRef:
     home_url: str
     host: str
     kind: str  # official | facebook | community | pass_network | directory | other
-    source: str  # us_sheet | snowguide | eu_directory | china_directory | pass_roster | parquet
+    source: str  # us_sheet | snowguide | eu_directory | china_directory | canada_directory | pass_roster | parquet
     pass_key: str | None = None
     winter_sports_id: str | None = None
     match_score: float | None = None
@@ -564,6 +567,7 @@ def _prefer_key(ref: UrlRef) -> tuple[int, int, int]:
     source_rank = {
         "us_sheet": 40,
         "china_directory": 35,  # Huaxue-curated CN sites beat older OSM websites
+        "canada_directory": 32,
         "snowguide": 30,
         "eu_directory": 25,
         "parquet": 20,
@@ -631,6 +635,43 @@ def refs_from_china_directory(path: Path | None = DEFAULT_CHINA_DIR) -> list[Url
                     source="china_directory",
                 )
             )
+    return out
+
+
+def refs_from_canada_directory(path: Path | None = DEFAULT_CANADA_DIR) -> list[UrlRef]:
+    """ski-ski-ski Western/Eastern Canada province name→URL seeds."""
+    if not path or not path.is_file():
+        return []
+    out: list[UrlRef] = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        url = _clean_listed_url(str(row.get("url") or ""))
+        name = str(row.get("name") or "").strip()
+        if not url or not name:
+            continue
+        # Strip trailing "(XC)" marker for matching; keep URL as thin seed.
+        match_name = re.sub(r"\s*\(XC\)\s*$", "", name, flags=re.I).strip() or name
+        kind = classify_url(url)
+        if host_of(url) and (host_of(url) or "").endswith(".gc.ca"):
+            kind = "community"
+        state = str(row.get("state") or "").strip() or None
+        out.append(
+            UrlRef(
+                name=match_name,
+                state=state,
+                country="Canada",
+                url=url,
+                home_url=home_url_for(url),
+                host=host_of(home_url_for(url) or url),
+                kind=kind,
+                source="canada_directory",
+            )
+        )
     return out
 
 
@@ -811,6 +852,7 @@ def build_refs(
     snowguide: Path | None = DEFAULT_SNOWGUIDE,
     eu_directory: Path | None = DEFAULT_EU_DIR,
     china_directory: Path | None = DEFAULT_CHINA_DIR,
+    canada_directory: Path | None = DEFAULT_CANADA_DIR,
     roster_dir: Path | None = None,
     parquet_rows: list[dict[str, Any]] | None = None,
     out_dir: Path = REF_DIR,
@@ -824,6 +866,8 @@ def build_refs(
         refs.extend(refs_from_european_directory(eu_directory if eu_directory.is_file() else None))
     if china_directory and china_directory.is_file():
         refs.extend(refs_from_china_directory(china_directory))
+    if canada_directory and canada_directory.is_file():
+        refs.extend(refs_from_canada_directory(canada_directory))
     roster = roster_dir or output_path("pass_rosters")
     refs.extend(refs_from_pass_rosters(roster))
     if parquet_rows:
@@ -879,6 +923,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--snowguide", type=Path, default=DEFAULT_SNOWGUIDE)
     parser.add_argument("--eu-directory", type=Path, default=DEFAULT_EU_DIR)
     parser.add_argument("--china-directory", type=Path, default=DEFAULT_CHINA_DIR)
+    parser.add_argument("--canada-directory", type=Path, default=DEFAULT_CANADA_DIR)
     parser.add_argument("--rosters", type=Path, default=None)
     parser.add_argument("--parquet", type=Path, default=Path("output/combined/ski_areas_analyzed.parquet"))
     parser.add_argument("--out", type=Path, default=REF_DIR)
@@ -886,6 +931,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-snowguide", action="store_true")
     parser.add_argument("--no-eu-directory", action="store_true")
     parser.add_argument("--no-china-directory", action="store_true")
+    parser.add_argument("--no-canada-directory", action="store_true")
     args = parser.parse_args(argv)
 
     rows: list[dict[str, Any]] | None = None
@@ -905,12 +951,15 @@ def main(argv: list[str] | None = None) -> int:
         china_directory=None
         if args.no_china_directory
         else (args.china_directory if args.china_directory.is_file() else None),
+        canada_directory=None
+        if args.no_canada_directory
+        else (args.canada_directory if args.canada_directory.is_file() else None),
         roster_dir=args.rosters,
         parquet_rows=rows,
         out_dir=args.out,
     )
     print(json.dumps(summary, indent=2))
-    # Smoke known NA misses + a few EU/JP/CN seeds.
+    # Smoke known NA misses + a few EU/JP/CN/CA seeds.
     idx = UrlRefIndex.load(args.out / "refs.jsonl")
     for name, state, country in (
         ("Loveland Basin", "Colorado", "United States of America"),
@@ -927,6 +976,10 @@ def main(argv: list[str] | None = None) -> int:
         ("Wanlong Ski Resort", None, "China"),
         ("Nanshan Ski Resort", None, "China"),
         ("北大湖滑雪度假区", None, "China"),
+        ("Whistler Blackcomb", "British Columbia", "Canada"),
+        ("Banff Mount Norquay", "Alberta", "Canada"),
+        ("Blue Mountain Resort", "Ontario", "Canada"),
+        ("Mont Tremblant", "Quebec", "Canada"),
     ):
         ref = idx.lookup(name=name, state=state, country=country)
         print(
