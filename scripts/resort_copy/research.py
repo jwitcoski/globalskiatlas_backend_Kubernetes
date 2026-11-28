@@ -196,7 +196,12 @@ def _url_priority(entity: EntityRecord, topic: Topic, row: dict[str, Any]) -> in
         return 0
     for domain in PASS_PROVIDERS.values():
         if host_in(host, domain):
-            return 1 if topic.key == PASS_TOPIC else None
+            # Pass-operator destination pages also carry terrain/access/lodging copy.
+            if topic.key == PASS_TOPIC:
+                return 1
+            if mentions_name(blob, entity.canonical_name):
+                return 2
+            return None
     if any(d in host for d in DIRECTORY_HOSTS):
         return 6 if mentions_name(blob, entity.canonical_name) else None
     if not mentions_name(blob, entity.canonical_name):
@@ -242,6 +247,7 @@ def run_research(
     log: Callable[[str], None] | None = None,
     sleep: Callable[[float], None] | None = None,
     seed_official_url: str | None = None,
+    winter_sports_id: str | None = None,
     searxng_url: str | None = None,
     use_ddg: bool = True,
 ) -> ResearchResult:
@@ -283,6 +289,7 @@ def run_research(
 
     _assess_all(entity, registry)
     _official_website_fact(entity, registry, store)
+    _seed_pass_memberships(entity, registry, store, pass_state, winter_sports_id, emit)
     attraction_terms: dict[str, str] = {}
     if entity.official_domain:
         _fetch_navigation(entity, registry, attraction_terms, emit)
@@ -341,6 +348,74 @@ def _official_website_fact(entity: EntityRecord, registry: SourceRegistry, store
             )
             store.upsert(fact)
             return
+
+
+def _seed_pass_memberships(
+    entity: EntityRecord,
+    registry: SourceRegistry,
+    store: FactStore,
+    pass_state: dict[str, Any],
+    winter_sports_id: str | None,
+    emit: Callable[[str], None],
+) -> None:
+    """Prefetch mega-pass destination pages linked to this atlas resort.
+
+    Membership comes from harvested operator lists (Epic/Ikon/Indy/…). Those pages
+    also carry terrain, access, and lodging copy useful for the essay.
+    """
+    if not winter_sports_id:
+        return
+    try:
+        from .pass_lists import lookup_pass_memberships
+    except Exception:
+        return
+    memberships = lookup_pass_memberships(winter_sports_id)
+    if not memberships:
+        return
+    labels: list[str] = []
+    for item in memberships:
+        label = str(item.get("pass_label") or item.get("pass_key") or "").strip()
+        urls = []
+        for key in ("url", "provider_url", "listed_url", "list_url"):
+            cand = str(item.get(key) or "").strip()
+            if cand.startswith("http") and cand not in urls:
+                urls.append(cand)
+        if label:
+            labels.append(label)
+            # Mark as claimed so verify prefers these providers.
+            key = label.lower()
+            pass_state["candidates"].setdefault(key if key in _PRIMARY_PROVIDERS else label, [])
+            pass_state["probed"].add(key if key in _PRIMARY_PROVIDERS else label.split()[0].lower())
+        for url in urls[:2]:
+            host = host_of(url)
+            is_provider = any(host_in(host, domain) for domain in PASS_PROVIDERS.values())
+            reason = "pass_seed_provider" if is_provider else "pass_seed_listed"
+            rec = registry.fetch(url, reason=reason, topic=PASS_TOPIC)
+            if rec is not None and rec.get("fetch_status") == "ok":
+                emit(f"  pass seed: {label or host} → {url}")
+            elif url:
+                emit(f"  pass seed skipped: {label or host} ({(rec or {}).get('fetch_status', 'none')})")
+    if labels and not store.has(PASS_TOPIC):
+        # Roster match is operator-published membership; treat as verified list seed.
+        topic = TOPIC_BY_KEY[PASS_TOPIC]
+        unique = list(dict.fromkeys(labels))
+        fact = {
+            "topic": PASS_TOPIC,
+            "field": PASS_TOPIC,
+            "label": topic.label,
+            "kind": "list",
+            "entity_id": entity.entity_id,
+            "value": unique,
+            "status": "verified",
+            "retrieved_at": now_iso(),
+            "season": None,
+            "queries_attempted": [],
+            "sources_checked": [],
+            "notes": "seeded from harvested mega-pass destination lists",
+            "evidence": [{"quote": f"Listed on {', '.join(unique)}", "source_id": "pass_roster"}],
+        }
+        store.facts[PASS_TOPIC] = fact
+        emit(f"  pass membership: {', '.join(unique)}")
 
 
 def _fetch_navigation(entity: EntityRecord, registry: SourceRegistry, attractions: dict[str, str], emit: Callable[[str], None]) -> None:

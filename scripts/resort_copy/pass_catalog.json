@@ -1,6 +1,17 @@
 {
   "passes": [
-    {"key": "epic", "label": "Epic", "pattern": "\\bepic(?:\\s+pass)?\\b", "hosts": ["epicpass.com"], "list_urls": ["https://www.epicpass.com/regions.aspx", "https://www.epicpass.com/regions/partner-resorts.aspx"]},
+    {"key": "epic", "label": "Epic", "pattern": "\\bepic(?:\\s+pass)?\\b", "hosts": ["epicpass.com"], "list_urls": [
+      "https://www.epicpass.com/regions/us/rockies.aspx",
+      "https://www.epicpass.com/regions/us/west.aspx",
+      "https://www.epicpass.com/regions/us/northeast.aspx",
+      "https://www.epicpass.com/regions/us/midwest.aspx",
+      "https://www.epicpass.com/regions/us/mid-atlantic.aspx",
+      "https://www.epicpass.com/regions/canada.aspx",
+      "https://www.epicpass.com/regions/europe.aspx",
+      "https://www.epicpass.com/regions/japan.aspx",
+      "https://www.epicpass.com/regions/australia.aspx",
+      "https://www.epicpass.com/regions/partner-resorts.aspx"
+    ]},
     {"key": "ikon", "label": "Ikon", "pattern": "\\bikon(?:\\s+(?:pass|base))?\\b", "hosts": ["ikonpass.com"], "list_urls": ["https://www.ikonpass.com/en/opening-closing-dates", "https://www.ikonpass.com/en/destinations"]},
     {"key": "indy", "label": "Indy", "pattern": "\\bindy(?:\\s+pass)?\\b", "hosts": ["indyskipass.com", "indypass.com", "indy-pass.com"], "list_urls": ["https://www.indyskipass.com/our-resorts"]},
     {"key": "mountain_collective", "label": "Mountain Collective", "pattern": "mountain collective", "hosts": ["mountaincollective.com"], "list_urls": ["https://mountaincollective.com/resorts/"]},

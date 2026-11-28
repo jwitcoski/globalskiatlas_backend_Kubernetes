@@ -19,7 +19,11 @@ model call is running.
 
 ## Pass order
 
-1. **Search** (structured first): seed the official (or thin community/Facebook) URL from the reference layer (`url_refs.py` — US ski-area sheet + SnowGuide/OpenSkiData + ski-ski-ski Europe/Canada directories + China Huaxue seeds + mega-pass rosters + parquet website), resolve/verify that domain, crawl its navigation (`research.py` / `entity.py` / `sources.py`), extract evidence-backed facts per topic. JS-empty official pages fall back to Jina Reader. Then sticky questions + top-up fill remaining gaps (`stickies.py`, `topup.py`). Pass `--no-structured-research` for the legacy sticky-only path. Seed with `--official-url` when you already know the site.
+1. **Search** (structured first): seed the official (or thin community/Facebook) URL from the reference layer (`url_refs.py` — US ski-area sheet + SnowGuide/OpenSkiData + ski-ski-ski Europe/Canada directories + China Huaxue seeds + mega-pass rosters + parquet website), resolve/verify that domain, crawl its navigation (`research.py` / `entity.py` / `sources.py`), extract evidence-backed facts per topic. Linked mega-pass destination pages (Epic/Ikon/Indy/…) from `pass_lists.py` are prefetched as extra sources — they confirm pass membership and often carry terrain/access copy for the essay. JS-empty official pages fall back to Jina Reader. Then sticky questions + top-up fill remaining gaps (`stickies.py`, `topup.py`). Pass `--no-structured-research` for the legacy sticky-only path. Seed with `--official-url` when you already know the site.
+
+```bash
+python -m resort_copy.pass_lists
+```
 
 Rebuild the URL reference table after updating the sheet or pass rosters:
 

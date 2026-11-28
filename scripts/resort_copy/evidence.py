@@ -79,21 +79,28 @@ class Candidate:
     negative: bool = False
 
 
-def eligible(topic: Topic, rec: dict[str, Any]) -> bool:
+def eligible(topic: Topic, rec: dict[str, Any], entity: EntityRecord | None = None) -> bool:
     if rec.get("fetch_status") != "ok" or rec.get("duplicate_of"):
         return False
     decision = (rec.get("relevance") or {}).get("decision")
     if decision in ("official", "entity"):
         return True
     if decision == "provider":
-        return topic.key == PASS_TOPIC
+        # Pass-operator destination pages: always for pass facts; other topics when
+        # the page is clearly about this resort (Ikon/Indy destination writeups).
+        if topic.key == PASS_TOPIC:
+            return True
+        if entity is None:
+            return False
+        blob = f"{rec.get('title', '')} {rec.get('url', '')} {(rec.get('text') or '')[:1200]}"
+        return mentions_name(blob, entity.canonical_name)
     if decision == "regional":
         return topic.allow_regional
     return False
 
 
 def candidates_for(topic: Topic, rec: dict[str, Any], entity: EntityRecord) -> list[Candidate]:
-    if not eligible(topic, rec):
+    if not eligible(topic, rec, entity):
         return []
     decision = rec["relevance"]["decision"]
     tier = SOURCE_TIER.get(rec.get("source_type", ""), 6)
@@ -120,7 +127,7 @@ def candidates_for(topic: Topic, rec: dict[str, Any], entity: EntityRecord) -> l
             # Provider listings and third-party pass roundups must name this resort in the quoted line itself.
             if decision != "official" and not mentions_name(unit, entity.canonical_name):
                 continue
-        elif decision in ("entity",) and not about and not near_name:
+        elif decision in ("entity", "provider") and not about and not near_name:
             continue
         elif decision == "regional" and not topic.allow_regional:
             continue

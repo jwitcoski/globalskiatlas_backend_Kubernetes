@@ -173,6 +173,7 @@ def _run_structured_research(
     use_ddg: bool,
     searxng_url: str | None,
     seed_official_url: str | None,
+    winter_sports_id: str | None,
     checkpoint: CheckpointCallback | None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
     """Official-site-first harvest. Returns notes, key_points, snippets, timing blob."""
@@ -186,6 +187,7 @@ def _run_structured_research(
         llm=make_llm(base_url, search_model, num_ctx, timeout),
         cache_dir=cache_root() / "research",
         seed_official_url=seed_official_url,
+        winter_sports_id=winter_sports_id,
         searxng_url=searxng_url,
         use_ddg=use_ddg,
     )
@@ -296,6 +298,7 @@ def run_passes(
                 use_ddg=use_ddg,
                 searxng_url=searxng_url,
                 seed_official_url=seed_official_url,
+                winter_sports_id=winter_sports_id,
                 checkpoint=checkpoint,
             )
             stage_timings.update({k: v for k, v in research_timing.items() if isinstance(v, (int, float))})

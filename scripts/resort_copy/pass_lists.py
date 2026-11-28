@@ -25,6 +25,8 @@ from .web_fetch import _fetch_archived, _fetch_html
 
 
 ROSTER_DIR = output_path("pass_rosters")
+DEFAULT_BY_ID = ROSTER_DIR / "by_winter_sports_id.json"
+EPIC_SUPPLEMENT = Path(__file__).with_name("data") / "epic_destinations.jsonl"
 _SKIP_SLUGS = {
     "destinations",
     "destination",
@@ -283,10 +285,25 @@ def same_origin_scripts(html: str, page_url: str) -> list[str]:
     return urls
 
 
+def _fetch_jina(url: str, timeout: float = 60.0) -> str:
+    """Jina Reader unwraps SPA destination lists (Epic and similar)."""
+    target = url.strip()
+    if not target.startswith("http"):
+        return ""
+    # Prefer http upstream; Jina accepts either.
+    jina = "https://r.jina.ai/" + target.replace("https://", "http://", 1)
+    return _fetch_text(jina, timeout=timeout)
+
+
 def fetch_list_html(url: str) -> str:
     html = _fetch_html(url) or ""
     if len(html) < 800:
         html = _fetch_archived(url) or html
+    # Epic and other SPA list pages often return an empty shell without JS.
+    if len(html) < 4000 or ("epicpass.com" in url and "vail" not in html.lower() and "resort" not in html.lower()):
+        jina = _fetch_jina(url)
+        if len(jina) > len(html):
+            html = jina
     return html
 
 
@@ -352,9 +369,41 @@ def _score_pair(listed: str, atlas: dict[str, Any]) -> float:
     return best
 
 
-def match_listed(listed_name: str, atlas: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, float, list[dict[str, Any]]]:
+def _atlas_key_index(atlas: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    by_key: dict[str, list[dict[str, Any]]] = {}
+    for item in atlas:
+        for key in item.get("keys") or set():
+            by_key.setdefault(key, []).append(item)
+    return by_key
+
+
+def match_listed(
+    listed_name: str,
+    atlas: list[dict[str, Any]],
+    *,
+    key_index: dict[str, list[dict[str, Any]]] | None = None,
+) -> tuple[dict[str, Any] | None, float, list[dict[str, Any]]]:
+    listed_core = squash(core_name(listed_name))
+    if listed_core and key_index is not None:
+        exact = key_index.get(listed_core) or []
+        if len(exact) == 1:
+            return exact[0], 1.0, []
+        if len(exact) > 1:
+            # Prefer ski/resort-labelled rows, then shorter names.
+            ranked_exact = sorted(
+                exact,
+                key=lambda item: (
+                    int("resort" in (item["atlas_name"] + " " + item["local_name"]).lower()
+                        or "ski" in (item["atlas_name"] + " " + item["local_name"]).lower()),
+                    -len(item["atlas_name"]),
+                ),
+                reverse=True,
+            )
+            if ranked_exact[0]["winter_sports_id"] != ranked_exact[1]["winter_sports_id"]:
+                return ranked_exact[0], 1.0, ranked_exact[1:3]
+            return None, 1.0, ranked_exact[:3]
     ranked = sorted(
-        (( _score_pair(listed_name, item), item) for item in atlas),
+        ((_score_pair(listed_name, item), item) for item in atlas),
         key=lambda pair: pair[0],
         reverse=True,
     )
@@ -379,9 +428,10 @@ def merge_rosters(
     atlas_rows: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     atlas = atlas_index(atlas_rows)
+    key_index = _atlas_key_index(atlas)
     merged: list[dict[str, Any]] = []
     for item in listed:
-        hit, score, rivals = match_listed(item["listed_name"], atlas)
+        hit, score, rivals = match_listed(item["listed_name"], atlas, key_index=key_index)
         row = dict(item)
         row["match_score"] = round(score, 3)
         if hit:
@@ -443,6 +493,54 @@ def write_rosters(merged: list[dict[str, Any]], directory: Path = ROSTER_DIR) ->
         "".join(json.dumps(item, ensure_ascii=False) + "\n" for item in chips.values()),
         encoding="utf-8",
     )
+    by_id: dict[str, dict[str, Any]] = {}
+    for row in merged:
+        if row.get("status") != "matched" or not row.get("winter_sports_id"):
+            continue
+        wid = str(row["winter_sports_id"])
+        item = by_id.setdefault(
+            wid,
+            {
+                "winter_sports_id": wid,
+                "atlas_name": row.get("atlas_name") or "",
+                "state": row.get("state") or "",
+                "country": row.get("country") or "",
+                "passes": [],
+            },
+        )
+        listed_url = str(row.get("listed_url") or "").strip()
+        list_url = str(row.get("list_url") or "").strip()
+        pass_key = str(row.get("pass_key") or "")
+        pass_label = str(row.get("pass_label") or pass_key)
+        # Prefer the resort-specific listed URL (Ikon destination page, Epic resort
+        # site, Indy resort card). Fall back to the operator list page.
+        chip = next((c for c in PASS_CHIPS if c.key == pass_key), None)
+        hosts = tuple(chip.hosts) if chip else ()
+        provider_url = ""
+        for cand in (listed_url, list_url):
+            host = (urlparse(cand).hostname or "").lower()
+            if cand and hosts and any(host == h or host.endswith("." + h) for h in hosts):
+                provider_url = cand
+                break
+        seed = listed_url or provider_url or list_url
+        entry = {
+            "pass_key": pass_key,
+            "pass_label": pass_label,
+            "listed_name": row.get("listed_name") or "",
+            "url": seed,
+            "provider_url": provider_url or list_url,
+            "listed_url": listed_url,
+            "list_url": list_url,
+            "match_score": row.get("match_score"),
+        }
+        existing = {p["pass_key"]: i for i, p in enumerate(item["passes"])}
+        if pass_key in existing:
+            item["passes"][existing[pass_key]] = entry
+        else:
+            item["passes"].append(entry)
+        item[pass_key] = True
+    by_path = directory / "by_winter_sports_id.json"
+    by_path.write_text(json.dumps(by_id, ensure_ascii=False, indent=2), encoding="utf-8")
     unmatched = [row for row in merged if row.get("status") != "matched"]
     (directory / "unmatched.jsonl").write_text(
         "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in unmatched),
@@ -466,13 +564,88 @@ def load_chip_overlay(path: Path | None = None) -> dict[str, dict[str, Any]]:
     return overlay
 
 
+def load_pass_index(path: Path | None = None) -> dict[str, dict[str, Any]]:
+    """winter_sports_id → pass memberships with destination URLs for research."""
+    by_path = path or DEFAULT_BY_ID
+    if by_path.is_file():
+        try:
+            data = json.loads(by_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            data = {}
+        if isinstance(data, dict):
+            return {str(k): v for k, v in data.items()}
+    # Fall back to chips.jsonl
+    out: dict[str, dict[str, Any]] = {}
+    for wid, item in load_chip_overlay().items():
+        passes = []
+        listed = item.get("listed") or {}
+        for key, meta in listed.items():
+            if not isinstance(meta, dict):
+                continue
+            passes.append(
+                {
+                    "pass_key": key,
+                    "pass_label": key.replace("_", " ").title(),
+                    "url": meta.get("url") or "",
+                    "listed_url": meta.get("url") or "",
+                    "listed_name": meta.get("name") or "",
+                }
+            )
+        out[wid] = {
+            "winter_sports_id": wid,
+            "atlas_name": item.get("atlas_name") or "",
+            "passes": passes,
+            **{k: True for k in PASS_COLUMNS if item.get(k) is True},
+        }
+    return out
+
+
+def lookup_pass_memberships(winter_sports_id: str | None) -> list[dict[str, Any]]:
+    """Pass chips + destination URLs for one atlas resort."""
+    wid = str(winter_sports_id or "").strip()
+    if not wid:
+        return []
+    item = load_pass_index().get(wid) or {}
+    passes = item.get("passes") or []
+    return [p for p in passes if isinstance(p, dict) and (p.get("url") or p.get("pass_key"))]
+
+
 def apply_overlay(amenities: dict[str, Any], winter_sports_id: str, overlay: dict[str, dict[str, Any]] | None = None) -> None:
     item = (overlay or load_chip_overlay()).get(str(winter_sports_id or "").strip())
+    if not item:
+        item = load_pass_index().get(str(winter_sports_id or "").strip())
     if not item:
         return
     for key in PASS_COLUMNS:
         if item.get(key) is True:
             amenities[key] = True
+
+
+def _load_epic_supplement() -> list[dict[str, str]]:
+    if not EPIC_SUPPLEMENT.is_file():
+        return []
+    rows: list[dict[str, str]] = []
+    for line in EPIC_SUPPLEMENT.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        name = str(row.get("listed_name") or row.get("name") or "").strip()
+        url = str(row.get("listed_url") or row.get("url") or "").strip()
+        if not name or not url:
+            continue
+        rows.append(
+            {
+                "pass_key": "epic",
+                "pass_label": "Epic",
+                "listed_name": name,
+                "listed_url": url,
+                "list_url": str(row.get("list_url") or ""),
+            }
+        )
+    return rows
 
 
 def _load_parquet(path: Path) -> list[dict[str, Any]]:
@@ -489,6 +662,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, default=ROSTER_DIR)
     parser.add_argument("--pass-key", action="append", default=[], help="Only these catalog keys (repeatable)")
     parser.add_argument("--html", nargs=2, action="append", default=[], metavar=("URL", "FILE"), help="Use a saved HTML file instead of fetching")
+    parser.add_argument("--no-epic-supplement", action="store_true")
     args = parser.parse_args(argv)
     html_by_url = {url: Path(file).read_text(encoding="utf-8") for url, file in args.html}
     wanted = set(args.pass_key)
@@ -498,11 +672,17 @@ def main(argv: list[str] | None = None) -> int:
         rows = harvest_pass_list(chip, html_by_url=html_by_url or None)
         print(f"{chip.key}: {len(rows)} listed names", file=sys.stderr)
         listed.extend(rows)
+    if not args.no_epic_supplement and (not wanted or "epic" in wanted):
+        extra = _load_epic_supplement()
+        if extra:
+            print(f"epic supplement: {len(extra)} listed names", file=sys.stderr)
+            listed.extend(extra)
     atlas_rows = _load_parquet(args.parquet) if args.parquet.is_file() else []
     merged = merge_rosters(listed, atlas_rows)
     path = write_rosters(merged, args.out)
     matched = sum(1 for row in merged if row.get("status") == "matched")
-    print(f"matched {matched}/{len(merged)} -> {path}", file=sys.stderr)
+    linked = len(json.loads((args.out / "by_winter_sports_id.json").read_text(encoding="utf-8"))) if (args.out / "by_winter_sports_id.json").is_file() else 0
+    print(f"matched {matched}/{len(merged)} rows; {linked} atlas resorts linked -> {path}", file=sys.stderr)
     return 0
 
 
